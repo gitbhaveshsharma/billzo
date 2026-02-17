@@ -29,13 +29,15 @@ import { authService } from "@/services/auth.service";
 import { useStoreStore } from "@/stores/store.store";
 import { useAuthStore } from "@/stores/auth.store";
 import { useOrganizationStore } from "@/stores/organization.store";
+import { useAuth } from "@/hooks/use-auth";
 import { APP_CONFIG } from "@/constants/app.config";
 
 type ApprovalStatus = "pending" | "active" | "rejected" | "suspended";
 
 export function PendingApprovalCard() {
     const router = useRouter();
-    const { store, updateStatus, reset: resetStore } = useStoreStore();
+    const { appUser, isInitialized } = useAuth();
+    const { store, updateStatus, setStore, reset: resetStore } = useStoreStore();
     const { logout: logoutAuth } = useAuthStore();
     const { reset: resetOrg } = useOrganizationStore();
 
@@ -43,11 +45,73 @@ export function PendingApprovalCard() {
         (store?.status as ApprovalStatus) || "pending"
     );
     const [isPolling, setIsPolling] = useState(true);
+    const [isFetchingStore, setIsFetchingStore] = useState(false);
     const [lastChecked, setLastChecked] = useState<Date>(new Date());
     const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+    // Fetch store if not in Zustand but user has storeId (page refresh scenario)
+    useEffect(() => {
+        const fetchStore = async () => {
+            if (!isInitialized) {
+                console.log("⏳ [PENDING APPROVAL] Waiting for auth to initialize...");
+                return;
+            }
+
+            if (store) {
+                console.log("⏳ [PENDING APPROVAL] Store already loaded", {
+                    storeId: store.id,
+                    storeName: store.name,
+                    status: store.status,
+                });
+                return;
+            }
+
+            const storeId = appUser?.storeId;
+            if (!storeId) {
+                console.log("⏳ [PENDING APPROVAL] No storeId found, redirecting to create-store");
+                toast.error("No store found. Please create a store.");
+                router.push(APP_CONFIG.routes.createStore);
+                return;
+            }
+
+            console.log("⏳ [PENDING APPROVAL] Fetching store from database", { storeId });
+            setIsFetchingStore(true);
+
+            try {
+                const { data, error } = await storeService.getById(storeId);
+                
+                if (error || !data) {
+                    console.error("❌ [PENDING APPROVAL] Failed to fetch store:", error);
+                    toast.error("Failed to load store data");
+                    router.push(APP_CONFIG.routes.createStore);
+                    return;
+                }
+
+                console.log("✅ [PENDING APPROVAL] Store fetched successfully", {
+                    storeId: data.id,
+                    storeName: data.name,
+                    status: data.status,
+                });
+                
+                setStore(data);
+                setStatus(data.status as ApprovalStatus);
+            } catch (err) {
+                console.error("❌ [PENDING APPROVAL] Exception while fetching store:", err);
+                toast.error("Failed to load store data");
+                router.push(APP_CONFIG.routes.createStore);
+            } finally {
+                setIsFetchingStore(false);
+            }
+        };
+
+        fetchStore();
+    }, [isInitialized, appUser, store, setStore, router]);
+
     const checkApprovalStatus = useCallback(async () => {
-        if (!store?.id) return;
+        if (!store?.id) {
+            console.log("⏳ [PENDING APPROVAL] No store ID available for polling");
+            return;
+        }
 
         try {
             const { data, error } = await storeService.checkStatus(store.id);
@@ -79,7 +143,7 @@ export function PendingApprovalCard() {
 
     /** Poll every 30 seconds */
     useEffect(() => {
-        if (!isPolling || !store?.id) return;
+        if (!isPolling || !store?.id || isFetchingStore) return;
 
         const interval = setInterval(
             checkApprovalStatus,
@@ -87,7 +151,7 @@ export function PendingApprovalCard() {
         );
 
         return () => clearInterval(interval);
-    }, [isPolling, store?.id, checkApprovalStatus]);
+    }, [isPolling, store?.id, isFetchingStore, checkApprovalStatus]);
 
     const handleManualRefresh = async () => {
         await checkApprovalStatus();
@@ -144,6 +208,26 @@ export function PendingApprovalCard() {
     };
 
     const cfg = statusConfig[status];
+
+    // Show loading state while fetching store
+    if (!isInitialized || isFetchingStore) {
+        return (
+            <Card className="w-full max-w-lg mx-auto">
+                <CardHeader className="text-center">
+                    <div className="mx-auto mb-2">
+                        <Clock className="h-10 w-10 text-amber-500 animate-pulse" />
+                    </div>
+                    <CardTitle className="text-2xl text-amber-600">Loading Store...</CardTitle>
+                    <CardDescription className="text-base">
+                        Please wait while we load your store information.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-center py-8">
+                    <LoadingSpinner size="lg" text="Loading store data..." />
+                </CardContent>
+            </Card>
+        );
+    }
 
     return (
         <Card className="w-full max-w-lg mx-auto">

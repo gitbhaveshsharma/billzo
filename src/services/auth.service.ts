@@ -144,6 +144,7 @@ export const authService = {
   /**
    * Fetch the enriched AppUser from the v_user_store_role view.
    * Falls back gracefully when the user has no store assignment yet.
+   * During onboarding, fetches organization and store data separately.
    */
   getCurrentUser: async (): Promise<ServiceResponse<AppUser>> => {
     try {
@@ -168,17 +169,42 @@ export const authService = {
 
       // User exists in auth but has no store assignment yet (onboarding)
       if (!row) {
+        // Fetch profile to get full name
+        const { data: profile } = await getClient()
+          .from("profiles")
+          .select("full_name")
+          .eq("id", supabaseUser.id)
+          .single();
+
+        // Check if user has created an organization (during onboarding)
+        const { data: organization } = await getClient()
+          .from("organizations")
+          .select("id, name")
+          .eq("created_by", supabaseUser.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        // Check if user has created a store (during onboarding)
+        const { data: store } = await getClient()
+          .from("stores")
+          .select("id, name, status")
+          .eq("created_by", supabaseUser.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
         const appUser: AppUser = {
           id: supabaseUser.id,
           email: supabaseUser.email ?? "",
-          fullName: null,
+          fullName: profile?.full_name ?? null,
           role: "cashier",
           permissions: [],
-          storeId: null,
-          storeName: null,
-          storeStatus: null,
-          organizationId: null,
-          organizationName: null,
+          storeId: store?.id ?? null,
+          storeName: store?.name ?? null,
+          storeStatus: (store?.status as StoreStatus) ?? null,
+          organizationId: organization?.id ?? null,
+          organizationName: organization?.name ?? null,
           isActive: true,
           isBanned: false,
           bannedReason: null,

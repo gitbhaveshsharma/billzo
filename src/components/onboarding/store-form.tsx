@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Store, ArrowRight } from "lucide-react";
+import { Store, ArrowRight, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -19,11 +19,14 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { storeSchema, type StoreFormData } from "@/validations/store.validation";
 import { storeService } from "@/services/store.service";
+import { organizationService } from "@/services/organization.service";
 import { useOrganizationStore } from "@/stores/organization.store";
 import { useStoreStore } from "@/stores/store.store";
+import { useAuth } from "@/hooks/use-auth";
 import { APP_CONFIG } from "@/constants/app.config";
 import { INDIAN_STATES } from "@/constants/states";
 import { generateStoreCode } from "@/lib/utils";
@@ -31,19 +34,85 @@ import { generateStoreCode } from "@/lib/utils";
 export function StoreForm() {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const { organization } = useOrganizationStore();
+    const [isFetchingOrg, setIsFetchingOrg] = useState(false);
+    const [orgError, setOrgError] = useState<string | null>(null);
+    
+    const { appUser, isInitialized } = useAuth();
+    const { organization, setOrganization } = useOrganizationStore();
     const { setStore } = useStoreStore();
 
+    // Fetch organization if not in store but user has organizationId
     useEffect(() => {
-        console.log("🏪 [STORE FORM] Component mounted", {
-            hasOrganization: !!organization,
-            organizationId: organization?.id,
-            organizationName: organization?.name,
-        });
-        return () => {
-            console.log("🏪 [STORE FORM] Component unmounted");
+        const fetchOrganization = async () => {
+            // Wait for auth to initialize
+            if (!isInitialized) {
+                console.log("🏪 [STORE FORM] Waiting for auth to initialize...");
+                return;
+            }
+
+            // If organization already in store, we're good
+            if (organization) {
+                console.log("🏪 [STORE FORM] Organization already loaded", {
+                    organizationId: organization.id,
+                    organizationName: organization.name,
+                });
+                return;
+            }
+
+            // Check if user has organizationId
+            const orgId = appUser?.organizationId;
+            if (!orgId) {
+                console.log("🏪 [STORE FORM] No organizationId found in appUser", {
+                    hasAppUser: !!appUser,
+                    appUserId: appUser?.id,
+                });
+                setOrgError("No organization found. Please create an organization first.");
+                return;
+            }
+
+            // Fetch organization from database
+            console.log("🏪 [STORE FORM] Fetching organization from database", { orgId });
+            setIsFetchingOrg(true);
+            setOrgError(null);
+
+            try {
+                const { data, error } = await organizationService.getById(orgId);
+                
+                if (error || !data) {
+                    console.error("❌ [STORE FORM] Failed to fetch organization:", error);
+                    setOrgError(error || "Failed to load organization");
+                    toast.error("Failed to load organization data");
+                    return;
+                }
+
+                console.log("✅ [STORE FORM] Organization fetched successfully", {
+                    organizationId: data.id,
+                    organizationName: data.name,
+                });
+                
+                // Update Zustand store
+                setOrganization(data);
+            } catch (err) {
+                console.error("❌ [STORE FORM] Exception while fetching organization:", err);
+                setOrgError("Failed to load organization");
+                toast.error("Failed to load organization data");
+            } finally {
+                setIsFetchingOrg(false);
+            }
         };
-    }, [organization]);
+
+        fetchOrganization();
+    }, [isInitialized, appUser, organization, setOrganization]);
+
+    useEffect(() => {
+        console.log("🏪 [STORE FORM] Component state", {
+            isInitialized,
+            hasAppUser: !!appUser,
+            hasOrganization: !!organization,
+            isFetchingOrg,
+            orgError,
+        });
+    }, [isInitialized, appUser, organization, isFetchingOrg, orgError]);
 
     const {
         register,
@@ -102,6 +171,59 @@ export function StoreForm() {
             setIsSubmitting(false);
         }
     };
+
+    // Show loading state while fetching organization
+    if (!isInitialized || isFetchingOrg) {
+        return (
+            <Card className="w-full max-w-2xl mx-auto">
+                <CardHeader className="text-center">
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                        <Store className="h-6 w-6 text-primary" />
+                    </div>
+                    <CardTitle className="text-2xl">Add your first store</CardTitle>
+                    <CardDescription>
+                        Loading organization data...
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-center py-8">
+                    <LoadingSpinner size="lg" text="Loading organization..." />
+                </CardContent>
+            </Card>
+        );
+    }
+
+    // Show error state if organization fetch failed
+    if (orgError || !organization) {
+        return (
+            <Card className="w-full max-w-2xl mx-auto">
+                <CardHeader className="text-center">
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+                        <AlertCircle className="h-6 w-6 text-destructive" />
+                    </div>
+                    <CardTitle className="text-2xl">Organization Not Found</CardTitle>
+                    <CardDescription>
+                        {orgError || "Could not load organization data"}
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                            You need to create an organization before you can add a store.
+                        </AlertDescription>
+                    </Alert>
+                </CardContent>
+                <CardFooter>
+                    <Button
+                        className="w-full"
+                        onClick={() => router.push(APP_CONFIG.routes.createOrganization)}
+                    >
+                        Create Organization
+                    </Button>
+                </CardFooter>
+            </Card>
+        );
+    }
 
     return (
         <Card className="w-full max-w-2xl mx-auto">

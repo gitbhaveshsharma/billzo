@@ -27,20 +27,85 @@ import {
 } from "@/validations/organization.validation";
 import { organizationService } from "@/services/organization.service";
 import { useOrganizationStore } from "@/stores/organization.store";
+import { useAuth } from "@/hooks/use-auth";
 import { APP_CONFIG } from "@/constants/app.config";
 import { INDIAN_STATES } from "@/constants/states";
 
 export function OrganizationForm() {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const { setOrganization } = useOrganizationStore();
+    const [isFetchingOrg, setIsFetchingOrg] = useState(false);
+    
+    const { appUser, isInitialized } = useAuth();
+    const { organization, setOrganization } = useOrganizationStore();
+
+    // Fetch organization if user already has one (page refresh scenario)
+    useEffect(() => {
+        const fetchExistingOrganization = async () => {
+            // Wait for auth to initialize
+            if (!isInitialized) {
+                console.log("🏢 [ORGANIZATION FORM] Waiting for auth to initialize...");
+                return;
+            }
+
+            // If organization already in store, redirect to next step
+            if (organization) {
+                console.log("🏢 [ORGANIZATION FORM] Organization already exists, redirecting to create-store", {
+                    organizationId: organization.id,
+                    organizationName: organization.name,
+                });
+                router.push(APP_CONFIG.routes.createStore);
+                return;
+            }
+
+            // Check if user has organizationId (meaning they already created one)
+            const orgId = appUser?.organizationId;
+            if (!orgId) {
+                console.log("🏢 [ORGANIZATION FORM] No existing organization, showing form");
+                return;
+            }
+
+            // Fetch existing organization and redirect
+            console.log("🏢 [ORGANIZATION FORM] User has existing organization, fetching...", { orgId });
+            setIsFetchingOrg(true);
+
+            try {
+                const { data, error } = await organizationService.getById(orgId);
+                
+                if (error || !data) {
+                    console.error("❌ [ORGANIZATION FORM] Failed to fetch organization:", error);
+                    // Don't show error toast - allow user to create new org
+                    return;
+                }
+
+                console.log("✅ [ORGANIZATION FORM] Organization fetched, redirecting to create-store", {
+                    organizationId: data.id,
+                    organizationName: data.name,
+                });
+                
+                // Update store and redirect
+                setOrganization(data);
+                toast.success(`Welcome back! ${data.name} loaded.`);
+                router.push(APP_CONFIG.routes.createStore);
+            } catch (err) {
+                console.error("❌ [ORGANIZATION FORM] Exception while fetching organization:", err);
+                // Don't show error - allow user to proceed with form
+            } finally {
+                setIsFetchingOrg(false);
+            }
+        };
+
+        fetchExistingOrganization();
+    }, [isInitialized, appUser, organization, setOrganization, router]);
 
     useEffect(() => {
-        console.log("🏢 [ORGANIZATION FORM] Component mounted");
-        return () => {
-            console.log("🏢 [ORGANIZATION FORM] Component unmounted");
-        };
-    }, []);
+        console.log("🏢 [ORGANIZATION FORM] Component state", {
+            isInitialized,
+            hasAppUser: !!appUser,
+            hasOrganization: !!organization,
+            isFetchingOrg,
+        });
+    }, [isInitialized, appUser, organization, isFetchingOrg]);
 
     const {
         register,
@@ -76,6 +141,26 @@ export function OrganizationForm() {
             setIsSubmitting(false);
         }
     };
+
+    // Show loading state while checking for existing organization
+    if (!isInitialized || isFetchingOrg) {
+        return (
+            <Card className="w-full max-w-2xl mx-auto">
+                <CardHeader className="text-center">
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                        <Building2 className="h-6 w-6 text-primary" />
+                    </div>
+                    <CardTitle className="text-2xl">Set up your organization</CardTitle>
+                    <CardDescription>
+                        Checking existing data...
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-center py-8">
+                    <LoadingSpinner size="lg" text="Loading organization..." />
+                </CardContent>
+            </Card>
+        );
+    }
 
     return (
         <Card className="w-full max-w-2xl mx-auto">
