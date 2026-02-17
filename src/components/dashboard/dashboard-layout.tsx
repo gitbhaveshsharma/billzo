@@ -22,8 +22,8 @@ export function DashboardLayout({
     title,
     description,
 }: DashboardLayoutProps) {
-    const { isAuthenticated, isInitialized } = useAuth();
-    const { userRole, isLoading } = useRole();
+    const { isAuthenticated, isInitialized, isLoading } = useAuth();
+    const { role } = useRole();
 
     // Show loading state
     if (!isInitialized || isLoading) {
@@ -51,7 +51,7 @@ export function DashboardLayout({
         const requiredRoles = Array.isArray(requiredRole)
             ? requiredRole
             : [requiredRole];
-        if (!userRole || !requiredRoles.includes(userRole)) {
+        if (!role || !requiredRoles.includes(role)) {
             return (
                 <div className="flex items-center justify-center min-h-screen">
                     <div className="text-center">

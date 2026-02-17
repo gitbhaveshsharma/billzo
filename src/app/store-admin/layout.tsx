@@ -1,14 +1,16 @@
-import type { Metadata } from "next";
+"use client";
 
-export const metadata: Metadata = {
-    title: "Store Admin Dashboard",
-    description: "Manage your store and view analytics",
-};
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { StoreAdminProvider } from "./_context/store-admin-context";
 
 export default function StoreAdminLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    return children;
+    return (
+        <DashboardLayout requiredRole={["store_admin", "manager"]}>
+            <StoreAdminProvider>{children}</StoreAdminProvider>
+        </DashboardLayout>
+    );
 }

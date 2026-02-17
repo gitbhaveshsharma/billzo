@@ -48,7 +48,6 @@ export interface StoreUser {
 export interface Employee {
     id: string;
     store_id: string;
-    organization_id: string;
     store_user_id: string | null;
     employee_code: string;
 
@@ -155,10 +154,10 @@ export interface EnrichedStoreUser extends StoreUser {
     role_priority: number;
 
     // From employees table (if exists)
-    employee?: Employee;
+    employee?: Employee | null;
     employee_code?: string;
 
-    // From organizations table
+    // From stores->organizations table
     organization_id: string;
     organization_name: string;
 

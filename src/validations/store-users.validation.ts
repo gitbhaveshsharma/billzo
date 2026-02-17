@@ -78,26 +78,28 @@ export const updateStoreUserSchema = z.object({
     is_active: z.boolean().optional(),
     custom_permissions: z.record(z.string(), z.boolean()).optional(),
     work_schedule: z.record(z.string(), z.any()).optional(),
-    /** Ban User Schema */
-    export const banUserSchema = z.object({
-        user_id: z.string().uuid("Invalid user ID"),
-        reason: z.string().min(10, "Ban reason must be at least 10 characters"),
-    });
+});
 
-    /** Activate/Deactivate User Schema */
-    export const activateUserSchema = z.object({
-        user_id: z.string().uuid("Invalid user ID"),
-        is_active: z.boolean(),
-    });
+/** Ban User Schema */
+export const banUserSchema = z.object({
+    user_id: z.string().uuid("Invalid user ID"),
+    reason: z.string().min(10, "Ban reason must be at least 10 characters"),
+});
 
-    /** Reset User Access Schema */
-    export const resetUserAccessSchema = z.object({
-        user_id: z.string().uuid("Invalid user ID"),
-        reset_login_attempts: z.boolean().default(false),
-        unlock_account: z.boolean().default(false),
-        reset_2fa: z.boolean().default(false),
-        clear_ban: z.boolean().default(false),
-    });
+/** Activate/Deactivate User Schema */
+export const activateUserSchema = z.object({
+    user_id: z.string().uuid("Invalid user ID"),
+    is_active: z.boolean(),
+});
+
+/** Reset User Access Schema */
+export const resetUserAccessSchema = z.object({
+    user_id: z.string().uuid("Invalid user ID"),
+    reset_login_attempts: z.boolean().default(false),
+    unlock_account: z.boolean().default(false),
+    reset_2fa: z.boolean().default(false),
+    clear_ban: z.boolean().default(false),
+});
 
     // ============================================================================
     // EMPLOYEE SCHEMAS

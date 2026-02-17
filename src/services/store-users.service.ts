@@ -21,7 +21,7 @@ import type {
     BulkOperationResponse,
     CreateEmployeeData,
 } from "@/types/store-users.types";
-import type { RoleName } from "@/types/database.types";
+import type { RoleName, EmploymentStatus } from "@/types/database.types";
 
 const getClient = () => createClient();
 
@@ -60,7 +60,7 @@ export const storeUsersService = {
             permissions,
             priority
           ),
-          employees:employee_id (
+          employees!store_user_id (
             *
           ),
           stores:store_id (
@@ -118,17 +118,17 @@ export const storeUsersService = {
             }
 
             // Transform data to EnrichedStoreUser format
-            const users: EnrichedStoreUser[] = (data || []).map((item: any) => ({
+            const users: EnrichedStoreUser[] = (data as any[] || []).map((item: any) => ({
                 ...item,
                 email: item.profiles?.email || "",
                 full_name: item.profiles?.full_name || null,
                 phone: item.profiles?.phone || null,
                 profile_picture: item.profiles?.profile_picture || null,
-                role_name: item.roles?.name || ("cashier" as RoleName),
+                role_name: (item.roles?.name || "cashier") as RoleName,
                 role_display_name: item.roles?.display_name || "",
                 permissions: item.roles?.permissions || {},
                 role_priority: item.roles?.priority || 0,
-                employee: item.employees || undefined,
+                employee: item.employees ? (item.employees as Employee) : null,
                 employee_code: item.employees?.employee_code || undefined,
                 organization_id: item.stores?.organization_id || "",
                 organization_name: item.stores?.organizations?.name || "",
@@ -184,7 +184,7 @@ export const storeUsersService = {
             permissions,
             priority
           ),
-          employees:employee_id (
+          employees!store_user_id (
             *
           ),
           stores:store_id (
@@ -212,23 +212,24 @@ export const storeUsersService = {
             }
 
             // Transform to EnrichedStoreUser
+            const result = data as any;
             const user: EnrichedStoreUser = {
-                ...data,
-                email: data.profiles?.email || "",
-                full_name: data.profiles?.full_name || null,
-                phone: data.profiles?.phone || null,
-                profile_picture: data.profiles?.profile_picture || null,
-                role_name: data.roles?.name || ("cashier" as RoleName),
-                role_display_name: data.roles?.display_name || "",
-                permissions: data.roles?.permissions || {},
-                role_priority: data.roles?.priority || 0,
-                employee: data.employees || undefined,
-                employee_code: data.employees?.employee_code || undefined,
-                organization_id: data.stores?.organization_id || "",
-                organization_name: data.stores?.organizations?.name || "",
-                store_name: data.stores?.name || "",
-                store_code: data.stores?.store_code || "",
-                store_status: data.stores?.status || "",
+                ...result,
+                email: result.profiles?.email || "",
+                full_name: result.profiles?.full_name || null,
+                phone: result.profiles?.phone || null,
+                profile_picture: result.profiles?.profile_picture || null,
+                role_name: (result.roles?.name || "cashier") as RoleName,
+                role_display_name: result.roles?.display_name || "",
+                permissions: result.roles?.permissions || {},
+                role_priority: result.roles?.priority || 0,
+                employee: result.employees ? (result.employees as Employee) : null,
+                employee_code: result.employees?.employee_code || undefined,
+                organization_id: result.stores?.organization_id || "",
+                organization_name: result.stores?.organizations?.name || "",
+                store_name: result.stores?.name || "",
+                store_code: result.stores?.store_code || "",
+                store_status: result.stores?.status || "",
             };
 
             return { data: user, error: null };
@@ -254,7 +255,7 @@ export const storeUsersService = {
             // 1. Check if user exists in profiles table by email
             const { data: existingProfile } = await client
                 .from("profiles")
-                .select("id, email")
+                .select("id, email, phone")
                 .eq("email", request.email)
                 .single();
 
@@ -321,18 +322,11 @@ export const storeUsersService = {
 
             // 5. If creating employee record
             if (request.create_employee && request.employee_data) {
-                const { data: org } = await client
-                    .from("stores")
-                    .select("organization_id")
-                    .eq("id", storeId)
-                    .single();
-
                 const employeeData = request.employee_data;
                 const { error: employeeError } = await client
                     .from("employees")
                     .insert({
                         store_id: storeId,
-                        organization_id: org?.organization_id || "",
                         store_user_id: storeUser.id,
                         employee_code: employeeData.employee_code,
                         first_name: employeeData.first_name,
@@ -423,9 +417,10 @@ export const storeUsersService = {
                     .eq("id", employeeId)
                     .single();
 
-                const firstName = updates.first_name || currentEmployee?.first_name || "";
-                const middleName = updates.middle_name || currentEmployee?.middle_name || "";
-                const lastName = updates.last_name || currentEmployee?.last_name || "";
+                const current = currentEmployee as any;
+                const firstName = updates.first_name || current?.first_name || "";
+                const middleName = updates.middle_name || current?.middle_name || "";
+                const lastName = updates.last_name || current?.last_name || "";
                 fullNameUpdate.full_name = `${firstName} ${middleName} ${lastName}`.trim();
             }
 
@@ -444,7 +439,7 @@ export const storeUsersService = {
                 return { data: null, error: error.message };
             }
 
-            return { data: data as Employee, error: null };
+            return { data: data as any as Employee, error: null };
         } catch (err) {
             return {
                 data: null,
@@ -703,7 +698,7 @@ export const storeUsersService = {
                 .select(`
           *,
           roles:role_id (name),
-          employees:employee_id (employment_status)
+          employees!store_user_id (employment_status)
         `)
                 .eq("store_id", storeId);
 
@@ -725,7 +720,7 @@ export const storeUsersService = {
 
             // Count by role
             users?.forEach((user: any) => {
-                const roleName = user.roles?.name || "cashier";
+                const roleName = (user.roles?.name || "cashier") as RoleName;
                 stats.by_role[roleName] = (stats.by_role[roleName] || 0) + 1;
 
                 // Count by department
@@ -736,7 +731,7 @@ export const storeUsersService = {
 
                 // Count by employment status
                 if (user.employees?.employment_status) {
-                    const status = user.employees.employment_status;
+                    const status = user.employees.employment_status as EmploymentStatus;
                     stats.by_employment_status[status] =
                         (stats.by_employment_status[status] || 0) + 1;
                 }

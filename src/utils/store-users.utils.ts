@@ -417,7 +417,7 @@ export function isValidEmail(email: string): boolean {
 export function calculateRetentionRate(stats: StoreUserStats): number {
     if (stats.total_users === 0) return 0;
 
-    const retained = stats.active_users - stats.by_employment_status.probation || 0;
+    const retained = stats.active_users - (stats.by_employment_status?.probation ?? 0);
     return Math.round((retained / stats.total_users) * 100);
 }
 

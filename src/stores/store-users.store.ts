@@ -3,6 +3,7 @@ import { devtools } from "zustand/middleware";
 import { storeUsersService } from "@/services/store-users.service";
 import type {
     EnrichedStoreUser,
+    Employee,
     StoreUserFilters,
     StoreUserPagination,
     StoreUserStats,
@@ -355,12 +356,12 @@ export const useStoreUsersStore = create<StoreUsersState>()(
                         set((state) => ({
                             users: state.users.map((user) =>
                                 user.employee?.id === employeeId
-                                    ? { ...user, employee: result.data! }
+                                    ? { ...user, employee: result.data! as Employee }
                                     : user
                             ),
                             currentUser:
                                 state.currentUser?.employee?.id === employeeId
-                                    ? { ...state.currentUser, employee: result.data }
+                                    ? { ...state.currentUser, employee: result.data as Employee }
                                     : state.currentUser,
                             error: null,
                             isLoading: false,
