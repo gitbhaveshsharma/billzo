@@ -42,11 +42,15 @@ export async function middleware(request: NextRequest) {
 
   // VISIBILITY CHECK: Always log to confirm middleware execution
   // NOTE: In Next.js 16, middleware logs don't appear in dev terminal - check browser network tab for X-Middleware-Executed header
-  console.log(">>> MIDDLEWARE EXECUTING <<<", pathname);
+  console.log("🚀 [MIDDLEWARE] EXECUTING", {
+    path: pathname,
+    url: request.nextUrl.href,
+    timestamp: new Date().toISOString(),
+  });
 
   // 1. Bypass paths (static assets, internals)
   if (shouldBypassMiddleware(pathname)) {
-    console.log(">>> MIDDLEWARE BYPASSED <<<", pathname);
+    console.log("⏭️  [MIDDLEWARE] BYPASSED", pathname);
     return NextResponse.next();
   }
 
@@ -119,12 +123,14 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // CRITICAL: Log auth check result to verify middleware execution
-  console.log(">>> MW AUTH CHECK <<<", {
+  console.log("🔐 [AUTH CHECK]", {
     path: pathname,
     authenticated: !!user,
     userId: user?.id,
+    userEmail: user?.email,
     error: authError?.message,
     cookieCount: request.cookies.getAll().length,
+    cookies: request.cookies.getAll().map(c => c.name),
   });
 
   log("info", "Auth check", {
@@ -148,7 +154,7 @@ export async function middleware(request: NextRequest) {
   if (routeConfig.type === "public") {
     if (user && routeConfig.redirect?.authenticated) {
       const target = routeConfig.redirect.authenticated;
-      
+
       log("info", "Authenticated user on public route, redirect", {
         path: pathname,
         userId: user.id,
@@ -165,7 +171,7 @@ export async function middleware(request: NextRequest) {
   if (routeConfig.type === "auth") {
     if (user) {
       const target = routeConfig.redirect?.authenticated ?? MIDDLEWARE_CONFIG.redirects.defaultAuthRedirect;
-      
+
       log("info", "Authenticated user on auth route, redirect", {
         path: pathname,
         userId: user.id,
@@ -223,8 +229,35 @@ export async function middleware(request: NextRequest) {
     redirect_to: onboardingStatus.redirect_to,
   });
 
-  // ── Onboarding routes (authenticated, allow access) ──────────────────────
+  // CRITICAL: Console log for debugging onboarding flow
+  console.log("🔍 [ONBOARDING CHECK]", {
+    currentPath: pathname,
+    hasOrg: onboardingStatus.has_organization,
+    hasStore: onboardingStatus.has_store,
+    storeStatus: onboardingStatus.store_status,
+    isStoreUser: onboardingStatus.is_store_user,
+    nextStep: onboardingStatus.next_step,
+    shouldRedirectTo: onboardingStatus.redirect_to,
+    isComplete: onboardingStatus.is_onboarding_complete,
+  });
+
+  // ── Onboarding routes (authenticated, check correct step) ────────────────
   if (routeConfig.type === "onboarding") {
+    // Check if user is on the correct onboarding step
+    if (!onboardingStatus.is_onboarding_complete && pathname !== onboardingStatus.redirect_to) {
+      log("info", "Wrong onboarding step, redirecting", {
+        path: pathname,
+        userId: user.id,
+        correctStep: onboardingStatus.redirect_to,
+      });
+      console.log("🔀 [ONBOARDING REDIRECT]", {
+        from: pathname,
+        to: onboardingStatus.redirect_to,
+        reason: "User on wrong onboarding step",
+      });
+      return redirect(request, onboardingStatus.redirect_to);
+    }
+
     log("info", "Onboarding route allowed", {
       path: pathname,
       userId: user.id,
@@ -232,6 +265,7 @@ export async function middleware(request: NextRequest) {
     response.headers.set("X-Middleware-Result", "onboarding-allowed");
     response.headers.set("X-User-Id", user.id);
     response.headers.set("X-Onboarding-Complete", String(onboardingStatus.is_onboarding_complete));
+    response.headers.set("X-Onboarding-Step", onboardingStatus.next_step);
     return response;
   }
 

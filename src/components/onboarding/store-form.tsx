@@ -34,6 +34,17 @@ export function StoreForm() {
     const { organization } = useOrganizationStore();
     const { setStore } = useStoreStore();
 
+    useEffect(() => {
+        console.log("🏪 [STORE FORM] Component mounted", {
+            hasOrganization: !!organization,
+            organizationId: organization?.id,
+            organizationName: organization?.name,
+        });
+        return () => {
+            console.log("🏪 [STORE FORM] Component unmounted");
+        };
+    }, [organization]);
+
     const {
         register,
         handleSubmit,
@@ -54,10 +65,18 @@ export function StoreForm() {
 
     const onSubmit = async (data: StoreFormData) => {
         if (!organization) {
+            console.error("❌ [STORE FORM] No organization found");
             toast.error("Organization not found. Please go back and create one.");
             router.push(APP_CONFIG.routes.createOrganization);
             return;
         }
+
+        console.log("🏪 [STORE FORM] Submitting...", {
+            name: data.name,
+            storeCode: data.store_code,
+            storeType: data.store_type,
+            organizationId: organization.id,
+        });
 
         setIsSubmitting(true);
         try {
@@ -67,14 +86,17 @@ export function StoreForm() {
             });
 
             if (error || !store) {
+                console.error("❌ [STORE FORM] Error:", error);
                 toast.error(error || "Failed to create store");
                 return;
             }
 
+            console.log("✅ [STORE FORM] Created successfully, redirecting to pending-approval");
             setStore(store);
             toast.success("Store created! Awaiting admin approval.");
             router.push(APP_CONFIG.routes.pendingApproval);
-        } catch {
+        } catch (err) {
+            console.error("❌ [STORE FORM] Exception:", err);
             toast.error("Something went wrong. Please try again.");
         } finally {
             setIsSubmitting(false);

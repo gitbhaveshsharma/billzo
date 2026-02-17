@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -35,6 +35,13 @@ export function OrganizationForm() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { setOrganization } = useOrganizationStore();
 
+    useEffect(() => {
+        console.log("🏢 [ORGANIZATION FORM] Component mounted");
+        return () => {
+            console.log("🏢 [ORGANIZATION FORM] Component unmounted");
+        };
+    }, []);
+
     const {
         register,
         handleSubmit,
@@ -44,18 +51,26 @@ export function OrganizationForm() {
     });
 
     const onSubmit = async (data: OrganizationFormData) => {
+        console.log("🏢 [ORGANIZATION FORM] Submitting...", {
+            name: data.name,
+            legalName: data.legal_name,
+            registrationType: data.registration_type,
+        });
         setIsSubmitting(true);
         try {
             const { data: org, error } = await organizationService.create(data);
             if (error || !org) {
+                console.error("❌ [ORGANIZATION FORM] Error:", error);
                 toast.error(error || "Failed to create organization");
                 return;
             }
 
+            console.log("✅ [ORGANIZATION FORM] Created successfully, redirecting to create-store");
             setOrganization(org);
             toast.success("Organization created successfully!");
             router.push(APP_CONFIG.routes.createStore);
-        } catch {
+        } catch (err) {
+            console.error("❌ [ORGANIZATION FORM] Exception:", err);
             toast.error("Something went wrong. Please try again.");
         } finally {
             setIsSubmitting(false);

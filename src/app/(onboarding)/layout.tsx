@@ -1,6 +1,9 @@
+"use client";
+
 // Middleware handles all auth checks - no client-side verification needed
 // If user reaches this page, they are authenticated (middleware guarantees it)
 
+import { useEffect } from "react";
 import { useAuthStore } from "@/stores/auth.store";
 
 export default function OnboardingLayout({
@@ -11,8 +14,15 @@ export default function OnboardingLayout({
     // Only use store for display purposes, not for auth checks
     const user = useAuthStore((state) => state.user);
 
+    useEffect(() => {
+        console.log("🎨 [ONBOARDING LAYOUT] Mounted", {
+            hasUser: !!user,
+            userEmail: user?.email,
+        });
+    }, [user]);
+
     return (
-        <div className="min-h-screen flex flex-col bg-gradient-to-b from-background to-muted/30">
+        <div className="min-h-screen flex flex-col bg-linear-to-b from-background to-muted/30">
             <header className="p-6 flex items-center justify-between">
                 <span className="text-xl font-bold tracking-tight">
                     Store<span className="text-primary">POS</span>

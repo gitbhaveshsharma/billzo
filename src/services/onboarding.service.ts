@@ -17,6 +17,8 @@ export const onboardingService = {
     try {
       const supabase = createClient();
 
+      console.log("📊 [ONBOARDING SERVICE] Fetching status for user:", userId || "current user");
+
       const { data, error } = await (supabase.rpc as CallableFunction)(
         "get_onboarding_status",
         {
@@ -25,14 +27,26 @@ export const onboardingService = {
       );
 
       if (error) {
+        console.error("❌ [ONBOARDING SERVICE] Error:", error);
         return { data: null, error: error.message };
       }
 
       // The RPC returns a JSONB object, cast it to OnboardingStatus
       const status = data as unknown as OnboardingStatus;
 
+      console.log("✅ [ONBOARDING SERVICE] Status received:", {
+        hasOrganization: status.has_organization,
+        hasStore: status.has_store,
+        storeStatus: status.store_status,
+        isStoreUser: status.is_store_user,
+        nextStep: status.next_step,
+        redirectTo: status.redirect_to,
+        isComplete: status.is_onboarding_complete,
+      });
+
       return { data: status, error: null };
     } catch (err) {
+      console.error("❌ [ONBOARDING SERVICE] Exception:", err);
       return {
         data: null,
         error: err instanceof Error ? err.message : "Failed to get onboarding status",
