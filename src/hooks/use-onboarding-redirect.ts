@@ -57,6 +57,21 @@ export function useOnboardingRedirect() {
 
         setOnboardingStatus(data);
 
+        // Special case: If store is pending, always redirect to pending-approval
+        if (data.store_status === "pending" && pathname !== "/pending-approval") {
+          const isOnOnboardingRoute = [
+            "/create-organization",
+            "/create-store",
+            "/pending-approval",
+          ].some((route) => pathname.startsWith(route));
+
+          if (!isOnOnboardingRoute || pathname !== "/pending-approval") {
+            console.log(`Store pending, redirecting to /pending-approval (current: ${pathname})`);
+            router.push("/pending-approval");
+            return;
+          }
+        }
+
         // Only redirect if:
         // 1. Onboarding is not complete
         // 2. Current path doesn't match the redirect target

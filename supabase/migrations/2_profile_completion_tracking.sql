@@ -186,8 +186,9 @@ BEGIN
         END,
         
         -- Is onboarding complete?
+        -- User must have active role AND store must not be pending
         'is_onboarding_complete', (
-            v_role_info->>'has_role' = 'true' OR
+            (v_role_info->>'has_role' = 'true' AND COALESCE(v_store_status, 'active') != 'pending') OR
             (v_has_organization AND v_has_store AND v_store_status = 'active' AND v_is_store_user)
         ),
         

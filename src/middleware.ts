@@ -243,6 +243,21 @@ export async function middleware(request: NextRequest) {
 
   // ── Onboarding routes (authenticated, check correct step) ────────────────
   if (routeConfig.type === "onboarding") {
+    // Special handling: If store is pending, always redirect to pending-approval
+    if (onboardingStatus.store_status === "pending" && pathname !== "/pending-approval") {
+      log("info", "Store pending, redirecting to pending-approval", {
+        path: pathname,
+        userId: user.id,
+        storeStatus: onboardingStatus.store_status,
+      });
+      console.log("🔀 [PENDING STORE REDIRECT]", {
+        from: pathname,
+        to: "/pending-approval",
+        reason: "Store is pending approval",
+      });
+      return redirect(request, "/pending-approval");
+    }
+
     // Check if user is on the correct onboarding step
     if (!onboardingStatus.is_onboarding_complete && pathname !== onboardingStatus.redirect_to) {
       log("info", "Wrong onboarding step, redirecting", {
