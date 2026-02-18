@@ -148,8 +148,8 @@ export function AddSupplierDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
-                    <TabsList className="grid w-full grid-cols-4 flex-shrink-0">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col p-1">
+                    <TabsList className="grid w-full grid-cols-4 flex-shrink-0 ">
                         <TabsTrigger value="basic">Basic Info</TabsTrigger>
                         <TabsTrigger value="contact">Contact</TabsTrigger>
                         <TabsTrigger value="address">Address</TabsTrigger>
@@ -158,7 +158,7 @@ export function AddSupplierDialog({
 
                     <ScrollArea className="flex-1 min-h-0 p-4 overflow-x-auto">
                         {/* ================================ BASIC INFO ================================ */}
-                        <TabsContent value="basic" className="space-y-4 mt-0">
+                        <TabsContent value="basic" className="space-y-4 mt-0 px-4">
                             {/* Supplier Code + Name */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
