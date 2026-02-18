@@ -1,0 +1,139 @@
+"use client";
+
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+    Building2,
+    CheckCircle2,
+    XCircle,
+    Star,
+    Ban,
+    FileText,
+} from "lucide-react";
+import type { SupplierStats as SupplierStatsType } from "@/types/supplier.types";
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+interface SupplierStatsProps {
+    stats: SupplierStatsType | null;
+    isLoading: boolean;
+}
+
+interface StatCardProps {
+    label: string;
+    value: number | string;
+    icon: React.ReactNode;
+    color: string;
+    description?: string;
+}
+
+// ============================================================================
+// STAT CARD
+// ============================================================================
+
+function StatCard({ label, value, icon, color, description }: StatCardProps) {
+    return (
+        <Card>
+            <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                    <div className={`rounded-lg p-2 ${color}`}>
+                        {icon}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-muted-foreground truncate">
+                            {label}
+                        </p>
+                        <p className="text-xl font-bold tracking-tight">
+                            {value}
+                        </p>
+                        {description && (
+                            <p className="text-[10px] text-muted-foreground truncate">
+                                {description}
+                            </p>
+                        )}
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ============================================================================
+// STAT SKELETON
+// ============================================================================
+
+function StatSkeleton() {
+    return (
+        <Card>
+            <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-lg" />
+                    <div className="space-y-1.5 flex-1">
+                        <Skeleton className="h-3 w-16" />
+                        <Skeleton className="h-6 w-12" />
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+export function SupplierStats({ stats, isLoading }: SupplierStatsProps) {
+    if (isLoading || !stats) {
+        return (
+            <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+                {Array.from({ length: 6 }).map((_, i) => (
+                    <StatSkeleton key={i} />
+                ))}
+            </div>
+        );
+    }
+
+    return (
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+            <StatCard
+                label="Total Suppliers"
+                value={stats.total_suppliers}
+                icon={<Building2 className="h-4 w-4 text-blue-600" />}
+                color="bg-blue-100 dark:bg-blue-900/30"
+            />
+            <StatCard
+                label="Active"
+                value={stats.active_suppliers}
+                icon={<CheckCircle2 className="h-4 w-4 text-green-600" />}
+                color="bg-green-100 dark:bg-green-900/30"
+            />
+            <StatCard
+                label="Inactive"
+                value={stats.inactive_suppliers}
+                icon={<XCircle className="h-4 w-4 text-gray-600" />}
+                color="bg-gray-100 dark:bg-gray-900/30"
+            />
+            <StatCard
+                label="Preferred"
+                value={stats.preferred_suppliers}
+                icon={<Star className="h-4 w-4 text-amber-600" />}
+                color="bg-amber-100 dark:bg-amber-900/30"
+            />
+            <StatCard
+                label="Blacklisted"
+                value={stats.blacklisted_suppliers}
+                icon={<Ban className="h-4 w-4 text-red-600" />}
+                color="bg-red-100 dark:bg-red-900/30"
+            />
+            <StatCard
+                label="With GST"
+                value={stats.with_gstin}
+                icon={<FileText className="h-4 w-4 text-indigo-600" />}
+                color="bg-indigo-100 dark:bg-indigo-900/30"
+                description={`${stats.without_gstin} without`}
+            />
+        </div>
+    );
+}

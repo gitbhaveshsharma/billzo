@@ -4,13 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
+    DropdownMenuSeparator,
+    DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
     Tooltip,
@@ -28,15 +28,12 @@ import {
     Ban,
     Shield,
     X,
+    Check,
 } from "lucide-react";
 import type { StoreUserFilters, AvailableRolesResponse } from "@/types/store-users.types";
 import { exportUsersToCSV, downloadCSV } from "@/utils/store-users.utils";
 import { useStoreAdmin } from "../../_context/store-admin-context";
 import type { EnrichedStoreUser } from "@/types/store-users.types";
-
-// ============================================================================
-// TYPES
-// ============================================================================
 
 interface EmployeeToolbarProps {
     filters: StoreUserFilters;
@@ -47,10 +44,6 @@ interface EmployeeToolbarProps {
     users: EnrichedStoreUser[];
     availableRoles: AvailableRolesResponse | null;
 }
-
-// ============================================================================
-// COMPONENT
-// ============================================================================
 
 export function EmployeeToolbar({
     filters,
@@ -96,9 +89,19 @@ export function EmployeeToolbar({
         });
     }, [onFiltersChange]);
 
+    // Derived labels for dropdown triggers
+    const selectedRoleLabel =
+        availableRoles?.roles.find((r) => r.id === filters.role_id)?.role_display_name ?? "All Roles";
+
+    const selectedStatusLabel =
+        filters.is_active === undefined ? "All Status" : filters.is_active ? "Active" : "Inactive";
+
+    const selectedBanLabel =
+        filters.is_banned === undefined ? "Ban Status" : filters.is_banned ? "Banned" : "Not Banned";
+
     return (
         <div className="space-y-3">
-            {/* Top row — Search + Actions */}
+            {/* Top row */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 {/* Search */}
                 <div className="relative flex-1 max-w-sm">
@@ -128,7 +131,6 @@ export function EmployeeToolbar({
                             <span className="sm:hidden">Add</span>
                         </Button>
                     )}
-
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button variant="outline" size="sm" onClick={handleExportCSV}>
@@ -142,67 +144,95 @@ export function EmployeeToolbar({
 
             {/* Filter row */}
             <div className="flex flex-wrap items-center gap-2">
+
                 {/* Role filter */}
-                <Select
-                    value={filters.role_id || ""}
-                    onChange={(e) =>
-                        onFiltersChange({ role_id: e.target.value || undefined })
-                    }
-                    className="h-8 w-auto min-w-[140px] text-xs"
-                >
-                    <option value="">All Roles</option>
-                    {availableRoles?.roles.map((role) => (
-                        <option key={role.id} value={role.id}>
-                            {role.role_display_name}
-                        </option>
-                    ))}
-                </Select>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
+                            {selectedRoleLabel}
+                            <ChevronDown className="h-3 w-3 opacity-50" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                        <DropdownMenuLabel className="text-xs">Role</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            className="text-xs"
+                            onClick={() => onFiltersChange({ role_id: undefined })}
+                        >
+                            <Check className={`mr-2 h-3 w-3 ${!filters.role_id ? "opacity-100" : "opacity-0"}`} />
+                            All Roles
+                        </DropdownMenuItem>
+                        {availableRoles?.roles.map((role) => (
+                            <DropdownMenuItem
+                                key={role.id}
+                                className="text-xs"
+                                onClick={() => onFiltersChange({ role_id: role.id })}
+                            >
+                                <Check className={`mr-2 h-3 w-3 ${filters.role_id === role.id ? "opacity-100" : "opacity-0"}`} />
+                                {role.role_display_name}
+                            </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
 
                 {/* Status filter */}
-                <Select
-                    value={
-                        filters.is_active === undefined
-                            ? ""
-                            : filters.is_active
-                                ? "active"
-                                : "inactive"
-                    }
-                    onChange={(e) => {
-                        const val = e.target.value;
-                        onFiltersChange({
-                            is_active: val === "" ? undefined : val === "active",
-                        });
-                    }}
-                    className="h-8 w-auto min-w-[120px] text-xs"
-                >
-                    <option value="">All Status</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                </Select>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
+                            {selectedStatusLabel}
+                            <ChevronDown className="h-3 w-3 opacity-50" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-40">
+                        <DropdownMenuLabel className="text-xs">Status</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {[
+                            { label: "All Status", value: undefined },
+                            { label: "Active", value: true },
+                            { label: "Inactive", value: false },
+                        ].map(({ label, value }) => (
+                            <DropdownMenuItem
+                                key={label}
+                                className="text-xs"
+                                onClick={() => onFiltersChange({ is_active: value })}
+                            >
+                                <Check className={`mr-2 h-3 w-3 ${filters.is_active === value ? "opacity-100" : "opacity-0"}`} />
+                                {label}
+                            </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
 
-                {/* Banned filter */}
-                <Select
-                    value={
-                        filters.is_banned === undefined
-                            ? ""
-                            : filters.is_banned
-                                ? "banned"
-                                : "not-banned"
-                    }
-                    onChange={(e) => {
-                        const val = e.target.value;
-                        onFiltersChange({
-                            is_banned: val === "" ? undefined : val === "banned",
-                        });
-                    }}
-                    className="h-8 w-auto min-w-[120px] text-xs"
-                >
-                    <option value="">Ban Status</option>
-                    <option value="banned">Banned</option>
-                    <option value="not-banned">Not Banned</option>
-                </Select>
+                {/* Ban Status filter */}
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
+                            {selectedBanLabel}
+                            <ChevronDown className="h-3 w-3 opacity-50" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-40">
+                        <DropdownMenuLabel className="text-xs">Ban Status</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {[
+                            { label: "All", value: undefined },
+                            { label: "Banned", value: true },
+                            { label: "Not Banned", value: false },
+                        ].map(({ label, value }) => (
+                            <DropdownMenuItem
+                                key={label}
+                                className="text-xs"
+                                onClick={() => onFiltersChange({ is_banned: value })}
+                            >
+                                <Check className={`mr-2 h-3 w-3 ${filters.is_banned === value ? "opacity-100" : "opacity-0"}`} />
+                                {label}
+                            </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
 
-                {/* Active filter count + clear */}
+                {/* Clear filters */}
                 {activeFilterCount > 0 && (
                     <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs">
                         <Filter className="mr-1 h-3 w-3" />
@@ -223,57 +253,34 @@ export function EmployeeToolbar({
                     <div className="flex items-center gap-1 ml-auto">
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-xs"
-                                    onClick={() => onBulkAction("activate")}
-                                >
+                                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onBulkAction("activate")}>
                                     <UserCheck className="mr-1 h-3 w-3" />
                                     Activate
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>Activate selected users</TooltipContent>
                         </Tooltip>
-
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-xs"
-                                    onClick={() => onBulkAction("deactivate")}
-                                >
+                                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onBulkAction("deactivate")}>
                                     <UserX className="mr-1 h-3 w-3" />
                                     Deactivate
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>Deactivate selected users</TooltipContent>
                         </Tooltip>
-
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-xs text-orange-600"
-                                    onClick={() => onBulkAction("ban")}
-                                >
+                                <Button variant="outline" size="sm" className="h-7 text-xs text-orange-600" onClick={() => onBulkAction("ban")}>
                                     <Ban className="mr-1 h-3 w-3" />
                                     Ban
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>Ban selected users</TooltipContent>
                         </Tooltip>
-
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 text-xs"
-                                    onClick={() => onBulkAction("change-role")}
-                                >
+                                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => onBulkAction("change-role")}>
                                     <Shield className="mr-1 h-3 w-3" />
                                     Change Role
                                 </Button>

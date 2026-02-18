@@ -4,12 +4,23 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "./use-auth";
 import { onboardingService } from "@/services/onboarding.service";
+import { ROUTE_PROTECTION } from "@/config/middleware.config";
+import { MIDDLEWARE_CONFIG } from "@/config/middleware.config";
 import type { OnboardingStatus } from "@/types/onboarding.types";
 
-/**
- * Hook to handle onboarding redirects
- * Checks user's onboarding status and redirects to appropriate page
- */
+// ============================================================================
+// Client-side onboarding redirect hook
+//
+// Acts as a safety net on top of the middleware. The middleware handles the
+// primary redirect logic; this hook covers edge-cases like client-side
+// navigations that skip middleware (e.g., router.push inside an SPA).
+// ============================================================================
+
+/** Check if `pathname` starts with any prefix in `list` */
+function matchesAny(pathname: string, list: readonly string[]): boolean {
+  return list.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
 export function useOnboardingRedirect() {
   const router = useRouter();
   const pathname = usePathname();
@@ -18,96 +29,81 @@ export function useOnboardingRedirect() {
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null);
 
   useEffect(() => {
-    // Don't check until auth is initialized
-    if (!isInitialized) {
-      return;
-    }
+    // Wait for auth to initialize
+    if (!isInitialized) return;
 
-    // If not authenticated, skip check
+    // Unauthenticated → nothing to check
     if (!isAuthenticated || !authUser) {
       setIsChecking(false);
       return;
     }
 
-    // Skip check for certain routes
-    const skipRoutes = [
-      "/login",
-      "/signup",
-      "/verify-otp",
-      "/unauthorized",
-      "/account-suspended",
-    ];
-
-    if (skipRoutes.some((route) => pathname.startsWith(route))) {
+    // Config-driven skip list (login, signup, otp, unauthorized, etc.)
+    if (matchesAny(pathname, ROUTE_PROTECTION.skipOnboardingCheck)) {
       setIsChecking(false);
       return;
     }
 
-    // Check onboarding status
-    const checkOnboarding = async () => {
+    let cancelled = false;
+
+    const check = async () => {
       try {
         setIsChecking(true);
         const { data, error } = await onboardingService.getOnboardingStatus(authUser.id);
 
+        if (cancelled) return;
         if (error || !data) {
-          console.error("Failed to get onboarding status:", error);
+          console.error("[onboarding-hook] status fetch failed", error);
           setIsChecking(false);
           return;
         }
 
         setOnboardingStatus(data);
 
-        // Special case: If store is pending, always redirect to pending-approval
-        if (data.store_status === "pending" && pathname !== "/pending-approval") {
-          const isOnOnboardingRoute = [
-            "/create-organization",
-            "/create-store",
-            "/pending-approval",
-          ].some((route) => pathname.startsWith(route));
+        const { redirects } = MIDDLEWARE_CONFIG;
+        const isOnOnboardingRoute = matchesAny(pathname, ROUTE_PROTECTION.onboarding);
 
-          if (!isOnOnboardingRoute || pathname !== "/pending-approval") {
-            console.log(`Store pending, redirecting to /pending-approval (current: ${pathname})`);
-            router.push("/pending-approval");
-            return;
-          }
-        }
-
-        // Redirect from generic /dashboard to role-specific dashboard
-        if (data.is_onboarding_complete && pathname === "/dashboard" && data.redirect_to && data.redirect_to !== "/dashboard") {
-          console.log(`🔀 Redirecting to role-specific dashboard: ${data.redirect_to} (current: ${pathname})`);
-          router.push(data.redirect_to);
+        // ── 1. Completed users must NOT stay on onboarding pages ─────────
+        if (data.is_onboarding_complete && isOnOnboardingRoute) {
+          const target = data.redirect_to || redirects.afterAuth;
+          router.replace(target);
           return;
         }
 
-        // Only redirect if:
-        // 1. Onboarding is not complete
-        // 2. Current path doesn't match the redirect target
-        // 3. Current path is not already an onboarding route
-        if (!data.is_onboarding_complete && pathname !== data.redirect_to) {
-          const isOnOnboardingRoute = [
-            "/create-organization",
-            "/create-store",
-            "/pending-approval",
-          ].some((route) => pathname.startsWith(route));
+        // ── 2. Generic /dashboard → role-specific dashboard ─────────────
+        if (
+          data.is_onboarding_complete &&
+          pathname === "/dashboard" &&
+          data.redirect_to &&
+          data.redirect_to !== "/dashboard"
+        ) {
+          router.replace(data.redirect_to);
+          return;
+        }
 
-          // If already on an onboarding route, only redirect if it's the wrong step
-          if (!isOnOnboardingRoute) {
-            console.log(`Redirecting to ${data.redirect_to} (current: ${pathname})`);
-            router.push(data.redirect_to);
-          } else if (pathname !== data.redirect_to) {
-            // On onboarding route but wrong step
-            console.log(`Wrong onboarding step, redirecting to ${data.redirect_to}`);
-            router.push(data.redirect_to);
-          }
+        // ── 3. Store pending → /pending-approval ────────────────────────
+        if (data.store_status === "pending" && pathname !== redirects.pendingStore) {
+          router.replace(redirects.pendingStore);
+          return;
+        }
+
+        // ── 4. Incomplete onboarding → correct step ─────────────────────
+        if (!data.is_onboarding_complete && pathname !== data.redirect_to) {
+          router.replace(data.redirect_to);
+          return;
         }
       } catch (err) {
-        console.error("Error checking onboarding:", err);
+        console.error("[onboarding-hook] error", err);
       } finally {
-        setIsChecking(false);
+        if (!cancelled) setIsChecking(false);
       }
     };
 
-    checkOnboarding();
+    check();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated, authUser, isInitialized, pathname, router]);
 
   return {

@@ -1,16 +1,11 @@
 "use client";
 
-import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 export default function POSPage() {
     return (
-        <DashboardLayout
-            requiredRole="cashier"
-            title="Point of Sale System"
-            description="Manage customer transactions and sales"
-        >
+        <div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {/* Quick Stats */}
                 <Card className="p-6">
@@ -56,6 +51,6 @@ export default function POSPage() {
                     </Button>
                 </div>
             </Card>
-        </DashboardLayout>
+        </div>
     );
 }

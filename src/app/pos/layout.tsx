@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LayoutShell } from "@/components/layout/layout-shell";
 
 export const metadata: Metadata = {
     title: "Point of Sale",
@@ -10,5 +11,5 @@ export default function POSLayout({
 }: {
     children: React.ReactNode;
 }) {
-    return children;
+    return <LayoutShell>{children}</LayoutShell>;
 }

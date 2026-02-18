@@ -1,29 +1,23 @@
 "use client";
 
 import { useOnboardingRedirect } from "@/hooks/use-onboarding-redirect";
-import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageLoader } from "@/components/shared/loading-spinner";
 
 export default function AccountantDashboardPage() {
     const { isChecking } = useOnboardingRedirect();
 
     if (isChecking) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="text-center">
-                    <p className="text-gray-600">Loading...</p>
-                </div>
-            </div>
-        );
+        return <PageLoader text="Loading..." />;
     }
 
     return (
-        <DashboardLayout
-            requiredRole={["accountant", "manager", "store_admin", "super_admin"]}
-            title="Accountant Dashboard"
-            description="Manage finances and generate financial reports"
-        >
+        <div>
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-foreground">Accountant Dashboard</h1>
+                <p className="text-muted-foreground text-sm mt-1">Manage finances and generate financial reports</p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {/* Financial Summary */}
                 <Card className="p-6">
@@ -101,6 +95,6 @@ export default function AccountantDashboardPage() {
                     </Button>
                 </div>
             </Card>
-        </DashboardLayout>
+        </div>
     );
 }

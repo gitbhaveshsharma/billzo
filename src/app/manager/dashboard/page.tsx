@@ -1,29 +1,23 @@
 "use client";
 
 import { useOnboardingRedirect } from "@/hooks/use-onboarding-redirect";
-import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageLoader } from "@/components/shared/loading-spinner";
 
 export default function ManagerDashboardPage() {
     const { isChecking } = useOnboardingRedirect();
 
     if (isChecking) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="text-center">
-                    <p className="text-gray-600">Loading...</p>
-                </div>
-            </div>
-        );
+        return <PageLoader text="Loading..." />;
     }
 
     return (
-        <DashboardLayout
-            requiredRole={["manager", "store_admin", "super_admin"]}
-            title="Manager Dashboard"
-            description="Oversee store operations and team performance"
-        >
+        <div>
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-foreground">Manager Dashboard</h1>
+                <p className="text-muted-foreground text-sm mt-1">Oversee store operations and team performance</p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 {/* Quick Stats */}
                 <Card className="p-6">
@@ -91,6 +85,6 @@ export default function ManagerDashboardPage() {
                 <h2 className="text-xl font-bold mb-4 text-gray-900">My Tasks & Approvals</h2>
                 <p className="text-gray-500 text-sm">No pending tasks at the moment.</p>
             </Card>
-        </DashboardLayout>
+        </div>
     );
 }

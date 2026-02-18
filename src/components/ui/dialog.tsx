@@ -1,67 +1,65 @@
-"use client"
+  'use client'
 
-import * as React from "react"
-import { XIcon } from "lucide-react"
-import { Dialog as DialogPrimitive } from "radix-ui"
+  import * as React from 'react'
+  import * as DialogPrimitive from '@radix-ui/react-dialog'
+  import { XIcon } from 'lucide-react'
+  import { cn } from '@/lib/utils'
+  import { COMMON_SCROLLABLE_PATTERNS } from '@/lib/scrollbar'
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+  // Base components
+  const Dialog = DialogPrimitive.Root
+  const DialogTrigger = DialogPrimitive.Trigger
+  const DialogPortal = DialogPrimitive.Portal
+  const DialogClose = DialogPrimitive.Close
 
-function Dialog({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
-}
-
-function DialogTrigger({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
-}
-
-function DialogPortal({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
-}
-
-function DialogClose({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Close>) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
-}
-
-function DialogOverlay({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
-  return (
+  // Dialog Overlay - Enhanced with backdrop blur
+  const DialogOverlay = React.forwardRef<
+    React.ElementRef<typeof DialogPrimitive.Overlay>,
+    React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
+  >(({ className, ...props }, ref) => (
     <DialogPrimitive.Overlay
-      data-slot="dialog-overlay"
+      ref={ref}
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
+        'fixed inset-0 z-50',
+        // Enhanced overlay with blur effect - using your color system
+        'bg-black/50 backdrop-blur-sm',
+        // Smooth animations
+        'data-[state=open]:animate-in data-[state=closed]:animate-out',
+        'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        // Transition for smooth backdrop appearance
+        'transition-all duration-200',
         className
       )}
       {...props}
     />
-  )
-}
+  ))
+  DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
-function DialogContent({
-  className,
-  children,
-  showCloseButton = true,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  showCloseButton?: boolean
-}) {
-  return (
-    <DialogPortal data-slot="dialog-portal">
+  // Dialog Content - Enhanced styling with card colors
+  const DialogContent = React.forwardRef<
+    React.ElementRef<typeof DialogPrimitive.Content>,
+    React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+      showCloseButton?: boolean
+    }
+  >(({ className, children, showCloseButton = true, ...props }, ref) => (
+    <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
-        data-slot="dialog-content"
+        ref={ref}
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 outline-none sm:max-w-lg",
+          'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-0',
+          // Use card colors for clean, professional look
+          'bg-card border border-border shadow-lg',
+          // Smooth transitions
+          'duration-200 rounded-lg overflow-hidden',
+          // Animations
+          'data-[state=open]:animate-in data-[state=closed]:animate-out',
+          'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+          'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+          'data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]',
+          'data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]',
+          // Layout
+          'max-h-[85vh] flex flex-col',
           className
         )}
         {...props}
@@ -69,90 +67,128 @@ function DialogContent({
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
-            data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className={cn(
+              'absolute right-4 top-4 rounded-sm',
+              // Using muted colors for subtle close button
+              'text-muted-foreground opacity-70',
+              'ring-offset-background transition-all',
+              // Hover state with brand color hint
+              'hover:opacity-100 hover:text-foreground',
+              // Focus state with ring
+              'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+              'disabled:pointer-events-none',
+              // Enhanced close button background on hover
+              'hover:bg-accent rounded-md p-1'
+            )}
           >
-            <XIcon />
+            <XIcon className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
     </DialogPortal>
-  )
-}
+  ))
+  DialogContent.displayName = DialogPrimitive.Content.displayName
 
-function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
+  // Dialog Header - Fixed at top with card background
+  const DialogHeader = ({
+    className,
+    ...props
+  }: React.HTMLAttributes<HTMLDivElement>) => (
     <div
-      data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
-      {...props}
-    />
-  )
-}
-
-function DialogFooter({
-  className,
-  showCloseButton = false,
-  children,
-  ...props
-}: React.ComponentProps<"div"> & {
-  showCloseButton?: boolean
-}) {
-  return (
-    <div
-      data-slot="dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        'flex flex-col space-y-1.5 p-6 pb-4',
+        // Use card background with subtle border
+        'bg-card border-b border-border',
+        'flex-shrink-0',
         className
       )}
       {...props}
-    >
-      {children}
-      {showCloseButton && (
-        <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
-        </DialogPrimitive.Close>
+    />
+  )
+  DialogHeader.displayName = "DialogHeader"
+
+  // Dialog Body - Scrollable content area with modern scrollbar
+  const DialogBody = ({
+    className,
+    ...props
+  }: React.HTMLAttributes<HTMLDivElement>) => (
+    <div
+      className={cn(
+        COMMON_SCROLLABLE_PATTERNS.DIALOG_BODY,
+        // Background using card color for consistency
+        'bg-card',
+        'p-6 py-4',
+        'max-h-full',
+        className
       )}
-    </div>
+      {...props}
+    />
   )
-}
+  DialogBody.displayName = "DialogBody"
 
-function DialogTitle({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Title>) {
-  return (
+  // Dialog Footer - Fixed at bottom with card background
+  const DialogFooter = ({
+    className,
+    ...props
+  }: React.HTMLAttributes<HTMLDivElement>) => (
+    <div
+      className={cn(
+        'flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 p-6 pt-4',
+        // Use card background with subtle border
+        'bg-card border-t border-border',
+        'flex-shrink-0',
+        className
+      )}
+      {...props}
+    />
+  )
+  DialogFooter.displayName = "DialogFooter"
+
+  // Dialog Title - Enhanced typography
+  const DialogTitle = React.forwardRef<
+    React.ElementRef<typeof DialogPrimitive.Title>,
+    React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
+  >(({ className, ...props }, ref) => (
     <DialogPrimitive.Title
-      data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
+      ref={ref}
+      className={cn(
+        'text-lg font-semibold leading-none tracking-tight',
+        // Use primary text color for emphasis
+        'text-foreground',
+        className
+      )}
       {...props}
     />
-  )
-}
+  ))
+  DialogTitle.displayName = DialogPrimitive.Title.displayName
 
-function DialogDescription({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description>) {
-  return (
+  // Dialog Description - Enhanced typography
+  const DialogDescription = React.forwardRef<
+    React.ElementRef<typeof DialogPrimitive.Description>,
+    React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
+  >(({ className, ...props }, ref) => (
     <DialogPrimitive.Description
-      data-slot="dialog-description"
-      className={cn("text-muted-foreground text-sm", className)}
+      ref={ref}
+      className={cn(
+        'text-sm text-muted-foreground',
+        className
+      )}
       {...props}
     />
-  )
-}
+  ))
+  DialogDescription.displayName = DialogPrimitive.Description.displayName
 
-export {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogOverlay,
-  DialogPortal,
-  DialogTitle,
-  DialogTrigger,
-}
+  export {
+    Dialog,
+    DialogTrigger,
+    DialogPortal,
+    DialogOverlay,
+    DialogContent,
+    DialogClose,
+    DialogHeader,
+    DialogBody,
+    DialogFooter,
+    DialogTitle,
+    DialogDescription,
+  }

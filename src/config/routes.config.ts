@@ -107,11 +107,25 @@ export const ROUTE_CONFIGS: RouteConfig[] = [
     description: "Point of Sale System",
   },
   {
+    path: "/pos/*",
+    type: "role-based",
+    allowedRoles: ["cashier", "manager", "store_admin", "super_admin"],
+    redirect: { unauthenticated: "/login", unauthorized: "/unauthorized" },
+    description: "POS sub-pages",
+  },
+  {
     path: "/store-admin/dashboard",
     type: "role-based",
     allowedRoles: ["store_admin", "super_admin"],
     redirect: { unauthenticated: "/login", unauthorized: "/unauthorized" },
     description: "Store Admin Dashboard",
+  },
+  {
+    path: "/store-admin/*",
+    type: "role-based",
+    allowedRoles: ["store_admin", "super_admin"],
+    redirect: { unauthenticated: "/login", unauthorized: "/unauthorized" },
+    description: "Store Admin area",
   },
   {
     path: "/manager/dashboard",
@@ -121,11 +135,25 @@ export const ROUTE_CONFIGS: RouteConfig[] = [
     description: "Manager Dashboard",
   },
   {
+    path: "/manager/*",
+    type: "role-based",
+    allowedRoles: ["manager", "store_admin", "super_admin"],
+    redirect: { unauthenticated: "/login", unauthorized: "/unauthorized" },
+    description: "Manager area",
+  },
+  {
     path: "/accountant/dashboard",
     type: "role-based",
     allowedRoles: ["accountant", "manager", "store_admin", "super_admin"],
     redirect: { unauthenticated: "/login", unauthorized: "/unauthorized" },
     description: "Accountant Dashboard",
+  },
+  {
+    path: "/accountant/*",
+    type: "role-based",
+    allowedRoles: ["accountant", "manager", "store_admin", "super_admin"],
+    redirect: { unauthenticated: "/login", unauthorized: "/unauthorized" },
+    description: "Accountant area",
   },
   {
     path: "/inventory/dashboard",
@@ -135,11 +163,25 @@ export const ROUTE_CONFIGS: RouteConfig[] = [
     description: "Inventory Dashboard",
   },
   {
+    path: "/inventory/*",
+    type: "role-based",
+    allowedRoles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+    redirect: { unauthenticated: "/login", unauthorized: "/unauthorized" },
+    description: "Inventory area",
+  },
+  {
     path: "/super-admin/dashboard",
     type: "role-based",
     allowedRoles: ["super_admin"],
     redirect: { unauthenticated: "/login", unauthorized: "/unauthorized" },
     description: "Super Admin Dashboard",
+  },
+  {
+    path: "/super-admin/*",
+    type: "role-based",
+    allowedRoles: ["super_admin"],
+    redirect: { unauthenticated: "/login", unauthorized: "/unauthorized" },
+    description: "Super Admin area",
   },
 
   // ── Role-Based Routes ────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { LayoutShell } from "@/components/layout/layout-shell";
 
 export const metadata: Metadata = {
     title: "Accountant Dashboard",
@@ -10,5 +11,5 @@ export default function AccountantLayout({
 }: {
     children: React.ReactNode;
 }) {
-    return children;
+    return <LayoutShell>{children}</LayoutShell>;
 }

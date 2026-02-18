@@ -1,74 +1,115 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import {
-  getRouteConfig,
-  shouldBypassMiddleware,
-} from "@/config/routes.config";
+import { getRouteConfig } from "@/config/routes.config";
 import { hasAnyRole } from "@/config/roles.config";
 import { MIDDLEWARE_CONFIG } from "@/config/middleware.config";
 import type { RoleName, StoreStatus, Json } from "@/types/database.types";
 
 // ============================================================================
-// Structured logger (inline — cannot import utils that use MIDDLEWARE_CONFIG
-// at the edge because of module resolution, so we duplicate minimal logic)
+// Logger — minimal inline logger for edge runtime
 // ============================================================================
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
-const LOG_PRIORITY: Record<LogLevel, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-};
+const LOG_RANK: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
 
 function log(level: LogLevel, message: string, meta?: Record<string, unknown>) {
-  if (!MIDDLEWARE_CONFIG.logging.enabled) return;
-  if (LOG_PRIORITY[level] < LOG_PRIORITY[MIDDLEWARE_CONFIG.logging.level]) return;
+  const { logging } = MIDDLEWARE_CONFIG;
+  if (!logging.enabled) return;
+  if (LOG_RANK[level] < LOG_RANK[logging.level]) return;
+
   const ts = new Date().toISOString();
-  const base = `[${ts}] [${level.toUpperCase()}] [MW] ${message}`;
-  const fn =
-    level === "error" ? console.error : level === "warn" ? console.warn : console.log;
-  fn(meta ? `${base} ${JSON.stringify(meta)}` : base);
+  const line = `[${ts}] [${level.toUpperCase()}] [MW] ${message}`;
+  const fn = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
+  fn(meta ? `${line} ${JSON.stringify(meta)}` : line);
+}
+
+/** Verbose console.log only in dev */
+function verbose(label: string, data: Record<string, unknown>) {
+  if (MIDDLEWARE_CONFIG.logging.verboseConsole) {
+    console.log(label, data);
+  }
 }
 
 // ============================================================================
-// Middleware handler
+// In-memory rate limiter (per-instance, resets on restart — production should
+// use Redis/Upstash. This is a lightweight edge-compatible default.)
 // ============================================================================
 
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
-  // VISIBILITY CHECK: Always log to confirm middleware execution
-  // NOTE: In Next.js 16, middleware logs don't appear in dev terminal - check browser network tab for X-Middleware-Executed header
-  console.log("🚀 [MIDDLEWARE] EXECUTING", {
-    path: pathname,
-    url: request.nextUrl.href,
-    timestamp: new Date().toISOString(),
-  });
+function checkRateLimit(ip: string, pathname: string): { allowed: boolean; retryAfterMs: number } {
+  const cfg = MIDDLEWARE_CONFIG.rateLimit;
+  if (!cfg.enabled) return { allowed: true, retryAfterMs: 0 };
 
-  // 1. Bypass paths (static assets, internals)
-  if (shouldBypassMiddleware(pathname)) {
-    console.log("⏭️  [MIDDLEWARE] BYPASSED", pathname);
-    return NextResponse.next();
+  // Find matching rule (first match wins) or use default
+  const rule = cfg.rules.find((r) => pathname.startsWith(r.pathPrefix));
+  const maxReq = rule?.maxRequests ?? cfg.defaultLimit.maxRequests;
+  const windowMs = (rule?.windowSeconds ?? cfg.defaultLimit.windowSeconds) * 1000;
+
+  const key = `${ip}:${rule?.pathPrefix ?? "default"}`;
+  const now = Date.now();
+  const entry = rateLimitStore.get(key);
+
+  if (!entry || now >= entry.resetAt) {
+    rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
+    return { allowed: true, retryAfterMs: 0 };
   }
 
-  // 2. Dev bypass
-  if (
-    process.env.NODE_ENV === "development" &&
-    MIDDLEWARE_CONFIG.dev.bypassAuth
-  ) {
-    log("warn", "Auth bypassed in dev mode", { path: pathname });
-    return NextResponse.next();
+  entry.count += 1;
+  if (entry.count > maxReq) {
+    return { allowed: false, retryAfterMs: entry.resetAt - now };
   }
+  return { allowed: true, retryAfterMs: 0 };
+}
 
-  // 3. Create response and Supabase client (response will be updated with cookies)
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/** True when `pathname` starts with any prefix in `list` */
+function matchesAny(pathname: string, list: readonly string[]): boolean {
+  return list.some((prefix) => pathname === prefix || pathname.startsWith(prefix + "/"));
+}
+
+/** Build a NextResponse redirect */
+function redirect(request: NextRequest, path: string): NextResponse {
+  const url = request.nextUrl.clone();
+  url.pathname = path;
+  const res = NextResponse.redirect(url);
+  res.headers.set("X-Middleware-Redirect", path);
+  return res;
+}
+
+/** Parse JSON permissions column to string[] */
+function parsePermissions(raw: Json): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === "string");
+  if (typeof raw === "object" && raw !== null) {
+    return Object.entries(raw)
+      .filter(([, v]) => v === true)
+      .map(([k]) => k);
+  }
+  return [];
+}
+
+/** Stamp informational headers onto a response */
+function stamp(
+  response: NextResponse,
+  data: Record<string, string | undefined>,
+): NextResponse {
+  for (const [k, v] of Object.entries(data)) {
+    if (v !== undefined) response.headers.set(k, v);
+  }
+  return response;
+}
+
+// ============================================================================
+// Supabase client factory (mutates `response` via cookie setter)
+// ============================================================================
+
+function createClient(request: NextRequest) {
+  let response = NextResponse.next({ request: { headers: request.headers } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -79,373 +120,289 @@ export async function middleware(request: NextRequest) {
           return request.cookies.get(name)?.value;
         },
         set(name: string, value: string, options) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          });
+          request.cookies.set({ name, value, ...options });
+          response = NextResponse.next({ request: { headers: request.headers } });
+          response.cookies.set({ name, value, ...options });
         },
         remove(name: string, options) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
+          request.cookies.set({ name, value: "", ...options });
+          response = NextResponse.next({ request: { headers: request.headers } });
+          response.cookies.set({ name, value: "", ...options });
         },
       },
-    }
+    },
   );
 
-  // 4. Get authenticated user (server-validated, triggers token refresh if needed)
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  // Expose response getter so callers always see the latest instance
+  return { supabase, getResponse: () => response };
+}
 
-  // CRITICAL: Log auth check result to verify middleware execution
-  console.log("🔐 [AUTH CHECK]", {
+// ============================================================================
+// Onboarding status shape returned by the RPC
+// ============================================================================
+
+interface OnboardingRPC {
+  has_organization: boolean;
+  has_store: boolean;
+  store_status: string | null;
+  is_store_user: boolean;
+  next_step: string;
+  redirect_to: string;
+  is_onboarding_complete: boolean;
+}
+
+// ============================================================================
+// Middleware entry point
+// ============================================================================
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const { routes, redirects } = MIDDLEWARE_CONFIG;
+
+  verbose("🚀 [MW]", { path: pathname, ts: new Date().toISOString() });
+
+  // ── 1. Bypass static / internal paths ────────────────────────────────────
+  if (matchesAny(pathname, routes.bypass)) {
+    return NextResponse.next();
+  }
+
+  // ── 2. Dev bypass ────────────────────────────────────────────────────────
+  if (process.env.NODE_ENV === "development" && MIDDLEWARE_CONFIG.dev.bypassAuth) {
+    log("warn", "Auth bypassed (dev)", { path: pathname });
+    return NextResponse.next();
+  }
+
+  // ── 3. Rate limit ───────────────────────────────────────────────────────
+  const rl = checkRateLimit(ip, pathname);
+  if (!rl.allowed) {
+    log("warn", "Rate limited", { path: pathname, ip, retryMs: rl.retryAfterMs });
+    return new NextResponse("Too Many Requests", {
+      status: 429,
+      headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+    });
+  }
+
+  // ── 4. Create Supabase client & authenticate ────────────────────────────
+  const { supabase, getResponse } = createClient(request);
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  verbose("🔐 [AUTH]", {
     path: pathname,
     authenticated: !!user,
     userId: user?.id,
-    userEmail: user?.email,
     error: authError?.message,
-    cookieCount: request.cookies.getAll().length,
-    cookies: request.cookies.getAll().map(c => c.name),
   });
 
   log("info", "Auth check", {
     path: pathname,
     authenticated: !!user,
     userId: user?.id,
-    hasCookies: request.cookies.getAll().length > 0,
   });
 
-  // 5. Resolve route config
+  // ── 5. Resolve route config ──────────────────────────────────────────────
   const routeConfig = getRouteConfig(pathname);
 
-  // No config found — allow (unknown routes fall through to Next.js 404)
+  // Unknown route — let Next.js show its 404
   if (!routeConfig) {
-    log("info", "No route config, allowing", { path: pathname });
-    response.headers.set("X-Middleware-Result", "no-config");
-    return response;
+    log("debug", "No route config", { path: pathname });
+    return stamp(getResponse(), { "X-Middleware-Result": "no-config" });
   }
 
-  // ── Public routes ────────────────────────────────────────────────────────
+  // ── 6. PUBLIC routes ─────────────────────────────────────────────────────
   if (routeConfig.type === "public") {
     if (user && routeConfig.redirect?.authenticated) {
-      const target = routeConfig.redirect.authenticated;
-
-      log("info", "Authenticated user on public route, redirect", {
-        path: pathname,
-        userId: user.id,
-        target,
-      });
-      return redirect(request, target);
+      log("info", "Auth user on public → redirect", { path: pathname, to: routeConfig.redirect.authenticated });
+      return redirect(request, routeConfig.redirect.authenticated);
     }
-    log("info", "Public route allowed", { path: pathname });
-    response.headers.set("X-Middleware-Result", "public-allowed");
-    return response;
+    return stamp(getResponse(), { "X-Middleware-Result": "public" });
   }
 
-  // ── Auth routes (login / signup / otp) ───────────────────────────────────
+  // ── 7. AUTH routes (login/signup/otp) — only for unauthenticated ────────
   if (routeConfig.type === "auth") {
     if (user) {
-      const target = routeConfig.redirect?.authenticated ?? MIDDLEWARE_CONFIG.redirects.defaultAuthRedirect;
-
-      log("info", "Authenticated user on auth route, redirect", {
-        path: pathname,
-        userId: user.id,
-        target,
-      });
+      const target = routeConfig.redirect?.authenticated ?? redirects.afterAuth;
+      log("info", "Auth user on auth route → redirect", { path: pathname, to: target });
       return redirect(request, target);
     }
-    log("info", "Auth route allowed (unauthenticated)", { path: pathname });
-    response.headers.set("X-Middleware-Result", "auth-route-allowed");
-    return response;
+    return stamp(getResponse(), { "X-Middleware-Result": "auth-allowed" });
   }
 
-  // ── Everything below requires authentication ─────────────────────────────
+  // ── 8. Everything below requires authentication ─────────────────────────
   if (!user) {
-    const target =
-      routeConfig.redirect?.unauthenticated ??
-      MIDDLEWARE_CONFIG.redirects.defaultUnauthRedirect;
-    log("info", "Unauthenticated access, redirect to login", { path: pathname, ip });
+    const target = routeConfig.redirect?.unauthenticated ?? redirects.unauthenticated;
+    log("info", "Unauthenticated → redirect", { path: pathname, to: target });
     return redirect(request, target);
   }
 
-  // ── For authenticated users, check onboarding status ─────────────────────
-  const { data: onboardingData, error: onboardingError } = await (supabase.rpc as CallableFunction)(
+  // ── 9. Fetch onboarding status ──────────────────────────────────────────
+  const { data: onboardingRaw, error: onboardingError } = await (supabase.rpc as CallableFunction)(
     "get_onboarding_status",
-    { p_user_id: user.id }
+    { p_user_id: user.id },
   );
 
   if (onboardingError) {
-    log("error", "Failed to get onboarding status", {
-      path: pathname,
-      userId: user.id,
-      error: onboardingError.message,
+    log("error", "Onboarding RPC failed", { path: pathname, userId: user.id, err: onboardingError.message });
+    // Fallback: let request through so the client-side can handle it
+    return stamp(getResponse(), {
+      "X-Middleware-Result": "onboarding-error-fallback",
+      "X-Onboarding-Error": onboardingError.message,
     });
-    // Fallback: allow access, let client-side handle it
-    response.headers.set("X-Middleware-Result", "onboarding-error-fallback");
-    response.headers.set("X-Onboarding-Error", onboardingError.message);
-    return response;
   }
 
-  const onboardingStatus = onboardingData as unknown as {
-    has_organization: boolean;
-    has_store: boolean;
-    store_status: string | null;
-    is_store_user: boolean;
-    next_step: string;
-    redirect_to: string;
-    is_onboarding_complete: boolean;
-  };
+  const onboarding = onboardingRaw as unknown as OnboardingRPC;
+
+  verbose("🔍 [ONBOARDING]", {
+    path: pathname,
+    complete: onboarding.is_onboarding_complete,
+    step: onboarding.next_step,
+    redirectTo: onboarding.redirect_to,
+    storeStatus: onboarding.store_status,
+  });
 
   log("info", "Onboarding status", {
     path: pathname,
     userId: user.id,
-    onboarding_complete: onboardingStatus.is_onboarding_complete,
-    next_step: onboardingStatus.next_step,
-    redirect_to: onboardingStatus.redirect_to,
+    complete: onboarding.is_onboarding_complete,
+    step: onboarding.next_step,
+    redirectTo: onboarding.redirect_to,
   });
 
-  // CRITICAL: Console log for debugging onboarding flow
-  console.log("🔍 [ONBOARDING CHECK]", {
-    currentPath: pathname,
-    hasOrg: onboardingStatus.has_organization,
-    hasStore: onboardingStatus.has_store,
-    storeStatus: onboardingStatus.store_status,
-    isStoreUser: onboardingStatus.is_store_user,
-    nextStep: onboardingStatus.next_step,
-    shouldRedirectTo: onboardingStatus.redirect_to,
-    isComplete: onboardingStatus.is_onboarding_complete,
-  });
+  // ── 10. Handle ONBOARDING routes ────────────────────────────────────────
+  //
+  //  Key fix: if onboarding is COMPLETE, the user must NOT stay on any
+  //  onboarding page — redirect them to their role dashboard immediately.
+  //
+  const isOnboardingPage = routeConfig.type === "onboarding" || matchesAny(pathname, routes.onboarding);
 
-  // ── Onboarding routes (authenticated, check correct step) ────────────────
-  if (routeConfig.type === "onboarding") {
-    // Special handling: If store is pending, always redirect to pending-approval
-    if (onboardingStatus.store_status === "pending" && pathname !== "/pending-approval") {
-      log("info", "Store pending, redirecting to pending-approval", {
+  if (isOnboardingPage) {
+    // ✅ FIX: Completed users should never be on onboarding pages
+    if (onboarding.is_onboarding_complete) {
+      const target = onboarding.redirect_to || redirects.afterAuth;
+      log("info", "Onboarding complete → redirect away from onboarding page", {
         path: pathname,
         userId: user.id,
-        storeStatus: onboardingStatus.store_status,
+        to: target,
       });
-      console.log("🔀 [PENDING STORE REDIRECT]", {
-        from: pathname,
-        to: "/pending-approval",
-        reason: "Store is pending approval",
-      });
-      return redirect(request, "/pending-approval");
+      verbose("🔀 [ONBOARDING→DASHBOARD]", { from: pathname, to: target });
+      return redirect(request, target);
     }
 
-    // Check if user is on the correct onboarding step
-    if (!onboardingStatus.is_onboarding_complete && pathname !== onboardingStatus.redirect_to) {
-      log("info", "Wrong onboarding step, redirecting", {
+    // Store is pending → always go to /pending-approval
+    if (onboarding.store_status === "pending" && pathname !== redirects.pendingStore) {
+      log("info", "Store pending → redirect", { path: pathname, to: redirects.pendingStore });
+      return redirect(request, redirects.pendingStore);
+    }
+
+    // Wrong onboarding step → redirect to correct step
+    if (pathname !== onboarding.redirect_to) {
+      log("info", "Wrong onboarding step → redirect", {
         path: pathname,
-        userId: user.id,
-        correctStep: onboardingStatus.redirect_to,
+        correctStep: onboarding.redirect_to,
       });
-      console.log("🔀 [ONBOARDING REDIRECT]", {
-        from: pathname,
-        to: onboardingStatus.redirect_to,
-        reason: "User on wrong onboarding step",
-      });
-      return redirect(request, onboardingStatus.redirect_to);
+      return redirect(request, onboarding.redirect_to);
     }
 
-    log("info", "Onboarding route allowed", {
-      path: pathname,
-      userId: user.id,
+    // Correct step — allow
+    return stamp(getResponse(), {
+      "X-Middleware-Result": "onboarding-allowed",
+      "X-User-Id": user.id,
+      "X-Onboarding-Step": onboarding.next_step,
     });
-    response.headers.set("X-Middleware-Result", "onboarding-allowed");
-    response.headers.set("X-User-Id", user.id);
-    response.headers.set("X-Onboarding-Complete", String(onboardingStatus.is_onboarding_complete));
-    response.headers.set("X-Onboarding-Step", onboardingStatus.next_step);
-    return response;
   }
 
-  // ── Protected routes - require completed onboarding ──────────────────────
-  if (!onboardingStatus.is_onboarding_complete) {
-    log("info", "Onboarding incomplete, redirecting", {
+  // ── 11. Protected / role-based routes require completed onboarding ──────
+  if (!onboarding.is_onboarding_complete) {
+    log("info", "Onboarding incomplete → redirect to correct step", {
       path: pathname,
       userId: user.id,
-      redirect_to: onboardingStatus.redirect_to,
+      to: onboarding.redirect_to,
     });
-    return redirect(request, onboardingStatus.redirect_to);
+    return redirect(request, onboarding.redirect_to);
   }
 
-  // ── Redirect to role-specific dashboard if needed ───────────────────────
-  // Users with roles should be on their role-specific dashboard, not generic /dashboard
-  if (pathname === "/dashboard" && onboardingStatus.redirect_to && onboardingStatus.redirect_to !== "/dashboard") {
-    log("info", "Redirecting to role-specific dashboard", {
+  // ── 12. Redirect generic /dashboard to role-specific dashboard ──────────
+  if (pathname === "/dashboard" && onboarding.redirect_to && onboarding.redirect_to !== "/dashboard") {
+    log("info", "Generic dashboard → role dashboard", {
       path: pathname,
-      userId: user.id,
-      roleDashboard: onboardingStatus.redirect_to,
+      to: onboarding.redirect_to,
     });
-    console.log("🔀 [ROLE DASHBOARD REDIRECT]", {
-      from: pathname,
-      to: onboardingStatus.redirect_to,
-      reason: "User has role-specific dashboard",
-    });
-    return redirect(request, onboardingStatus.redirect_to);
+    verbose("🔀 [ROLE DASHBOARD]", { from: pathname, to: onboarding.redirect_to });
+    return redirect(request, onboarding.redirect_to);
   }
 
-  // ── Protected & role-based routes — enrich from DB ───────────────────────
+  // ── 13. Fetch full user row for role/permissions/store checks ───────────
   const { data: userRow, error: userError } = await supabase
     .from("v_user_store_role")
     .select("*")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  // If no store assignment yet, redirect to onboarding
   if (userError || !userRow) {
-    log("info", "No store assignment, redirect to onboarding", {
-      path: pathname,
-      userId: user.id,
-      error: userError?.message,
-    });
-    return redirect(request, MIDDLEWARE_CONFIG.redirects.onboardingRedirect);
+    log("info", "No store assignment → onboarding", { path: pathname, userId: user.id });
+    return redirect(request, redirects.onboardingStart);
   }
 
-  // Check banned
-  if (userRow.is_banned) {
-    log("warn", "Banned user attempted access", {
+  // ── 14. Banned / inactive check ─────────────────────────────────────────
+  if (userRow.is_banned || !userRow.is_active) {
+    log("warn", userRow.is_banned ? "Banned user" : "Inactive user", {
       path: pathname,
       userId: user.id,
     });
-    return redirect(request, MIDDLEWARE_CONFIG.redirects.bannedUserRedirect);
+    return redirect(request, redirects.banned);
   }
 
-  // Check active
-  if (!userRow.is_active) {
-    log("warn", "Inactive user attempted access", {
-      path: pathname,
-      userId: user.id,
-    });
-    return redirect(request, MIDDLEWARE_CONFIG.redirects.bannedUserRedirect);
-  }
-
-  // Check store status
+  // ── 15. Store status check ──────────────────────────────────────────────
   const storeStatus = userRow.store_status as StoreStatus;
 
-  if (
-    MIDDLEWARE_CONFIG.storeStatus.handlePendingStores &&
-    storeStatus === "pending"
-  ) {
-    // Allow if already on pending-approval page
-    if (pathname !== MIDDLEWARE_CONFIG.redirects.pendingStoreRedirect) {
-      log("info", "Pending store, redirect", {
-        path: pathname,
-        userId: user.id,
-      });
-      return redirect(request, MIDDLEWARE_CONFIG.redirects.pendingStoreRedirect);
+  if (MIDDLEWARE_CONFIG.storeStatus.handlePendingStores && storeStatus === "pending") {
+    if (pathname !== redirects.pendingStore) {
+      log("info", "Store pending → redirect", { path: pathname });
+      return redirect(request, redirects.pendingStore);
     }
-    return response;
+    return getResponse();
   }
 
-  if (storeStatus === "suspended" || storeStatus === "rejected") {
-    log("warn", `Store ${storeStatus}, redirect`, {
-      path: pathname,
-      userId: user.id,
-    });
-    return redirect(request, MIDDLEWARE_CONFIG.redirects.bannedUserRedirect);
+  if (storeStatus === "suspended" || storeStatus === "rejected" || storeStatus === "closed") {
+    log("warn", `Store ${storeStatus}`, { path: pathname, userId: user.id });
+    return redirect(request, redirects.banned);
   }
 
-  // ── Role-based access check ──────────────────────────────────────────────
+  // ── 16. Role-based access control ───────────────────────────────────────
   if (routeConfig.type === "role-based") {
     const userRole = userRow.role_name as RoleName;
 
-    if (routeConfig.allowedRoles?.length) {
-      if (!hasAnyRole(userRole, routeConfig.allowedRoles)) {
-        log("warn", "Role check failed", {
-          path: pathname,
-          userId: user.id,
-          role: userRole,
-          required: routeConfig.allowedRoles,
-        });
-        const target =
-          routeConfig.redirect?.unauthorized ??
-          MIDDLEWARE_CONFIG.redirects.defaultUnauthorizedRedirect;
-        return redirect(request, target);
-      }
+    // Role check
+    if (routeConfig.allowedRoles?.length && !hasAnyRole(userRole, routeConfig.allowedRoles)) {
+      log("warn", "Role denied", {
+        path: pathname,
+        role: userRole,
+        required: routeConfig.allowedRoles,
+      });
+      return redirect(request, routeConfig.redirect?.unauthorized ?? redirects.unauthorized);
     }
 
     // Permission check
     if (routeConfig.requiredPermissions?.length) {
       const userPerms = parsePermissions(userRow.permissions);
-      const hasRequired = routeConfig.requiredPermissions.some((p) =>
-        userPerms.includes(p)
-      );
-      if (!hasRequired) {
-        log("warn", "Permission check failed", {
+      const hasPerm = routeConfig.requiredPermissions.some((p) => userPerms.includes(p));
+      if (!hasPerm) {
+        log("warn", "Permission denied", {
           path: pathname,
-          userId: user.id,
           required: routeConfig.requiredPermissions,
         });
-        const target =
-          routeConfig.redirect?.unauthorized ??
-          MIDDLEWARE_CONFIG.redirects.defaultUnauthorizedRedirect;
-        return redirect(request, target);
+        return redirect(request, routeConfig.redirect?.unauthorized ?? redirects.unauthorized);
       }
     }
   }
 
-  log("info", "Access granted", {
-    path: pathname,
-    userId: user.id,
-    role: userRow.role_name,
+  // ── 17. All checks passed — grant access ────────────────────────────────
+  log("info", "Access granted", { path: pathname, userId: user.id, role: userRow.role_name });
+
+  return stamp(getResponse(), {
+    "X-Middleware-Executed": "true",
+    "X-User-Id": user.id,
   });
-
-  // Add header to confirm middleware executed (visible in browser network tab)
-  response.headers.set("X-Middleware-Executed", "true");
-  response.headers.set("X-User-Id", user.id);
-
-  return response;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function redirect(request: NextRequest, path: string) {
-  const url = request.nextUrl.clone();
-  url.pathname = path;
-  const redirectResponse = NextResponse.redirect(url);
-  // Mark redirects from middleware
-  redirectResponse.headers.set("X-Middleware-Redirect", path);
-  return redirectResponse;
-}
-
-function parsePermissions(raw: Json): string[] {
-  if (!raw) return [];
-  if (Array.isArray(raw))
-    return raw.filter((v): v is string => typeof v === "string");
-  if (typeof raw === "object" && raw !== null) {
-    return Object.entries(raw)
-      .filter(([, v]) => v === true)
-      .map(([k]) => k);
-  }
-  return [];
 }
 
 // ============================================================================
@@ -455,10 +412,10 @@ function parsePermissions(raw: Json): string[] {
 export const config = {
   matcher: [
     /*
-     * Match all request paths EXCEPT:
-     * - _next/static, _next/image (static files)
+     * Match all paths EXCEPT:
+     * - _next/static, _next/image (build assets)
      * - favicon.ico, sitemap.xml, robots.txt (meta files)
-     * - images, fonts (asset directories)
+     * - images/, fonts/ (public asset dirs)
      */
     "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|images/|fonts/).*)",
   ],
