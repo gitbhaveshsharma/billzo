@@ -72,6 +72,13 @@ export function useOnboardingRedirect() {
           }
         }
 
+        // Redirect from generic /dashboard to role-specific dashboard
+        if (data.is_onboarding_complete && pathname === "/dashboard" && data.redirect_to && data.redirect_to !== "/dashboard") {
+          console.log(`🔀 Redirecting to role-specific dashboard: ${data.redirect_to} (current: ${pathname})`);
+          router.push(data.redirect_to);
+          return;
+        }
+
         // Only redirect if:
         // 1. Onboarding is not complete
         // 2. Current path doesn't match the redirect target

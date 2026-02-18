@@ -156,31 +156,28 @@ BEGIN
         'role', v_role_info,
         
         -- Next step based on onboarding progress
+        -- PRIORITY: Check store status BEFORE role
         'next_step', CASE
-            -- If user already has role, onboarding is complete for them
-            WHEN v_role_info->>'has_role' = 'true' THEN 'completed'
-            -- Otherwise follow standard onboarding flow
             WHEN NOT v_has_organization THEN 'create_organization'
             WHEN NOT v_has_store THEN 'create_store'
             WHEN v_store_status = 'pending' THEN 'pending_approval'
-            WHEN v_store_status = 'active' AND NOT v_is_store_user THEN 'waiting_for_invitation'
-            WHEN v_store_status = 'active' AND v_is_store_user THEN 'completed'
             WHEN v_store_status = 'rejected' THEN 'store_rejected'
             WHEN v_store_status = 'suspended' THEN 'store_suspended'
+            WHEN v_store_status = 'active' AND v_role_info->>'has_role' = 'true' THEN 'completed'
+            WHEN v_store_status = 'active' AND NOT v_is_store_user THEN 'waiting_for_invitation'
+            WHEN v_store_status = 'active' AND v_is_store_user THEN 'completed'
             ELSE 'unknown'
         END,
         
         -- Redirect URL based on role and onboarding status
+        -- PRIORITY: Check store status BEFORE role
         'redirect_to', CASE
-            -- ROLE-BASED REDIRECTS (when user has a role)
-            WHEN v_role_info->>'has_role' = 'true' THEN v_role_info->>'dashboard_path'
-            
-            -- ONBOARDING FLOW (when user has no role yet)
             WHEN NOT v_has_organization THEN '/create-organization'
             WHEN NOT v_has_store THEN '/create-store'
             WHEN v_store_status = 'pending' THEN '/pending-approval'
             WHEN v_store_status = 'rejected' THEN '/store-rejected'
             WHEN v_store_status = 'suspended' THEN '/account-suspended'
+            WHEN v_store_status = 'active' AND v_role_info->>'has_role' = 'true' THEN v_role_info->>'dashboard_path'
             WHEN v_store_status = 'active' AND NOT v_is_store_user THEN '/welcome?status=store_created'
             ELSE '/dashboard'
         END,
@@ -193,7 +190,11 @@ BEGIN
         ),
         
         -- Display message based on role
+        -- PRIORITY: Store status messages before role messages
         'welcome_message', CASE
+            WHEN v_store_status = 'pending' THEN 'Your store is under review'
+            WHEN v_store_status = 'rejected' THEN 'Store application was rejected'
+            WHEN v_store_status = 'suspended' THEN 'Store is currently suspended'
             WHEN v_role_info->>'role_name' = 'super_admin' THEN 'Welcome to Super Admin Dashboard'
             WHEN v_role_info->>'role_name' = 'store_admin' THEN 'Welcome to Store Admin Dashboard'
             WHEN v_role_info->>'role_name' = 'manager' THEN 'Welcome to Manager Dashboard'
@@ -202,7 +203,6 @@ BEGIN
             WHEN v_role_info->>'role_name' = 'cashier' THEN 'Ready to start selling?'
             WHEN NOT v_has_organization THEN 'Let''s set up your organization'
             WHEN NOT v_has_store THEN 'Now create your first store'
-            WHEN v_store_status = 'pending' THEN 'Your store is under review'
             ELSE 'Welcome to the platform'
         END
     );

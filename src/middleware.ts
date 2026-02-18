@@ -294,6 +294,22 @@ export async function middleware(request: NextRequest) {
     return redirect(request, onboardingStatus.redirect_to);
   }
 
+  // ── Redirect to role-specific dashboard if needed ───────────────────────
+  // Users with roles should be on their role-specific dashboard, not generic /dashboard
+  if (pathname === "/dashboard" && onboardingStatus.redirect_to && onboardingStatus.redirect_to !== "/dashboard") {
+    log("info", "Redirecting to role-specific dashboard", {
+      path: pathname,
+      userId: user.id,
+      roleDashboard: onboardingStatus.redirect_to,
+    });
+    console.log("🔀 [ROLE DASHBOARD REDIRECT]", {
+      from: pathname,
+      to: onboardingStatus.redirect_to,
+      reason: "User has role-specific dashboard",
+    });
+    return redirect(request, onboardingStatus.redirect_to);
+  }
+
   // ── Protected & role-based routes — enrich from DB ───────────────────────
   const { data: userRow, error: userError } = await supabase
     .from("v_user_store_role")
