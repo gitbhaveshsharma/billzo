@@ -1,0 +1,15 @@
+export { ProductStats } from "./product-stats";
+export { ProductTable, type ProductAction } from "./product-table";
+export { ProductRowActions } from "./product-row-actions";
+export { ProductToolbar } from "./product-toolbar";
+export { ProductPagination } from "./product-pagination";
+export { AddProductDialog } from "./add-product-dialog";
+export { EditProductDialog } from "./edit-product-dialog";
+export { ProductDetailSheet } from "./product-detail-sheet";
+export { DeleteProductDialog } from "./product-action-dialogs";
+export { VariantManager } from "./variant-manager";
+export { BarcodeManager } from "./barcode-manager";
+export { InventoryPanel } from "./inventory-panel";
+export { BatchManager } from "./batch-manager";
+export { SupplierProductMapper } from "./supplier-product-mapper";
+export { StockMovementHistory } from "./stock-movement-history";

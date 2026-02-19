@@ -1,0 +1,492 @@
+"use client";
+
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import toast from "react-hot-toast";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Loader2 } from "lucide-react";
+import { createProductSchema } from "@/validations/product.validation";
+import { GST_RATES } from "@/types/product.types";
+import type { CreateProductRequest, Category, UnitOfMeasure } from "@/types/product.types";
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+interface AddProductDialogProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSubmit: (data: CreateProductRequest) => Promise<boolean>;
+    categories: Category[];
+    units: UnitOfMeasure[];
+}
+
+// ============================================================================
+// COMPONENT
+// ============================================================================
+
+export function AddProductDialog({
+    open,
+    onOpenChange,
+    onSubmit,
+    categories,
+    units,
+}: AddProductDialogProps) {
+    const [activeTab, setActiveTab] = useState("basic");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const {
+        register,
+        handleSubmit,
+        setValue,
+        watch,
+        reset,
+        formState: { errors },
+    } = useForm({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        resolver: zodResolver(createProductSchema) as any,
+        defaultValues: {
+            product_code: "",
+            name: "",
+            barcode: "",
+            description: "",
+            short_description: "",
+            category_id: undefined as string | undefined,
+            brand: "",
+            model: "",
+            hsn_code: "",
+            gst_percentage: 18,
+            cess_percentage: 0,
+            mrp: 0,
+            selling_price: 0,
+            purchase_price: undefined as number | undefined,
+            unit_id: undefined as string | undefined,
+            minimum_stock: 0,
+            reorder_level: 0,
+            is_batch_tracked: false,
+            is_taxable: true,
+            primary_image: "",
+        },
+    });
+
+    const watchGst = watch("gst_percentage");
+    const watchBatchTracked = watch("is_batch_tracked");
+    const watchTaxable = watch("is_taxable");
+    const watchCategoryId = watch("category_id");
+    const watchUnitId = watch("unit_id");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const onFormSubmit = async (data: any) => {
+        setIsSubmitting(true);
+        const toastId = toast.loading("Creating product...");
+
+        try {
+            const success = await onSubmit(data as CreateProductRequest);
+            if (success) {
+                toast.success("Product created successfully", { id: toastId });
+                reset();
+                setActiveTab("basic");
+                onOpenChange(false);
+            } else {
+                toast.error("Failed to create product", { id: toastId });
+            }
+        } catch {
+            toast.error("An unexpected error occurred", { id: toastId });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleClose = (isOpen: boolean) => {
+        if (!isOpen) {
+            reset();
+            setActiveTab("basic");
+        }
+        onOpenChange(isOpen);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={handleClose}>
+            <DialogContent className="max-w-3xl max-h-[95vh] flex flex-col">
+                <DialogHeader className="flex-shrink-0">
+                    <DialogTitle>Add New Product</DialogTitle>
+                    <DialogDescription>
+                        Create a new product. Fill in required fields and any additional details.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col p-1">
+                    <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
+                        <TabsTrigger value="basic">Basic Info</TabsTrigger>
+                        <TabsTrigger value="pricing">Pricing & Tax</TabsTrigger>
+                        <TabsTrigger value="inventory">Inventory</TabsTrigger>
+                    </TabsList>
+
+                    <ScrollArea className="flex-1 min-h-0 p-4 overflow-x-auto">
+                        {/* ================================ BASIC INFO ================================ */}
+                        <TabsContent value="basic" className="space-y-4 mt-0 px-4">
+                            {/* Product Code + Name */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="product_code">
+                                        Product Code <span className="text-destructive">*</span>
+                                    </Label>
+                                    <Input
+                                        id="product_code"
+                                        placeholder="e.g., PRD-001"
+                                        {...register("product_code")}
+                                    />
+                                    {errors.product_code && (
+                                        <p className="text-xs text-destructive">{String(errors.product_code.message)}</p>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="name">
+                                        Product Name <span className="text-destructive">*</span>
+                                    </Label>
+                                    <Input
+                                        id="name"
+                                        placeholder="e.g., Premium Basmati Rice 5kg"
+                                        {...register("name")}
+                                    />
+                                    {errors.name && (
+                                        <p className="text-xs text-destructive">{String(errors.name.message)}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Barcode + Brand */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="barcode">Barcode</Label>
+                                    <Input
+                                        id="barcode"
+                                        placeholder="EAN-13 / UPC barcode"
+                                        {...register("barcode")}
+                                    />
+                                    {errors.barcode && (
+                                        <p className="text-xs text-destructive">{String(errors.barcode.message)}</p>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="brand">Brand</Label>
+                                    <Input
+                                        id="brand"
+                                        placeholder="e.g., Daawat"
+                                        {...register("brand")}
+                                    />
+                                    {errors.brand && (
+                                        <p className="text-xs text-destructive">{String(errors.brand.message)}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Category + Unit */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Category</Label>
+                                    <Select
+                                        value={watchCategoryId || ""}
+                                        onValueChange={(val) =>
+                                            setValue("category_id", val || undefined, { shouldValidate: true })
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select category" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {categories
+                                                .filter((c) => c.is_active)
+                                                .map((cat) => (
+                                                    <SelectItem key={cat.id} value={cat.id}>
+                                                        {cat.name}
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Unit of Measure</Label>
+                                    <Select
+                                        value={watchUnitId || ""}
+                                        onValueChange={(val) =>
+                                            setValue("unit_id", val || undefined, { shouldValidate: true })
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select unit" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {units
+                                                .filter((u) => u.is_active)
+                                                .map((unit) => (
+                                                    <SelectItem key={unit.id} value={unit.id}>
+                                                        {unit.name} ({unit.code})
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            {/* Model + HSN Code */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="model">Model</Label>
+                                    <Input
+                                        id="model"
+                                        placeholder="Model number"
+                                        {...register("model")}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="hsn_code">HSN Code</Label>
+                                    <Input
+                                        id="hsn_code"
+                                        placeholder="e.g., 10063020"
+                                        {...register("hsn_code")}
+                                    />
+                                    {errors.hsn_code && (
+                                        <p className="text-xs text-destructive">{String(errors.hsn_code.message)}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Short Description */}
+                            <div className="space-y-2">
+                                <Label htmlFor="short_description">Short Description</Label>
+                                <Input
+                                    id="short_description"
+                                    placeholder="Brief product description (max 200 chars)"
+                                    {...register("short_description")}
+                                />
+                                {errors.short_description && (
+                                    <p className="text-xs text-destructive">{String(errors.short_description.message)}</p>
+                                )}
+                            </div>
+
+                            {/* Description */}
+                            <div className="space-y-2">
+                                <Label htmlFor="description">Full Description</Label>
+                                <Textarea
+                                    id="description"
+                                    placeholder="Detailed product description..."
+                                    rows={3}
+                                    {...register("description")}
+                                />
+                                {errors.description && (
+                                    <p className="text-xs text-destructive">{String(errors.description.message)}</p>
+                                )}
+                            </div>
+
+                            {/* Primary Image */}
+                            <div className="space-y-2">
+                                <Label htmlFor="primary_image">Image URL</Label>
+                                <Input
+                                    id="primary_image"
+                                    placeholder="https://example.com/image.jpg"
+                                    {...register("primary_image")}
+                                />
+                                {errors.primary_image && (
+                                    <p className="text-xs text-destructive">{String(errors.primary_image.message)}</p>
+                                )}
+                            </div>
+                        </TabsContent>
+
+                        {/* ================================ PRICING & TAX ================================ */}
+                        <TabsContent value="pricing" className="space-y-4 mt-0 px-4">
+                            {/* MRP + Selling Price */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="mrp">
+                                        MRP (₹) <span className="text-destructive">*</span>
+                                    </Label>
+                                    <Input
+                                        id="mrp"
+                                        type="number"
+                                        min={0}
+                                        step={0.01}
+                                        placeholder="0.00"
+                                        {...register("mrp", { valueAsNumber: true })}
+                                    />
+                                    {errors.mrp && (
+                                        <p className="text-xs text-destructive">{String(errors.mrp.message)}</p>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="selling_price">
+                                        Selling Price (₹) <span className="text-destructive">*</span>
+                                    </Label>
+                                    <Input
+                                        id="selling_price"
+                                        type="number"
+                                        min={0}
+                                        step={0.01}
+                                        placeholder="0.00"
+                                        {...register("selling_price", { valueAsNumber: true })}
+                                    />
+                                    {errors.selling_price && (
+                                        <p className="text-xs text-destructive">{String(errors.selling_price.message)}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Purchase Price */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="purchase_price">Purchase Price (₹)</Label>
+                                    <Input
+                                        id="purchase_price"
+                                        type="number"
+                                        min={0}
+                                        step={0.01}
+                                        placeholder="0.00"
+                                        {...register("purchase_price", { valueAsNumber: true })}
+                                    />
+                                    {errors.purchase_price && (
+                                        <p className="text-xs text-destructive">{String(errors.purchase_price.message)}</p>
+                                    )}
+                                </div>
+                                <div />
+                            </div>
+
+                            {/* Tax Section */}
+                            <div className="space-y-4 pt-2">
+                                <h4 className="text-sm font-medium text-muted-foreground">Tax Configuration</h4>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>
+                                            GST Rate <span className="text-destructive">*</span>
+                                        </Label>
+                                        <Select
+                                            value={String(watchGst ?? 18)}
+                                            onValueChange={(val) =>
+                                                setValue("gst_percentage", Number(val), { shouldValidate: true })
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {GST_RATES.map((rate) => (
+                                                    <SelectItem key={rate} value={String(rate)}>
+                                                        {rate === 0 ? "Exempt (0%)" : `${rate}%`}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="cess_percentage">Cess (%)</Label>
+                                        <Input
+                                            id="cess_percentage"
+                                            type="number"
+                                            min={0}
+                                            max={100}
+                                            step={0.01}
+                                            {...register("cess_percentage", { valueAsNumber: true })}
+                                        />
+                                        {errors.cess_percentage && (
+                                            <p className="text-xs text-destructive">{String(errors.cess_percentage.message)}</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <Switch
+                                        id="is_taxable"
+                                        checked={watchTaxable}
+                                        onCheckedChange={(checked) => setValue("is_taxable", checked)}
+                                    />
+                                    <Label htmlFor="is_taxable">Product is taxable</Label>
+                                </div>
+                            </div>
+                        </TabsContent>
+
+                        {/* ================================ INVENTORY ================================ */}
+                        <TabsContent value="inventory" className="space-y-4 mt-0 px-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="minimum_stock">Minimum Stock</Label>
+                                    <Input
+                                        id="minimum_stock"
+                                        type="number"
+                                        min={0}
+                                        {...register("minimum_stock", { valueAsNumber: true })}
+                                    />
+                                    {errors.minimum_stock && (
+                                        <p className="text-xs text-destructive">{String(errors.minimum_stock.message)}</p>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="reorder_level">Reorder Level</Label>
+                                    <Input
+                                        id="reorder_level"
+                                        type="number"
+                                        min={0}
+                                        {...register("reorder_level", { valueAsNumber: true })}
+                                    />
+                                    {errors.reorder_level && (
+                                        <p className="text-xs text-destructive">{String(errors.reorder_level.message)}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <Switch
+                                    id="is_batch_tracked"
+                                    checked={watchBatchTracked}
+                                    onCheckedChange={(checked) => setValue("is_batch_tracked", checked)}
+                                />
+                                <Label htmlFor="is_batch_tracked">Enable batch & expiry tracking</Label>
+                            </div>
+
+                            <p className="text-xs text-muted-foreground">
+                                When batch tracking is enabled, you can record manufacturing dates,
+                                expiry dates, and batch numbers for this product.
+                            </p>
+                        </TabsContent>
+                    </ScrollArea>
+                </Tabs>
+
+                <DialogFooter className="flex-shrink-0 pt-4">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleClose(false)}
+                        disabled={isSubmitting}
+                    >
+                        Cancel
+                    </Button>
+                    <Button type="submit" onClick={handleSubmit(onFormSubmit)} disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Create Product
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
