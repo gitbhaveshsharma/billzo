@@ -35,7 +35,7 @@ export function StoreForm() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isFetchingOrg, setIsFetchingOrg] = useState(false);
     const [orgError, setOrgError] = useState<string | null>(null);
-    
+
     const { appUser, isInitialized } = useAuth();
     const { organization, setOrganization } = useOrganizationStore();
     const { setStore } = useStoreStore();
@@ -76,7 +76,7 @@ export function StoreForm() {
 
             try {
                 const { data, error } = await organizationService.getById(orgId);
-                
+
                 if (error || !data) {
                     console.error("❌ [STORE FORM] Failed to fetch organization:", error);
                     setOrgError(error || "Failed to load organization");
@@ -88,7 +88,7 @@ export function StoreForm() {
                     organizationId: data.id,
                     organizationName: data.name,
                 });
-                
+
                 // Update Zustand store
                 setOrganization(data);
             } catch (err) {

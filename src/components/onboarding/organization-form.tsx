@@ -34,7 +34,7 @@ export function OrganizationForm() {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isFetchingOrg, setIsFetchingOrg] = useState(false);
-    
+
     const { appUser, isInitialized } = useAuth();
     const { organization, setOrganization } = useOrganizationStore();
 
@@ -70,7 +70,7 @@ export function OrganizationForm() {
 
             try {
                 const { data, error } = await organizationService.getById(orgId);
-                
+
                 if (error || !data) {
                     console.error("❌ [ORGANIZATION FORM] Failed to fetch organization:", error);
                     // Don't show error toast - allow user to create new org
@@ -81,7 +81,7 @@ export function OrganizationForm() {
                     organizationId: data.id,
                     organizationName: data.name,
                 });
-                
+
                 // Update store and redirect
                 setOrganization(data);
                 toast.success(`Welcome back! ${data.name} loaded.`);
