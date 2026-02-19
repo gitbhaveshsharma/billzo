@@ -157,9 +157,10 @@ export function AddEmployeeDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden">
-                {/* Header */}
-                <DialogHeader className="px-6 pt-6 pb-4">
+            {/* Same structure as AddSupplierDialog: max-h-[95vh] flex flex-col */}
+            <DialogContent className="max-w-3xl max-h-[95vh] flex flex-col">
+                {/* Header — flex-shrink-0 so it never gets squeezed */}
+                <DialogHeader className="flex-shrink-0">
                     <DialogTitle className="flex items-center gap-2 text-lg">
                         <UserPlus className="h-5 w-5 text-primary" />
                         Add Employee
@@ -169,248 +170,246 @@ export function AddEmployeeDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <Separator />
+                <form
+                    onSubmit={handleSubmit(handleFormSubmit)}
+                    className="flex flex-col flex-1 min-h-0"
+                >
+                    {/* Tabs take remaining space, same as supplier dialog */}
+                    <Tabs defaultValue="basic" className="flex-1 min-h-0 flex flex-col p-1">
+                        {/* TabsList — flex-shrink-0, always visible */}
+                        <TabsList className="w-full grid grid-cols-2 flex-shrink-0">
+                            <TabsTrigger value="basic" className="flex items-center gap-2">
+                                <UserPlus className="h-3.5 w-3.5" />
+                                Basic Info
+                            </TabsTrigger>
+                            <TabsTrigger value="employee" className="flex items-center gap-2">
+                                <Briefcase className="h-3.5 w-3.5" />
+                                Employee Details
+                            </TabsTrigger>
+                        </TabsList>
 
-                <form onSubmit={handleSubmit(handleFormSubmit)}>
-                    <Tabs defaultValue="basic" className="w-full">
-                        {/* Tab list */}
-                        <div className="px-6 pt-4">
-                            <TabsList className="w-full grid grid-cols-2">
-                                <TabsTrigger value="basic" className="flex items-center gap-2">
-                                    <UserPlus className="h-3.5 w-3.5" />
-                                    Basic Info
-                                </TabsTrigger>
-                                <TabsTrigger value="employee" className="flex items-center gap-2">
-                                    <Briefcase className="h-3.5 w-3.5" />
-                                    Employee Details
-                                </TabsTrigger>
-                            </TabsList>
-                        </div>
+                        {/*
+                            Single ScrollArea wrapping ALL TabsContent — exactly like supplier dialog.
+                            flex-1 + min-h-0 makes it fill leftover space and scroll when needed.
+                        */}
+                        <ScrollArea className="flex-1 min-h-0 p-4">
 
-                        {/* ── Basic Info Tab ── */}
-                        <TabsContent value="basic" className="mt-0">
-                            <ScrollArea className="h-[420px]">
-                                <div className="px-6 py-4 space-y-5">
-                                    {/* Email */}
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="email">
-                                            Email <span className="text-destructive">*</span>
-                                        </Label>
-                                        <Input
-                                            id="email"
-                                            type="email"
-                                            placeholder="employee@example.com"
-                                            {...register("email")}
-                                        />
-                                        {errors.email && (
-                                            <p className="text-xs text-destructive">{errors.email.message}</p>
-                                        )}
-                                    </div>
-
-                                    {/* Role */}
-                                    <div className="space-y-1.5">
-                                        <Label>
-                                            Role <span className="text-destructive">*</span>
-                                        </Label>
-                                        <Controller
-                                            name="role_id"
-                                            control={control}
-                                            render={({ field }) => (
-                                                <Select value={field.value} onValueChange={field.onChange}>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Select a role" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {availableRoles?.roles.map((role) => (
-                                                            <SelectItem key={role.id} value={role.id}>
-                                                                {role.role_display_name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            )}
-                                        />
-                                        {errors.role_id && (
-                                            <p className="text-xs text-destructive">{errors.role_id.message}</p>
-                                        )}
-                                    </div>
-
-                                    {/* Designation + Department side by side */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="designation">Designation</Label>
-                                            <Input
-                                                id="designation"
-                                                placeholder="e.g. Senior Cashier"
-                                                {...register("designation")}
-                                            />
-                                            {errors.designation && (
-                                                <p className="text-xs text-destructive">{errors.designation.message}</p>
-                                            )}
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="department">Department</Label>
-                                            <Input
-                                                id="department"
-                                                placeholder="e.g. Sales, Inventory"
-                                                {...register("department")}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Active toggle */}
-                                    <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-4">
-                                        <div className="space-y-0.5">
-                                            <Label className="text-sm font-medium">Active</Label>
-                                            <p className="text-xs text-muted-foreground">
-                                                Allow this user to log in immediately after adding
-                                            </p>
-                                        </div>
-                                        <Switch
-                                            checked={watch("is_active")}
-                                            onCheckedChange={(checked) => setValue("is_active", checked)}
-                                        />
-                                    </div>
-                                </div>
-                            </ScrollArea>
-                        </TabsContent>
-
-                        {/* ── Employee Details Tab ── */}
-                        <TabsContent value="employee" className="mt-0">
-                            <ScrollArea className="h-[420px]">
-                                <div className="px-6 py-4 space-y-5">
-                                    {/* Toggle */}
-                                    <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-4">
-                                        <div className="space-y-0.5">
-                                            <Label className="text-sm font-medium">Create Employee Record</Label>
-                                            <p className="text-xs text-muted-foreground">
-                                                Create a detailed employee profile with a staff ID
-                                            </p>
-                                        </div>
-                                        <Switch
-                                            checked={createEmployee}
-                                            onCheckedChange={(checked) => {
-                                                setCreateEmployee(checked);
-                                                setValue("create_employee", checked);
-                                            }}
-                                        />
-                                    </div>
-
-                                    {createEmployee && (
-                                        <div className="space-y-5">
-                                            <Separator />
-
-                                            {/* Staff ID */}
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor="employee_code">
-                                                    Staff ID / Employee Code <span className="text-destructive">*</span>
-                                                </Label>
-                                                <Input
-                                                    id="employee_code"
-                                                    placeholder="e.g. EMP-001"
-                                                    {...register("employee_code")}
-                                                />
-                                                {errors.employee_code && (
-                                                    <p className="text-xs text-destructive">{errors.employee_code.message}</p>
-                                                )}
-                                            </div>
-
-                                            {/* First + Last Name */}
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor="first_name">
-                                                        First Name <span className="text-destructive">*</span>
-                                                    </Label>
-                                                    <Input id="first_name" placeholder="First name" {...register("first_name")} />
-                                                    {errors.first_name && (
-                                                        <p className="text-xs text-destructive">{errors.first_name.message}</p>
-                                                    )}
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor="last_name">
-                                                        Last Name <span className="text-destructive">*</span>
-                                                    </Label>
-                                                    <Input id="last_name" placeholder="Last name" {...register("last_name")} />
-                                                    {errors.last_name && (
-                                                        <p className="text-xs text-destructive">{errors.last_name.message}</p>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Phone */}
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor="phone">Phone</Label>
-                                                <Input id="phone" placeholder="10-digit Indian phone number" {...register("phone")} />
-                                                {errors.phone && (
-                                                    <p className="text-xs text-destructive">{errors.phone.message}</p>
-                                                )}
-                                            </div>
-
-                                            {/* Employee Type + Pay Frequency */}
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1.5">
-                                                    <Label>Employee Type</Label>
-                                                    <Controller
-                                                        name="employee_type"
-                                                        control={control}
-                                                        render={({ field }) => (
-                                                            <Select value={field.value} onValueChange={field.onChange}>
-                                                                <SelectTrigger>
-                                                                    <SelectValue placeholder="Select type" />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="full_time">Full Time</SelectItem>
-                                                                    <SelectItem value="part_time">Part Time</SelectItem>
-                                                                    <SelectItem value="contractor">Contractor</SelectItem>
-                                                                    <SelectItem value="intern">Intern</SelectItem>
-                                                                    <SelectItem value="trainee">Trainee</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        )}
-                                                    />
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <Label>Pay Frequency</Label>
-                                                    <Controller
-                                                        name="pay_frequency"
-                                                        control={control}
-                                                        render={({ field }) => (
-                                                            <Select value={field.value} onValueChange={field.onChange}>
-                                                                <SelectTrigger>
-                                                                    <SelectValue placeholder="Select frequency" />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="monthly">Monthly</SelectItem>
-                                                                    <SelectItem value="weekly">Weekly</SelectItem>
-                                                                    <SelectItem value="daily">Daily</SelectItem>
-                                                                    <SelectItem value="hourly">Hourly</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        )}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Joining Date */}
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor="joining_date">Joining Date</Label>
-                                                <Input
-                                                    id="joining_date"
-                                                    type="date"
-                                                    {...register("joining_date")}
-                                                />
-                                            </div>
-                                        </div>
+                            {/* ── Basic Info Tab ── */}
+                            <TabsContent value="basic" className="space-y-5 mt-0 px-2">
+                                {/* Email */}
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="email">
+                                        Email <span className="text-destructive">*</span>
+                                    </Label>
+                                    <Input
+                                        id="email"
+                                        type="email"
+                                        placeholder="employee@example.com"
+                                        {...register("email")}
+                                    />
+                                    {errors.email && (
+                                        <p className="text-xs text-destructive">{errors.email.message}</p>
                                     )}
                                 </div>
-                            </ScrollArea>
-                        </TabsContent>
+
+                                {/* Role */}
+                                <div className="space-y-1.5">
+                                    <Label>
+                                        Role <span className="text-destructive">*</span>
+                                    </Label>
+                                    <Controller
+                                        name="role_id"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Select value={field.value} onValueChange={field.onChange}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select a role" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {availableRoles?.roles.map((role) => (
+                                                        <SelectItem key={role.id} value={role.id}>
+                                                            {role.role_display_name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                    {errors.role_id && (
+                                        <p className="text-xs text-destructive">{errors.role_id.message}</p>
+                                    )}
+                                </div>
+
+                                {/* Designation + Department */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="designation">Designation</Label>
+                                        <Input
+                                            id="designation"
+                                            placeholder="e.g. Senior Cashier"
+                                            {...register("designation")}
+                                        />
+                                        {errors.designation && (
+                                            <p className="text-xs text-destructive">{errors.designation.message}</p>
+                                        )}
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="department">Department</Label>
+                                        <Input
+                                            id="department"
+                                            placeholder="e.g. Sales, Inventory"
+                                            {...register("department")}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Active toggle */}
+                                <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-4">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-sm font-medium">Active</Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Allow this user to log in immediately after adding
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={watch("is_active")}
+                                        onCheckedChange={(checked) => setValue("is_active", checked)}
+                                    />
+                                </div>
+                            </TabsContent>
+
+                            {/* ── Employee Details Tab ── */}
+                            <TabsContent value="employee" className="space-y-5 mt-0 px-2">
+                                {/* Toggle */}
+                                <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-4">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-sm font-medium">Create Employee Record</Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Create a detailed employee profile with a staff ID
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={createEmployee}
+                                        onCheckedChange={(checked) => {
+                                            setCreateEmployee(checked);
+                                            setValue("create_employee", checked);
+                                        }}
+                                    />
+                                </div>
+
+                                {createEmployee && (
+                                    <div className="space-y-5">
+                                        <Separator />
+
+                                        {/* Staff ID */}
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="employee_code">
+                                                Staff ID / Employee Code <span className="text-destructive">*</span>
+                                            </Label>
+                                            <Input
+                                                id="employee_code"
+                                                placeholder="e.g. EMP-001"
+                                                {...register("employee_code")}
+                                            />
+                                            {errors.employee_code && (
+                                                <p className="text-xs text-destructive">{errors.employee_code.message}</p>
+                                            )}
+                                        </div>
+
+                                        {/* First + Last Name */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="first_name">
+                                                    First Name <span className="text-destructive">*</span>
+                                                </Label>
+                                                <Input id="first_name" placeholder="First name" {...register("first_name")} />
+                                                {errors.first_name && (
+                                                    <p className="text-xs text-destructive">{errors.first_name.message}</p>
+                                                )}
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="last_name">
+                                                    Last Name <span className="text-destructive">*</span>
+                                                </Label>
+                                                <Input id="last_name" placeholder="Last name" {...register("last_name")} />
+                                                {errors.last_name && (
+                                                    <p className="text-xs text-destructive">{errors.last_name.message}</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Phone */}
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="phone">Phone</Label>
+                                            <Input id="phone" placeholder="10-digit Indian phone number" {...register("phone")} />
+                                            {errors.phone && (
+                                                <p className="text-xs text-destructive">{errors.phone.message}</p>
+                                            )}
+                                        </div>
+
+                                        {/* Employee Type + Pay Frequency */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <Label>Employee Type</Label>
+                                                <Controller
+                                                    name="employee_type"
+                                                    control={control}
+                                                    render={({ field }) => (
+                                                        <Select value={field.value} onValueChange={field.onChange}>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Select type" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="full_time">Full Time</SelectItem>
+                                                                <SelectItem value="part_time">Part Time</SelectItem>
+                                                                <SelectItem value="contractor">Contractor</SelectItem>
+                                                                <SelectItem value="intern">Intern</SelectItem>
+                                                                <SelectItem value="trainee">Trainee</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Pay Frequency</Label>
+                                                <Controller
+                                                    name="pay_frequency"
+                                                    control={control}
+                                                    render={({ field }) => (
+                                                        <Select value={field.value} onValueChange={field.onChange}>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Select frequency" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="monthly">Monthly</SelectItem>
+                                                                <SelectItem value="weekly">Weekly</SelectItem>
+                                                                <SelectItem value="daily">Daily</SelectItem>
+                                                                <SelectItem value="hourly">Hourly</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Joining Date */}
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="joining_date">Joining Date</Label>
+                                            <Input
+                                                id="joining_date"
+                                                type="date"
+                                                {...register("joining_date")}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </TabsContent>
+
+                        </ScrollArea>
                     </Tabs>
 
-                    <Separator />
-
-                    {/* Footer */}
-                    <DialogFooter className="px-6 py-4 gap-2">
+                    {/* Footer — flex-shrink-0, always anchored at bottom */}
+                    <DialogFooter className="flex-shrink-0 pt-4 gap-2">
                         <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
                             Cancel
                         </Button>

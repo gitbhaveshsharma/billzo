@@ -252,29 +252,44 @@ export const storeUsersService = {
         try {
             const client = getClient();
 
+            // 0. Get current user (needed for invited_by)
+            const { data: { user: currentUser } } = await client.auth.getUser();
+
             // 1. Check if user exists in profiles table by email
+            // Use maybeSingle() — returns null (no error) when 0 rows found;
+            // .single() would throw PGRST116 when the user does not exist yet.
             const { data: existingProfile } = await client
                 .from("profiles")
                 .select("id, email, phone")
                 .eq("email", request.email)
-                .single();
+                .maybeSingle();
 
             let userId: string;
 
-            // 2. If user doesn't exist, we need to invite them
+            // 2. If user doesn't exist, create a pending invitation
             if (!existingProfile) {
-                // Create invitation record
-                const { data: invitation, error: inviteError } = await client
+                // invited_by is NOT NULL in the schema — must be supplied.
+                const { error: inviteError } = await client
                     .from("invitations")
                     .insert({
                         store_id: storeId,
                         role_id: request.role_id,
                         email: request.email,
+                        invited_by: currentUser?.id,
                         status: "pending",
                         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+                        // Pre-fill employee details so the accept flow can read them
+                        employee_data: request.create_employee && request.employee_data
+                            ? {
+                                first_name: request.employee_data.first_name,
+                                last_name: request.employee_data.last_name,
+                                designation: request.designation,
+                                department: request.department,
+                            }
+                            : {},
                     })
                     .select()
-                    .single();
+                    .maybeSingle();
 
                 if (inviteError) {
                     return { data: null, error: "Failed to create invitation: " + inviteError.message };
@@ -290,12 +305,13 @@ export const storeUsersService = {
             userId = existingProfile.id;
 
             // 3. Check if user is already in this store
+            // maybeSingle() avoids PGRST116 when no membership row exists.
             const { data: existingStoreUser } = await client
                 .from("store_users")
                 .select("id")
                 .eq("store_id", storeId)
                 .eq("user_id", userId)
-                .single();
+                .maybeSingle();
 
             if (existingStoreUser) {
                 return { data: null, error: "User is already part of this store" };
