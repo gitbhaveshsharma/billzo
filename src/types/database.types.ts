@@ -1861,6 +1861,14 @@ export interface Database {
         };
         Returns: Json;
       };
+      get_purchase_dashboard_stats: {
+        Args: { p_store_id: string };
+        Returns: Json;
+      };
+      get_supplier_purchase_summary: {
+        Args: { p_store_id: string; p_supplier_id: string };
+        Returns: Json;
+      };
     };
     Enums: {
       registration_type: RegistrationType;
