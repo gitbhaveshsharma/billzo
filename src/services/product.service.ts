@@ -980,13 +980,17 @@ export const productService = {
             if (!user) return { data: null, error: "Not authenticated" };
 
             // Get current inventory for previous_quantity tracking
-            const { data: currentInv } = await getClient()
+            const baseInvQuery = getClient()
                 .from("inventory")
                 .select("quantity_on_hand")
                 .eq("store_id", storeId)
-                .eq("product_id", data.product_id)
-                .is("variant_id", data.variant_id ?? null)
-                .maybeSingle();
+                .eq("product_id", data.product_id);
+
+            const { data: currentInv } = await (
+                data.variant_id
+                    ? baseInvQuery.eq("variant_id", data.variant_id)
+                    : baseInvQuery.is("variant_id", null)
+            ).maybeSingle();
 
             const previousQty = (currentInv as Record<string, unknown> | null)?.quantity_on_hand as number ?? 0;
 
