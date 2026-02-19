@@ -21,7 +21,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { updateStoreUserSchema } from "@/validations/store-users.validation";
@@ -194,14 +193,18 @@ export function EditEmployeeDialog({
                         <TabsContent value="store-user" className="space-y-4 mt-4">
                             <div className="space-y-1.5">
                                 <Label htmlFor="edit-role">Role</Label>
-                                <Select id="edit-role" {...register("role_id")}>
+                                <select
+                                    id="edit-role"
+                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                    {...register("role_id")}
+                                >
                                     <option value="">Select a role</option>
                                     {availableRoles?.roles.map((role) => (
                                         <option key={role.id} value={role.id}>
                                             {role.role_display_name}
                                         </option>
                                     ))}
-                                </Select>
+                                </select>
                                 {errors.role_id && (
                                     <p className="text-xs text-destructive">{errors.role_id.message}</p>
                                 )}
@@ -257,24 +260,32 @@ export function EditEmployeeDialog({
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
                                         <Label htmlFor="edit-emp-type">Employee Type</Label>
-                                        <Select id="edit-emp-type" {...register("employee_type")}>
+                                        <select
+                                            id="edit-emp-type"
+                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                            {...register("employee_type")}
+                                        >
                                             <option value="full_time">Full Time</option>
                                             <option value="part_time">Part Time</option>
                                             <option value="contractor">Contractor</option>
                                             <option value="intern">Intern</option>
                                             <option value="trainee">Trainee</option>
-                                        </Select>
+                                        </select>
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label htmlFor="edit-emp-status">Status</Label>
-                                        <Select id="edit-emp-status" {...register("employment_status")}>
+                                        <select
+                                            id="edit-emp-status"
+                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                            {...register("employment_status")}
+                                        >
                                             <option value="active">Active</option>
                                             <option value="probation">Probation</option>
                                             <option value="notice_period">Notice Period</option>
                                             <option value="terminated">Terminated</option>
                                             <option value="resigned">Resigned</option>
                                             <option value="absconded">Absconded</option>
-                                        </Select>
+                                        </select>
                                     </div>
                                 </div>
 
@@ -290,12 +301,16 @@ export function EditEmployeeDialog({
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label htmlFor="edit-pay-freq">Pay Frequency</Label>
-                                        <Select id="edit-pay-freq" {...register("pay_frequency")}>
+                                        <select
+                                            id="edit-pay-freq"
+                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                            {...register("pay_frequency")}
+                                        >
                                             <option value="monthly">Monthly</option>
                                             <option value="weekly">Weekly</option>
                                             <option value="daily">Daily</option>
                                             <option value="hourly">Hourly</option>
-                                        </Select>
+                                        </select>
                                     </div>
                                 </div>
 
