@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, AlertTriangle, Ban, Shield, RotateCcw, Trash2 } from "lucide-react";
 import type {
@@ -197,8 +196,9 @@ export function ChangeRoleDialog({
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="new-role">New Role *</Label>
-                        <Select
+                        <select
                             id="new-role"
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                             value={selectedRole}
                             onChange={(e) => setSelectedRole(e.target.value)}
                         >
@@ -210,7 +210,7 @@ export function ChangeRoleDialog({
                                         {role.role_display_name}
                                     </option>
                                 ))}
-                        </Select>
+                        </select>
                     </div>
                 </div>
 
@@ -541,8 +541,9 @@ export function BulkActionDialog({
                     {action === "change-role" && (
                         <div className="space-y-1.5">
                             <Label htmlFor="bulk-role">New Role *</Label>
-                            <Select
+                            <select
                                 id="bulk-role"
+                                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                                 value={roleId}
                                 onChange={(e) => setRoleId(e.target.value)}
                             >
@@ -552,7 +553,7 @@ export function BulkActionDialog({
                                         {role.role_display_name}
                                     </option>
                                 ))}
-                            </Select>
+                            </select>
                         </div>
                     )}
                 </div>

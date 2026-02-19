@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import type { StoreUserPagination } from "@/types/store-users.types";
 
@@ -50,18 +49,18 @@ export function EmployeePagination({
                 {/* Rows per page */}
                 <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground whitespace-nowrap">Per page</span>
-                    <Select
+                    <select
                         value={String(limit)}
                         onChange={(e) =>
                             onPaginationChange({ limit: Number(e.target.value), page: 1 })
                         }
-                        className="h-8 w-16 text-xs"
+                        className="h-8 w-16 text-xs rounded-md border border-input bg-transparent px-2 py-1 shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <option value="10">10</option>
                         <option value="20">20</option>
                         <option value="50">50</option>
                         <option value="100">100</option>
-                    </Select>
+                    </select>
                 </div>
 
                 {/* Page info */}

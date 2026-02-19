@@ -10,7 +10,6 @@ import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import {
     Card,
@@ -209,8 +208,9 @@ export function OrganizationForm() {
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div className="space-y-2">
                                 <Label htmlFor="registration_type">Registration Type</Label>
-                                <Select
+                                <select
                                     id="registration_type"
+                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                                     disabled={isSubmitting}
                                     {...register("registration_type")}
                                 >
@@ -220,7 +220,7 @@ export function OrganizationForm() {
                                             {type.label}
                                         </option>
                                     ))}
-                                </Select>
+                                </select>
                             </div>
 
                             <div className="space-y-2">
@@ -349,8 +349,9 @@ export function OrganizationForm() {
                                     <Label htmlFor="state">
                                         State <span className="text-destructive">*</span>
                                     </Label>
-                                    <Select
+                                    <select
                                         id="state"
+                                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                                         disabled={isSubmitting}
                                         {...register("state")}
                                     >
@@ -360,7 +361,7 @@ export function OrganizationForm() {
                                                 {s.name}
                                             </option>
                                         ))}
-                                    </Select>
+                                    </select>
                                     {errors.state && (
                                         <p className="text-sm text-destructive">{errors.state.message}</p>
                                     )}

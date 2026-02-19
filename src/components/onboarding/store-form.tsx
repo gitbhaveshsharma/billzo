@@ -10,7 +10,6 @@ import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import {
     Card,
     CardContent,
@@ -280,8 +279,9 @@ export function StoreForm() {
                         <Label htmlFor="store_type">
                             Store Type <span className="text-destructive">*</span>
                         </Label>
-                        <Select
+                        <select
                             id="store_type"
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={isSubmitting}
                             {...register("store_type")}
                         >
@@ -290,7 +290,7 @@ export function StoreForm() {
                                     {type.label}
                                 </option>
                             ))}
-                        </Select>
+                        </select>
                         {errors.store_type && (
                             <p className="text-sm text-destructive">
                                 {errors.store_type.message}
@@ -336,8 +336,9 @@ export function StoreForm() {
                             <Label htmlFor="state">
                                 State <span className="text-destructive">*</span>
                             </Label>
-                            <Select
+                            <select
                                 id="state"
+                                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                                 disabled={isSubmitting}
                                 {...register("state")}
                             >
@@ -347,7 +348,7 @@ export function StoreForm() {
                                         {s.name}
                                     </option>
                                 ))}
-                            </Select>
+                            </select>
                             {errors.state && (
                                 <p className="text-sm text-destructive">{errors.state.message}</p>
                             )}
