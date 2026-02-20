@@ -220,13 +220,19 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
       {
         id: "admin-inventory-products",
         label: "Products",
-        href: "/store-admin/inventory/products",
+        href: "/store-admin/products",
         roles: ["store_admin", "super_admin"],
       },
       {
         id: "admin-inventory-stock",
         label: "Stock Levels",
-        href: "/store-admin/inventory/stock",
+        href: "/store-admin/stock",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-inventory-purchases",
+        label: "Purchases",
+        href: "/store-admin/purchase",
         roles: ["store_admin", "super_admin"],
       },
       {
@@ -883,11 +889,11 @@ export function mergeLayoutConfig(
     footer: override.footer ? { ...base.footer, ...override.footer } : base.footer,
     responsive: override.responsive
       ? {
-          mobile: {
-            ...base.responsive.mobile,
-            ...override.responsive.mobile,
-          },
-        }
+        mobile: {
+          ...base.responsive.mobile,
+          ...override.responsive.mobile,
+        },
+      }
       : base.responsive,
   };
 }

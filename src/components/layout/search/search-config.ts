@@ -28,6 +28,7 @@ import {
   Bell,
   HelpCircle,
   Zap,
+  ShoppingBag,
 } from "lucide-react";
 import type { SearchItem } from "../types";
 
@@ -82,6 +83,25 @@ export const SEARCH_INDEX: SearchItem[] = [
     priority: "high",
     roles: ["cashier", "manager", "store_admin", "super_admin"],
     shortcut: "Alt+P",
+  },
+  {
+    id: "nav-purchases",
+    name: "Purchases",
+    description: "Create and manage supplier purchase entries",
+    category: "navigation",
+    icon: ShoppingBag,
+    href: "/store-admin/purchase",
+    keywords: [
+      "purchase",
+      "buy",
+      "supplier order",
+      "stock entry",
+      "inventory purchase",
+      "grn"
+    ],
+    priority: "high",
+    roles: ["store_admin", "super_admin"],
+    shortcut: "Alt+U", // U = pUrchase (since P is used for POS)
   },
   {
     id: "nav-accountant-dashboard",
