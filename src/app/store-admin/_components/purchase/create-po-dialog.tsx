@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X, Pencil, PackagePlus } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import {
     Dialog,
     DialogContent,
@@ -37,12 +38,20 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
 
 import { createPurchaseOrderSchema } from "@/validations/purchase.validation";
 import type { CreatePurchaseOrderFormData } from "@/validations/purchase.validation";
 import type { PurchaseOrder, CreatePurchaseOrderRequest } from "@/types/purchase.types";
 import { calculateItemTotals, calculatePOTotals, formatCurrency } from "@/utils/purchase.utils";
 import { useSupplierStore } from "@/stores/supplier.store";
+import { POItemDialog, type POItemDialogItem } from "./po-item-dialog";
 
 // ============================================================================
 // TYPES
@@ -58,24 +67,47 @@ interface CreatePODialogProps {
 }
 
 // ============================================================================
-// DEFAULT ITEM
+// FIELD TOOLTIP (shared small helper)
 // ============================================================================
 
-const DEFAULT_ITEM = {
-    product_id: crypto.randomUUID(),
-    product_name: "",
-    product_code: "",
-    hsn_code: "",
-    ordered_quantity: 1,
-    unit_price: 0,
-    mrp: undefined as number | undefined,
-    discount_percentage: 0,
-    discount_amount: 0,
-    gst_percentage: 18,
-    cess_percentage: 0,
-    batch_number: "",
-    notes: "",
-};
+function FieldTooltip({ content }: { content: string }) {
+    return (
+        <TooltipProvider delayDuration={200}>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help inline-block ml-1 align-middle" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[220px] text-xs leading-relaxed">
+                    {content}
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    );
+}
+
+// ============================================================================
+// DEFAULT ITEM SHAPE
+// ============================================================================
+
+function makeDefaultItem() {
+    return {
+        product_id: crypto.randomUUID(),
+        product_name: "",
+        product_code: "",
+        hsn_code: "",
+        ordered_quantity: 1,
+        unit_price: 0,
+        mrp: undefined as number | undefined,
+        discount_percentage: 0,
+        discount_amount: 0,
+        gst_percentage: 18,
+        cess_percentage: 0,
+        batch_number: "",
+        manufacturing_date: "",
+        expiry_date: "",
+        notes: "",
+    };
+}
 
 // ============================================================================
 // CREATE PO DIALOG
@@ -90,6 +122,10 @@ export function CreatePODialog({
     isSaving,
 }: CreatePODialogProps) {
     const [activeTab, setActiveTab] = useState("details");
+    const [itemDialogOpen, setItemDialogOpen] = useState(false);
+    const [editingItem, setEditingItem] = useState<POItemDialogItem | null>(null);
+    const [editingIndex, setEditingIndex] = useState<number | null>(null);
+
     const suppliers = useSupplierStore((s) => s.suppliers);
 
     const {
@@ -124,11 +160,11 @@ export function CreatePODialog({
             terms_and_conditions: "",
             internal_notes: "",
             tags: [],
-            items: [{ ...DEFAULT_ITEM }],
+            items: [],
         },
     });
 
-    const { fields, append, remove } = useFieldArray({
+    const { fields, append, remove, update } = useFieldArray({
         control,
         name: "items",
     });
@@ -152,7 +188,6 @@ export function CreatePODialog({
                 isInterState
             )
         );
-
         const poTotals = calculatePOTotals(
             itemTotals,
             orderDiscount,
@@ -160,11 +195,10 @@ export function CreatePODialog({
             otherCharges,
             roundOff
         );
-
         return { itemTotals, poTotals };
     }, [watchedItems, isInterState, orderDiscount, shippingCharges, otherCharges, roundOff]);
 
-    // Select supplier handler
+    // ── Supplier handler ──
     const handleSupplierChange = useCallback(
         (supplierId: string) => {
             const supplier = suppliers.find((s) => s.id === supplierId);
@@ -177,8 +211,36 @@ export function CreatePODialog({
         [suppliers, setValue]
     );
 
-    // Form submit
+    // ── Item dialog handlers ──
+    const openAddItem = () => {
+        setEditingItem(null);
+        setEditingIndex(null);
+        setItemDialogOpen(true);
+    };
+
+    const openEditItem = (index: number) => {
+        setEditingItem(watchedItems[index] as POItemDialogItem);
+        setEditingIndex(index);
+        setItemDialogOpen(true);
+    };
+
+    const handleItemSave = (item: POItemDialogItem, index: number | null) => {
+        if (index === null) {
+            append(item);
+        } else {
+            update(index, item);
+        }
+        setItemDialogOpen(false);
+    };
+
+    // ── Form submit ──
     const onFormSubmit = async (data: CreatePurchaseOrderFormData) => {
+        if (data.items.length === 0) {
+            toast.error("Please add at least one item before submitting.");
+            setActiveTab("items");
+            return;
+        }
+
         const request: CreatePurchaseOrderRequest = {
             supplier_id: data.supplier_id,
             supplier_name: data.supplier_name,
@@ -212,6 +274,8 @@ export function CreatePODialog({
                 gst_percentage: item.gst_percentage,
                 cess_percentage: item.cess_percentage,
                 batch_number: item.batch_number || undefined,
+                manufacturing_date: item.manufacturing_date || undefined,
+                expiry_date: item.expiry_date || undefined,
                 notes: item.notes || undefined,
             })),
         };
@@ -224,7 +288,6 @@ export function CreatePODialog({
         }
     };
 
-    // Handle dialog close
     const handleClose = (isOpen: boolean) => {
         if (!isOpen) {
             reset();
@@ -233,7 +296,7 @@ export function CreatePODialog({
         onOpenChange(isOpen);
     };
 
-    // Tags input
+    // ── Tags ──
     const [tagInput, setTagInput] = useState("");
     const watchedTags = watch("tags") ?? [];
 
@@ -253,431 +316,541 @@ export function CreatePODialog({
     );
 
     return (
-        <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-                <DialogHeader>
-                    <DialogTitle>
-                        {editOrder ? "Edit Purchase Order" : "Create Purchase Order"}
-                    </DialogTitle>
-                    <DialogDescription>
-                        {editOrder
-                            ? "Update purchase order details and items."
-                            : "Fill in the details to create a new purchase order."}
-                    </DialogDescription>
-                </DialogHeader>
+        <>
+            <Dialog open={open} onOpenChange={handleClose}>
+                <DialogContent className="max-w-4xl max-h-[95vh] flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {editOrder ? "Edit Purchase Order" : "Create Purchase Order"}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {editOrder
+                                ? "Update purchase order details and items."
+                                : "Fill in the details to create a new purchase order."}
+                        </DialogDescription>
+                    </DialogHeader>
 
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0">
-                    <TabsList className="w-full grid grid-cols-3">
-                        <TabsTrigger value="details">Details</TabsTrigger>
-                        <TabsTrigger value="items">
-                            Items ({fields.length})
-                        </TabsTrigger>
-                        <TabsTrigger value="additional">Additional</TabsTrigger>
-                    </TabsList>
-
-                    <ScrollArea className="flex-1 mt-2" style={{ maxHeight: "calc(90vh - 220px)" }}>
-                        {/* === DETAILS TAB === */}
-                        <TabsContent value="details" className="space-y-4 px-1">
-                            {/* Supplier */}
-                            <div className="space-y-2">
-                                <Label>Supplier *</Label>
-                                <Select
-                                    value={watch("supplier_id")}
-                                    onValueChange={handleSupplierChange}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select a supplier" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {suppliers.map((s) => (
-                                            <SelectItem key={s.id} value={s.id}>
-                                                {s.name}
-                                                {s.supplier_code ? ` (${s.supplier_code})` : ""}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {errors.supplier_id && (
-                                    <p className="text-sm text-red-500">{errors.supplier_id.message}</p>
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0">
+                        <TabsList className="w-full grid grid-cols-3">
+                            <TabsTrigger value="details">Details</TabsTrigger>
+                            <TabsTrigger value="items">
+                                Items
+                                {fields.length > 0 && (
+                                    <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px]">
+                                        {fields.length}
+                                    </Badge>
                                 )}
-                            </div>
+                            </TabsTrigger>
+                            <TabsTrigger value="additional">Additional</TabsTrigger>
+                        </TabsList>
 
-                            {/* Supplier GSTIN (auto-filled, editable) */}
-                            <div className="space-y-2">
-                                <Label>Supplier GSTIN</Label>
-                                <Input {...register("supplier_gstin")} placeholder="e.g. 29AAACB1234F1Z5" />
-                            </div>
-
-                            {/* Dates */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Order Date *</Label>
-                                    <Input type="date" {...register("order_date")} />
-                                    {errors.order_date && (
-                                        <p className="text-sm text-red-500">{errors.order_date.message}</p>
+                        <ScrollArea className="flex-1 min-h-0 overflow-x-hidden">
+                            {/* ══════════════════════════════════════════
+                                DETAILS TAB
+                            ══════════════════════════════════════════ */}
+                            <TabsContent value="details" className="space-y-4 p-4">
+                                {/* Supplier */}
+                                <div className="space-y-1.5">
+                                    <Label className="flex items-center">
+                                        Supplier <span className="text-red-500 ml-0.5">*</span>
+                                        <FieldTooltip content="Select the supplier from whom you're purchasing goods. Must be pre-registered in the system." />
+                                    </Label>
+                                    <Select
+                                        value={watch("supplier_id")}
+                                        onValueChange={handleSupplierChange}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a supplier" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {suppliers.map((s) => (
+                                                <SelectItem key={s.id} value={s.id}>
+                                                    {s.name}
+                                                    {s.supplier_code ? ` (${s.supplier_code})` : ""}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.supplier_id && (
+                                        <p className="text-xs text-red-500">{errors.supplier_id.message}</p>
                                     )}
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Expected Delivery</Label>
-                                    <Input type="date" {...register("expected_delivery_date")} />
-                                    {errors.expected_delivery_date && (
-                                        <p className="text-sm text-red-500">
-                                            {errors.expected_delivery_date.message}
+
+                                {/* GSTIN */}
+                                <div className="space-y-1.5">
+                                    <Label className="flex items-center">
+                                        Supplier GSTIN
+                                        <FieldTooltip content="15-character GST Identification Number of the supplier. Auto-filled from supplier profile; editable if needed." />
+                                    </Label>
+                                    <Input {...register("supplier_gstin")} placeholder="e.g. 29AAACB1234F1Z5" />
+                                </div>
+
+                                {/* Dates */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label className="flex items-center">
+                                            Order Date <span className="text-red-500 ml-0.5">*</span>
+                                            <FieldTooltip content="The date this purchase order is raised. Defaults to today." />
+                                        </Label>
+                                        <Input type="date" {...register("order_date")} />
+                                        {errors.order_date && (
+                                            <p className="text-xs text-red-500">{errors.order_date.message}</p>
+                                        )}
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="flex items-center">
+                                            Expected Delivery
+                                            <FieldTooltip content="Expected goods delivery date. Must be on or after the order date." />
+                                        </Label>
+                                        <Input type="date" {...register("expected_delivery_date")} />
+                                        {errors.expected_delivery_date && (
+                                            <p className="text-xs text-red-500">
+                                                {errors.expected_delivery_date.message}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Invoice & Reference */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label className="flex items-center">
+                                            Invoice Number
+                                            <FieldTooltip content="Supplier's invoice number for this purchase. Used for reconciliation. Max 50 characters." />
+                                        </Label>
+                                        <Input {...register("invoice_number")} placeholder="INV-001" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="flex items-center">
+                                            Reference Number
+                                            <FieldTooltip content="Your internal reference or PO number for tracking this order. Max 50 characters." />
+                                        </Label>
+                                        <Input {...register("reference_number")} placeholder="REF-001" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label className="flex items-center">
+                                        Invoice Date
+                                        <FieldTooltip content="The date on the supplier's invoice, which may differ from the order date." />
+                                    </Label>
+                                    <Input type="date" {...register("invoice_date")} />
+                                </div>
+
+                                {/* Inter-state toggle */}
+                                <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/20">
+                                    <div>
+                                        <Label className="flex items-center gap-1">
+                                            Inter-State Supply
+                                            <FieldTooltip content="Enable if the supplier is in a different state. Applies IGST instead of CGST + SGST." />
+                                        </Label>
+                                        <p className="text-muted-foreground text-xs mt-0.5">
+                                            Enable for IGST instead of CGST+SGST
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        checked={isInterState}
+                                        onCheckedChange={(checked) => setValue("is_inter_state", checked)}
+                                    />
+                                </div>
+
+                                {isInterState && (
+                                    <div className="space-y-1.5">
+                                        <Label className="flex items-center">
+                                            Place of Supply
+                                            <FieldTooltip content="State where goods are being supplied. Required for inter-state GST compliance." />
+                                        </Label>
+                                        <Input
+                                            {...register("place_of_supply")}
+                                            placeholder="e.g. Maharashtra"
+                                        />
+                                    </div>
+                                )}
+                            </TabsContent>
+
+                            {/* ══════════════════════════════════════════
+                                ITEMS TAB
+                            ══════════════════════════════════════════ */}
+                            <TabsContent value="items" className="space-y-4 p-4">
+                                {errors.items?.message && (
+                                    <p className="text-sm text-red-500">{errors.items.message}</p>
+                                )}
+
+                                {/* Empty state */}
+                                {fields.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 py-12 gap-3 text-center">
+                                        <PackagePlus className="h-10 w-10 text-muted-foreground/40" />
+                                        <div>
+                                            <p className="text-sm font-medium text-muted-foreground">No items added yet</p>
+                                            <p className="text-xs text-muted-foreground/70 mt-0.5">
+                                                Click &quot;Add Item&quot; to start adding products to this order.
+                                            </p>
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={openAddItem}
+                                            className="gap-1.5 mt-1"
+                                        >
+                                            <Plus className="h-3.5 w-3.5" />
+                                            Add First Item
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Items summary table — clean, readable */}
+                                        <div className="rounded-md border overflow-hidden">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                                                        <TableHead className="w-[40px] text-center">#</TableHead>
+                                                        <TableHead>Product</TableHead>
+                                                        <TableHead className="w-[90px] text-center">Qty</TableHead>
+                                                        <TableHead className="w-[100px] text-right">Unit Price</TableHead>
+                                                        <TableHead className="w-[70px] text-center">GST</TableHead>
+                                                        <TableHead className="w-[80px] text-center">Disc %</TableHead>
+                                                        <TableHead className="w-[110px] text-right">Total</TableHead>
+                                                        <TableHead className="w-[80px] text-center">Actions</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {fields.map((field, index) => {
+                                                        const item = watchedItems[index];
+                                                        const totals = itemTotals[index];
+                                                        return (
+                                                            <TableRow key={field.id} className="group">
+                                                                <TableCell className="text-center text-muted-foreground text-sm">
+                                                                    {index + 1}
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    <div className="space-y-0.5">
+                                                                        <p className="text-sm font-medium leading-tight">
+                                                                            {item?.product_name || (
+                                                                                <span className="text-muted-foreground italic">Unnamed product</span>
+                                                                            )}
+                                                                        </p>
+                                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                                            {item?.product_code && (
+                                                                                <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1 py-0.5 rounded">
+                                                                                    {item.product_code}
+                                                                                </span>
+                                                                            )}
+                                                                            {item?.hsn_code && (
+                                                                                <span className="text-[10px] text-muted-foreground">
+                                                                                    HSN: {item.hsn_code}
+                                                                                </span>
+                                                                            )}
+                                                                            {item?.batch_number && (
+                                                                                <span className="text-[10px] text-blue-600 bg-blue-50 px-1 py-0.5 rounded dark:bg-blue-950 dark:text-blue-300">
+                                                                                    Batch: {item.batch_number}
+                                                                                </span>
+                                                                            )}
+                                                                            {item?.expiry_date && (
+                                                                                <span className="text-[10px] text-amber-600 bg-amber-50 px-1 py-0.5 rounded dark:bg-amber-950 dark:text-amber-300">
+                                                                                    Exp: {item.expiry_date}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="text-center text-sm">
+                                                                    {item?.ordered_quantity ?? 0}
+                                                                </TableCell>
+                                                                <TableCell className="text-right text-sm">
+                                                                    {formatCurrency(item?.unit_price ?? 0)}
+                                                                </TableCell>
+                                                                <TableCell className="text-center text-sm">
+                                                                    {item?.gst_percentage ?? 0}%
+                                                                </TableCell>
+                                                                <TableCell className="text-center text-sm">
+                                                                    {item?.discount_percentage
+                                                                        ? `${item.discount_percentage}%`
+                                                                        : "—"}
+                                                                </TableCell>
+                                                                <TableCell className="text-right text-sm font-medium">
+                                                                    {formatCurrency(totals?.totalAmount ?? 0)}
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    <div className="flex items-center justify-center gap-1">
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-7 w-7 opacity-60 hover:opacity-100"
+                                                                            onClick={() => openEditItem(index)}
+                                                                        >
+                                                                            <Pencil className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-7 w-7 opacity-60 hover:opacity-100"
+                                                                            onClick={() => {
+                                                                                if (fields.length > 1) remove(index);
+                                                                                else toast.error("At least one item is required.");
+                                                                            }}
+                                                                        >
+                                                                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                                                                        </Button>
+                                                                    </div>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        );
+                                                    })}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={openAddItem}
+                                            className="gap-1.5"
+                                        >
+                                            <Plus className="h-3.5 w-3.5" />
+                                            Add Another Item
+                                        </Button>
+                                    </>
+                                )}
+
+                                {/* Order-level charges */}
+                                {fields.length > 0 && (
+                                    <>
+                                        <Separator />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <Label className="flex items-center text-sm">
+                                                    Discount Amount (₹)
+                                                    <FieldTooltip content="Order-level discount deducted from the subtotal after all line items are summed." />
+                                                </Label>
+                                                <Input
+                                                    type="number"
+                                                    {...register("discount_amount", { valueAsNumber: true })}
+                                                    min={0}
+                                                    step="0.01"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label className="flex items-center text-sm">
+                                                    Shipping Charges (₹)
+                                                    <FieldTooltip content="Freight or delivery charges billed by the supplier. Added to the order total." />
+                                                </Label>
+                                                <Input
+                                                    type="number"
+                                                    {...register("shipping_charges", { valueAsNumber: true })}
+                                                    min={0}
+                                                    step="0.01"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label className="flex items-center text-sm">
+                                                    Other Charges (₹)
+                                                    <FieldTooltip content="Miscellaneous charges such as handling fees, insurance, or packing." />
+                                                </Label>
+                                                <Input
+                                                    type="number"
+                                                    {...register("other_charges", { valueAsNumber: true })}
+                                                    min={0}
+                                                    step="0.01"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label className="flex items-center text-sm">
+                                                    Round Off (₹)
+                                                    <FieldTooltip content="Small adjustment between -₹10 and +₹10 to round the grand total to a clean figure." />
+                                                </Label>
+                                                <Input
+                                                    type="number"
+                                                    {...register("round_off", { valueAsNumber: true })}
+                                                    min={-10}
+                                                    max={10}
+                                                    step="0.01"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Order summary */}
+                                        <Separator />
+                                        <div className="rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
+                                            <div className="flex justify-between text-muted-foreground">
+                                                <span>Subtotal</span>
+                                                <span className="text-foreground">{formatCurrency(poTotals.subtotal)}</span>
+                                            </div>
+                                            {orderDiscount > 0 && (
+                                                <div className="flex justify-between text-red-600">
+                                                    <span>Discount</span>
+                                                    <span>− {formatCurrency(orderDiscount)}</span>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between text-muted-foreground">
+                                                <span>Total Tax</span>
+                                                <span className="text-foreground">{formatCurrency(poTotals.totalTax)}</span>
+                                            </div>
+                                            {shippingCharges > 0 && (
+                                                <div className="flex justify-between text-muted-foreground">
+                                                    <span>Shipping</span>
+                                                    <span className="text-foreground">{formatCurrency(shippingCharges)}</span>
+                                                </div>
+                                            )}
+                                            {otherCharges > 0 && (
+                                                <div className="flex justify-between text-muted-foreground">
+                                                    <span>Other Charges</span>
+                                                    <span className="text-foreground">{formatCurrency(otherCharges)}</span>
+                                                </div>
+                                            )}
+                                            <Separator />
+                                            <div className="flex justify-between font-bold text-base pt-0.5">
+                                                <span>Grand Total</span>
+                                                <span>{formatCurrency(poTotals.grandTotal)}</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </TabsContent>
+
+                            {/* ══════════════════════════════════════════
+                                ADDITIONAL TAB
+                            ══════════════════════════════════════════ */}
+                            <TabsContent value="additional" className="space-y-4 p-4">
+                                <div className="space-y-1.5">
+                                    <Label className="flex items-center">
+                                        Receiving Warehouse
+                                        <FieldTooltip content="Name or location of the warehouse where goods will be delivered. Used for routing and stock placement." />
+                                    </Label>
+                                    <Input
+                                        {...register("receiving_warehouse")}
+                                        placeholder="Warehouse name or location"
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label className="flex items-center">
+                                        Notes
+                                        <FieldTooltip content="General notes about this purchase order. May be shared with the supplier. Max 2000 characters." />
+                                    </Label>
+                                    <Textarea
+                                        {...register("notes")}
+                                        placeholder="Add any general notes..."
+                                        rows={3}
+                                    />
+                                    {errors.notes && (
+                                        <p className="text-xs text-red-500">{errors.notes.message}</p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label className="flex items-center">
+                                        Terms & Conditions
+                                        <FieldTooltip content="Payment due dates, return policies, and delivery conditions. Max 5000 characters." />
+                                    </Label>
+                                    <Textarea
+                                        {...register("terms_and_conditions")}
+                                        placeholder="Terms and conditions..."
+                                        rows={3}
+                                    />
+                                    {errors.terms_and_conditions && (
+                                        <p className="text-xs text-red-500">
+                                            {errors.terms_and_conditions.message}
                                         </p>
                                     )}
                                 </div>
-                            </div>
 
-                            {/* Invoice & Reference */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Invoice Number</Label>
-                                    <Input {...register("invoice_number")} placeholder="INV-001" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Reference Number</Label>
-                                    <Input {...register("reference_number")} placeholder="REF-001" />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Invoice Date</Label>
-                                <Input type="date" {...register("invoice_date")} />
-                            </div>
-
-                            {/* Inter-state */}
-                            <div className="flex items-center justify-between rounded-lg border p-3">
-                                <div>
-                                    <Label>Inter-State Supply</Label>
-                                    <p className="text-muted-foreground text-xs">
-                                        Enable for IGST instead of CGST+SGST
-                                    </p>
-                                </div>
-                                <Switch
-                                    checked={isInterState}
-                                    onCheckedChange={(checked) => setValue("is_inter_state", checked)}
-                                />
-                            </div>
-
-                            {isInterState && (
-                                <div className="space-y-2">
-                                    <Label>Place of Supply</Label>
-                                    <Input {...register("place_of_supply")} placeholder="e.g. Maharashtra" />
-                                </div>
-                            )}
-                        </TabsContent>
-
-                        {/* === ITEMS TAB === */}
-                        <TabsContent value="items" className="space-y-4 px-1">
-                            {errors.items?.message && (
-                                <p className="text-sm text-red-500">{errors.items.message}</p>
-                            )}
-
-                            <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="w-[180px]">Product *</TableHead>
-                                            <TableHead className="w-[100px]">Code *</TableHead>
-                                            <TableHead className="w-[70px]">Qty *</TableHead>
-                                            <TableHead className="w-[100px]">Price *</TableHead>
-                                            <TableHead className="w-[60px]">GST% *</TableHead>
-                                            <TableHead className="w-[60px]">Disc%</TableHead>
-                                            <TableHead className="text-right w-[100px]">Total</TableHead>
-                                            <TableHead className="w-[40px]" />
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {fields.map((field, index) => (
-                                            <TableRow key={field.id}>
-                                                <TableCell>
-                                                    <Input
-                                                        {...register(`items.${index}.product_name`)}
-                                                        placeholder="Product name"
-                                                        className="h-8 text-sm"
-                                                    />
-                                                    {errors.items?.[index]?.product_name && (
-                                                        <p className="text-[10px] text-red-500 mt-0.5">
-                                                            {errors.items[index].product_name?.message}
-                                                        </p>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Input
-                                                        {...register(`items.${index}.product_code`)}
-                                                        placeholder="Code"
-                                                        className="h-8 text-sm"
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Input
-                                                        type="number"
-                                                        {...register(`items.${index}.ordered_quantity`, {
-                                                            valueAsNumber: true,
-                                                        })}
-                                                        className="h-8 text-sm w-16"
-                                                        min={1}
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Input
-                                                        type="number"
-                                                        {...register(`items.${index}.unit_price`, {
-                                                            valueAsNumber: true,
-                                                        })}
-                                                        className="h-8 text-sm"
-                                                        min={0}
-                                                        step="0.01"
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Select
-                                                        value={String(watchedItems?.[index]?.gst_percentage ?? 18)}
-                                                        onValueChange={(val) =>
-                                                            setValue(`items.${index}.gst_percentage`, Number(val))
-                                                        }
-                                                    >
-                                                        <SelectTrigger className="h-8 text-sm w-16">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {[0, 5, 12, 18, 28].map((rate) => (
-                                                                <SelectItem key={rate} value={String(rate)}>
-                                                                    {rate}%
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Input
-                                                        type="number"
-                                                        {...register(`items.${index}.discount_percentage`, {
-                                                            valueAsNumber: true,
-                                                        })}
-                                                        className="h-8 text-sm w-14"
-                                                        min={0}
-                                                        max={100}
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="text-right text-sm font-medium">
-                                                    {formatCurrency(itemTotals[index]?.totalAmount ?? 0)}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-7 w-7"
-                                                        onClick={() => {
-                                                            if (fields.length > 1) remove(index);
-                                                            else toast.error("At least one item is required");
-                                                        }}
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
-
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => append({ ...DEFAULT_ITEM, product_id: crypto.randomUUID() })}
-                                className="gap-1.5"
-                            >
-                                <Plus className="h-3.5 w-3.5" />
-                                Add Item
-                            </Button>
-
-                            {/* Summary */}
-                            <Separator />
-                            <div className="space-y-2">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Discount Amount</Label>
-                                        <Input
-                                            type="number"
-                                            {...register("discount_amount", { valueAsNumber: true })}
-                                            min={0}
-                                            step="0.01"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Shipping Charges</Label>
-                                        <Input
-                                            type="number"
-                                            {...register("shipping_charges", { valueAsNumber: true })}
-                                            min={0}
-                                            step="0.01"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Other Charges</Label>
-                                        <Input
-                                            type="number"
-                                            {...register("other_charges", { valueAsNumber: true })}
-                                            min={0}
-                                            step="0.01"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Round Off</Label>
-                                        <Input
-                                            type="number"
-                                            {...register("round_off", { valueAsNumber: true })}
-                                            min={-10}
-                                            max={10}
-                                            step="0.01"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Separator />
-                            <div className="rounded-lg bg-muted/50 p-3 space-y-1.5 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Subtotal</span>
-                                    <span>{formatCurrency(poTotals.subtotal)}</span>
-                                </div>
-                                {orderDiscount > 0 && (
-                                    <div className="flex justify-between text-red-600">
-                                        <span>Discount</span>
-                                        <span>-{formatCurrency(orderDiscount)}</span>
-                                    </div>
-                                )}
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Total Tax</span>
-                                    <span>{formatCurrency(poTotals.totalTax)}</span>
-                                </div>
-                                {shippingCharges > 0 && (
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Shipping</span>
-                                        <span>{formatCurrency(shippingCharges)}</span>
-                                    </div>
-                                )}
-                                {otherCharges > 0 && (
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Other Charges</span>
-                                        <span>{formatCurrency(otherCharges)}</span>
-                                    </div>
-                                )}
-                                <Separator />
-                                <div className="flex justify-between font-bold text-base">
-                                    <span>Grand Total</span>
-                                    <span>{formatCurrency(poTotals.grandTotal)}</span>
-                                </div>
-                            </div>
-                        </TabsContent>
-
-                        {/* === ADDITIONAL TAB === */}
-                        <TabsContent value="additional" className="space-y-4 px-1">
-                            <div className="space-y-2">
-                                <Label>Receiving Warehouse</Label>
-                                <Input {...register("receiving_warehouse")} placeholder="Warehouse name or location" />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Notes</Label>
-                                <Textarea
-                                    {...register("notes")}
-                                    placeholder="Add any general notes..."
-                                    rows={3}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Terms & Conditions</Label>
-                                <Textarea
-                                    {...register("terms_and_conditions")}
-                                    placeholder="Terms and conditions..."
-                                    rows={3}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Internal Notes</Label>
-                                <Textarea
-                                    {...register("internal_notes")}
-                                    placeholder="Internal notes (not shared with supplier)..."
-                                    rows={2}
-                                />
-                            </div>
-
-                            {/* Tags */}
-                            <div className="space-y-2">
-                                <Label>Tags</Label>
-                                <div className="flex gap-2">
-                                    <Input
-                                        value={tagInput}
-                                        onChange={(e) => setTagInput(e.target.value)}
-                                        placeholder="Add a tag..."
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter") {
-                                                e.preventDefault();
-                                                addTag();
-                                            }
-                                        }}
+                                <div className="space-y-1.5">
+                                    <Label className="flex items-center">
+                                        Internal Notes
+                                        <FieldTooltip content="Private notes visible only to your team. Not shared with the supplier. Max 2000 characters." />
+                                    </Label>
+                                    <Textarea
+                                        {...register("internal_notes")}
+                                        placeholder="Internal notes (not shared with supplier)..."
+                                        rows={2}
                                     />
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={addTag}
-                                    >
-                                        Add
-                                    </Button>
+                                    {errors.internal_notes && (
+                                        <p className="text-xs text-red-500">{errors.internal_notes.message}</p>
+                                    )}
                                 </div>
-                                {watchedTags.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                        {watchedTags.map((tag) => (
-                                            <span
-                                                key={tag}
-                                                className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium"
-                                            >
-                                                {tag}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeTag(tag)}
-                                                    className="text-muted-foreground hover:text-foreground"
-                                                >
-                                                    <X className="h-3 w-3" />
-                                                </button>
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </TabsContent>
-                    </ScrollArea>
-                </Tabs>
 
-                <DialogFooter>
-                    <Button
-                        variant="outline"
-                        onClick={() => handleClose(false)}
-                        disabled={isSaving}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleSubmit(onFormSubmit)}
-                        disabled={isSaving}
-                    >
-                        {isSaving
-                            ? "Saving..."
-                            : editOrder
-                                ? "Update Order"
-                                : "Create Order"}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                                {/* Tags */}
+                                <div className="space-y-1.5">
+                                    <Label className="flex items-center">
+                                        Tags
+                                        <FieldTooltip content="Add up to 20 tags to categorize this order for filtering and reporting. Press Enter or click Add." />
+                                    </Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            value={tagInput}
+                                            onChange={(e) => setTagInput(e.target.value)}
+                                            placeholder="Add a tag..."
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                    e.preventDefault();
+                                                    addTag();
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={addTag}
+                                        >
+                                            Add
+                                        </Button>
+                                    </div>
+                                    {watchedTags.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                            {watchedTags.map((tag) => (
+                                                <span
+                                                    key={tag}
+                                                    className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium"
+                                                >
+                                                    {tag}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeTag(tag)}
+                                                        className="text-muted-foreground hover:text-foreground"
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </TabsContent>
+                        </ScrollArea>
+                    </Tabs>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => handleClose(false)}
+                            disabled={isSaving}
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={handleSubmit(onFormSubmit)} disabled={isSaving}>
+                            {isSaving
+                                ? "Saving..."
+                                : editOrder
+                                    ? "Update Order"
+                                    : "Create Order"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Item sub-dialog ── */}
+            <POItemDialog
+                open={itemDialogOpen}
+                onOpenChange={setItemDialogOpen}
+                editItem={editingItem}
+                editIndex={editingIndex}
+                onSave={handleItemSave}
+            />
+        </>
     );
 }

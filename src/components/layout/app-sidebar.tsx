@@ -26,6 +26,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { SidebarItem } from "./types";
 import type { RoleName } from "@/types/database.types";
@@ -42,11 +43,11 @@ export function AppSidebar({ items, pageTitle, pageSubtitle }: AppSidebarProps) 
 
   const userInitials = appUser?.fullName
     ? appUser.fullName
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2)
     : "U";
 
   const roleBadge = appUser?.role
@@ -77,43 +78,75 @@ export function AppSidebar({ items, pageTitle, pageSubtitle }: AppSidebarProps) 
         </div>
       </SidebarHeader>
 
-      {/* Sidebar Content — Navigation */}
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) =>
-                item.children && item.children.length > 0 ? (
-                  <CollapsibleNavItem
-                    key={item.id}
-                    item={item}
-                    isActiveParent={isActiveParent(item)}
-                    isActiveFn={isActive}
-                  />
-                ) : (
-                  <SidebarMenuItem key={item.id}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive(item.href)}
-                      tooltip={item.label}
-                    >
-                      <Link href={item.href}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.label}</span>
-                        {item.badge && (
-                          <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                            {item.badge}
-                          </span>
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+      {/* Sidebar Content — Navigation with ScrollArea */}
+      <SidebarContent className="p-0">
+        <ScrollArea className="h-full">
+          <div className="px-3 py-2">
+            <SidebarGroup>
+              <SidebarGroupLabel className="px-2">Navigation</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {items.map((item) =>
+                    item.children && item.children.length > 0 ? (
+                      <CollapsibleNavItem
+                        key={item.id}
+                        item={item}
+                        isActiveParent={isActiveParent(item)}
+                        isActiveFn={isActive}
+                      />
+                    ) : (
+                      <SidebarMenuItem key={item.id}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive(item.href)}
+                          tooltip={item.label}
+                          className={cn(
+                            "transition-all duration-200",
+                            isActive(item.href) && "bg-primary/10 font-medium"
+                          )}
+                        >
+                          <Link href={item.href}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.label}</span>
+                            {item.badge && (
+                              <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-medium text-primary">
+                                {item.badge}
+                              </span>
+                            )}
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )
+                  )}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            {/* Optional: Add separator and additional sections for better organization */}
+            {items.length > 8 && (
+              <>
+                <SidebarSeparator className="my-2" />
+                <SidebarGroup>
+                  <SidebarGroupLabel className="px-2 text-xs text-muted-foreground">
+                    Quick Actions
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton tooltip="Settings">
+                          <Link href="/settings" className="flex items-center gap-2">
+                            <Settings className="h-4 w-4" />
+                            <span>Settings</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </>
+            )}
+          </div>
+        </ScrollArea>
       </SidebarContent>
 
       {/* Sidebar Footer — User Info */}
@@ -122,7 +155,7 @@ export function AppSidebar({ items, pageTitle, pageSubtitle }: AppSidebarProps) 
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
-              className="cursor-default"
+              className="cursor-default hover:bg-transparent data-[state=open]:bg-transparent"
               tooltip={appUser?.fullName ?? "User"}
             >
               <Avatar className="h-7 w-7">
@@ -134,7 +167,9 @@ export function AppSidebar({ items, pageTitle, pageSubtitle }: AppSidebarProps) 
                 <span className="text-sm font-medium truncate max-w-[140px]">
                   {appUser?.fullName ?? "User"}
                 </span>
-                <span className="text-xs text-muted-foreground">{roleBadge}</span>
+                <span className="text-xs text-muted-foreground truncate max-w-[140px]">
+                  {roleBadge}
+                </span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -163,23 +198,39 @@ function CollapsibleNavItem({
     <Collapsible defaultOpen={isActiveParent} className="group/collapsible">
       <SidebarMenuItem>
         <CollapsibleTrigger asChild>
-          <SidebarMenuButton tooltip={item.label} isActive={isActiveParent}>
+          <SidebarMenuButton
+            tooltip={item.label}
+            isActive={isActiveParent}
+            className={cn(
+              "transition-all duration-200",
+              isActiveParent && "bg-primary/10 font-medium"
+            )}
+          >
             <item.icon className="h-4 w-4" />
             <span>{item.label}</span>
-            <ChevronRight className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-90" />
+            <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
           </SidebarMenuButton>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <SidebarMenuSub>
+          <SidebarMenuSub className="border-l border-border/50 ml-3 pl-2">
             {item.children?.map((child) => (
               <SidebarMenuSubItem key={child.id}>
                 <SidebarMenuSubButton
                   asChild
                   isActive={isActiveFn(child.href)}
+                  className={cn(
+                    "transition-all duration-200",
+                    isActiveFn(child.href) && "bg-primary/10 font-medium"
+                  )}
                 >
-                  <Link href={child.href}>
+                  <Link href={child.href} className="flex items-center gap-2">
                     {child.icon && <child.icon className="h-3.5 w-3.5" />}
                     <span>{child.label}</span>
+                    {child.badge && (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {child.badge}
+                      </span>
+                    )}
                   </Link>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
