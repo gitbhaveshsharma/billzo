@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Store, Shield, Zap } from "lucide-react";
 
 export default function Home() {
@@ -6,9 +7,15 @@ export default function Home() {
     <div className="flex min-h-screen flex-col">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b">
-        <span className="text-xl font-bold tracking-tight">
-          Store<span className="text-primary">POS</span>
-        </span>
+        <Link href="/" className="flex items-center gap-2">
+          <Image
+            src="/billzo-logo.png"
+            alt="Billzo Logo"
+            width={180}
+            height={60}
+            className="h-11 w-auto object-contain"
+          />
+        </Link>
         <nav className="flex items-center gap-4">
           <Link
             href="/login"
