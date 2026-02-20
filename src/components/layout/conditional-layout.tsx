@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -18,6 +18,7 @@ import type { LayoutConfig, ConditionalLayoutProps } from "./types";
 
 // ============================================================================
 // ConditionalLayout — Config-driven layout wrapper
+// All hooks must be called unconditionally before any early returns.
 // ============================================================================
 
 export function ConditionalLayout({ children, forceConfig }: ConditionalLayoutProps) {
@@ -29,23 +30,33 @@ export function ConditionalLayout({ children, forceConfig }: ConditionalLayoutPr
   // Resolve the page type from the current route
   const pageType = resolvePageType(pathname);
 
-  // If we can't determine the page type and no forceConfig, render children directly
-  if (!pageType && !forceConfig?.page) {
-    return <>{children}</>;
-  }
+  // Derive role and stabilize permissions array to prevent unnecessary re-renders.
+  // Memoize permissions so the array reference only changes when contents change.
+  const userRole = appUser?.role ?? null;
+  const userPermissions = useMemo(
+    () => appUser?.permissions ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(appUser?.permissions)]
+  );
 
-  // Build final config: base from page type, then merge overrides
-  const baseConfig = getLayoutConfig(pageType ?? forceConfig!.page!);
-  const config = forceConfig ? mergeLayoutConfig(baseConfig, forceConfig) : baseConfig;
+  // Build config from page type then apply any forceConfig overrides
+  const config = useMemo(() => {
+    const effectivePage = pageType ?? forceConfig?.page;
+    if (!effectivePage) return null;
+    const base = getLayoutConfig(effectivePage);
+    return forceConfig ? mergeLayoutConfig(base, forceConfig) : base;
+  }, [pageType, forceConfig]);
 
   // Filter sidebar items by role & permissions
-  const userRole = appUser?.role ?? null;
-  const userPermissions = appUser?.permissions ?? [];
-
   const filteredSidebarItems = useMemo(() => {
-    if (!config.sidebar.enabled || !userRole) return [];
+    if (!config?.sidebar.enabled || !userRole) return [];
     return filterSidebarItems(config.sidebar.items, userRole, userPermissions);
-  }, [config.sidebar.enabled, config.sidebar.items, userRole, userPermissions]);
+  }, [config, userRole, userPermissions]);
+
+  // If no resolvable config, render children without layout chrome
+  if (!config) {
+    return <>{children}</>;
+  }
 
   // Handle mobile sidebar visibility
   const shouldShowSidebar =

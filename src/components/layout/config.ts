@@ -827,13 +827,16 @@ const RESPONSIVE_CONFIGS: Record<PageType, ResponsiveConfig> = {
 // Main Config Getter
 // ============================================================================
 
+/** Page types that should NOT show a footer */
+const PAGES_WITHOUT_FOOTER: PageType[] = ["pos", "store-admin"];
+
 /** Get full layout configuration for a page type */
 export function getLayoutConfig(page: PageType): LayoutConfig {
   return {
     page,
     header: HEADER_CONFIGS[page],
     sidebar: SIDEBAR_CONFIGS[page],
-    footer: { enabled: page !== "pos" },
+    footer: { enabled: !PAGES_WITHOUT_FOOTER.includes(page) },
     responsive: RESPONSIVE_CONFIGS[page],
   };
 }
