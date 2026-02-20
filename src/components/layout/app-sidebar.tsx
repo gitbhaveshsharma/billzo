@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, Store } from "lucide-react";
+import { ChevronRight, Store, Settings } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import {
@@ -29,7 +29,6 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { SidebarItem } from "./types";
-import type { RoleName } from "@/types/database.types";
 
 interface AppSidebarProps {
   items: SidebarItem[];
@@ -164,10 +163,10 @@ export function AppSidebar({ items, pageTitle, pageSubtitle }: AppSidebarProps) 
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
-                <span className="text-sm font-medium truncate max-w-[140px]">
+                <span className="text-sm font-medium truncate max-w-35">
                   {appUser?.fullName ?? "User"}
                 </span>
-                <span className="text-xs text-muted-foreground truncate max-w-[140px]">
+                <span className="text-xs text-muted-foreground truncate max-w-35">
                   {roleBadge}
                 </span>
               </div>
@@ -226,11 +225,6 @@ function CollapsibleNavItem({
                   <Link href={child.href} className="flex items-center gap-2">
                     {child.icon && <child.icon className="h-3.5 w-3.5" />}
                     <span>{child.label}</span>
-                    {child.badge && (
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        {child.badge}
-                      </span>
-                    )}
                   </Link>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
