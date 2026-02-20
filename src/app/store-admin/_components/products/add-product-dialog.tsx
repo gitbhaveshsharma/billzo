@@ -18,15 +18,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { createProductSchema } from "@/validations/product.validation";
 import { GST_RATES } from "@/types/product.types";
 import type { CreateProductRequest, Category, UnitOfMeasure } from "@/types/product.types";
@@ -41,6 +40,27 @@ interface AddProductDialogProps {
     onSubmit: (data: CreateProductRequest) => Promise<boolean>;
     categories: Category[];
     units: UnitOfMeasure[];
+}
+
+// ============================================================================
+// DROPDOWN TRIGGER
+// ============================================================================
+
+function DropdownTriggerButton({ label, placeholder }: { label?: string; placeholder: string }) {
+    return (
+        <DropdownMenuTrigger asChild>
+            <Button
+                variant="outline"
+                className="w-full justify-between font-normal text-left"
+                type="button"
+            >
+                <span className={label ? "text-foreground" : "text-muted-foreground"}>
+                    {label ?? placeholder}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+        </DropdownMenuTrigger>
+    );
 }
 
 // ============================================================================
@@ -97,6 +117,12 @@ export function AddProductDialog({
     const watchCategoryId = watch("category_id");
     const watchUnitId = watch("unit_id");
 
+    // Derived display labels
+    const selectedCategory = categories.find((c) => c.id === watchCategoryId);
+    const selectedUnit = units.find((u) => u.id === watchUnitId);
+    const selectedGstLabel =
+        watchGst === 0 ? "Exempt (0%)" : watchGst != null ? `${watchGst}%` : undefined;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const onFormSubmit = async (data: any) => {
         setIsSubmitting(true);
@@ -145,9 +171,9 @@ export function AddProductDialog({
                     </TabsList>
 
                     <ScrollArea className="flex-1 min-h-0 p-4 overflow-x-auto">
+
                         {/* ================================ BASIC INFO ================================ */}
                         <TabsContent value="basic" className="space-y-4 mt-0 px-4">
-                            {/* Product Code + Name */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="product_code">
@@ -177,7 +203,6 @@ export function AddProductDialog({
                                 </div>
                             </div>
 
-                            {/* Barcode + Brand */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="barcode">Barcode</Label>
@@ -203,55 +228,58 @@ export function AddProductDialog({
                                 </div>
                             </div>
 
-                            {/* Category + Unit */}
+                            {/* Category + Unit Dropdowns */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label>Category</Label>
-                                    <Select
-                                        value={watchCategoryId || ""}
-                                        onValueChange={(val) =>
-                                            setValue("category_id", val || undefined, { shouldValidate: true })
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select category" />
-                                        </SelectTrigger>
-                                        <SelectContent>
+                                    <DropdownMenu>
+                                        <DropdownTriggerButton
+                                            label={selectedCategory?.name}
+                                            placeholder="Select category"
+                                        />
+                                        <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
                                             {categories
                                                 .filter((c) => c.is_active)
                                                 .map((cat) => (
-                                                    <SelectItem key={cat.id} value={cat.id}>
+                                                    <DropdownMenuItem
+                                                        key={cat.id}
+                                                        onSelect={() =>
+                                                            setValue("category_id", cat.id, { shouldValidate: true })
+                                                        }
+                                                        className={watchCategoryId === cat.id ? "bg-accent" : ""}
+                                                    >
                                                         {cat.name}
-                                                    </SelectItem>
+                                                    </DropdownMenuItem>
                                                 ))}
-                                        </SelectContent>
-                                    </Select>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Unit of Measure</Label>
-                                    <Select
-                                        value={watchUnitId || ""}
-                                        onValueChange={(val) =>
-                                            setValue("unit_id", val || undefined, { shouldValidate: true })
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select unit" />
-                                        </SelectTrigger>
-                                        <SelectContent>
+                                    <DropdownMenu>
+                                        <DropdownTriggerButton
+                                            label={selectedUnit ? `${selectedUnit.name} (${selectedUnit.code})` : undefined}
+                                            placeholder="Select unit"
+                                        />
+                                        <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
                                             {units
                                                 .filter((u) => u.is_active)
                                                 .map((unit) => (
-                                                    <SelectItem key={unit.id} value={unit.id}>
+                                                    <DropdownMenuItem
+                                                        key={unit.id}
+                                                        onSelect={() =>
+                                                            setValue("unit_id", unit.id, { shouldValidate: true })
+                                                        }
+                                                        className={watchUnitId === unit.id ? "bg-accent" : ""}
+                                                    >
                                                         {unit.name} ({unit.code})
-                                                    </SelectItem>
+                                                    </DropdownMenuItem>
                                                 ))}
-                                        </SelectContent>
-                                    </Select>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </div>
                             </div>
 
-                            {/* Model + HSN Code */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="model">Model</Label>
@@ -274,7 +302,6 @@ export function AddProductDialog({
                                 </div>
                             </div>
 
-                            {/* Short Description */}
                             <div className="space-y-2">
                                 <Label htmlFor="short_description">Short Description</Label>
                                 <Input
@@ -287,7 +314,6 @@ export function AddProductDialog({
                                 )}
                             </div>
 
-                            {/* Description */}
                             <div className="space-y-2">
                                 <Label htmlFor="description">Full Description</Label>
                                 <Textarea
@@ -301,7 +327,6 @@ export function AddProductDialog({
                                 )}
                             </div>
 
-                            {/* Primary Image */}
                             <div className="space-y-2">
                                 <Label htmlFor="primary_image">Image URL</Label>
                                 <Input
@@ -317,7 +342,6 @@ export function AddProductDialog({
 
                         {/* ================================ PRICING & TAX ================================ */}
                         <TabsContent value="pricing" className="space-y-4 mt-0 px-4">
-                            {/* MRP + Selling Price */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="mrp">
@@ -353,7 +377,6 @@ export function AddProductDialog({
                                 </div>
                             </div>
 
-                            {/* Purchase Price */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="purchase_price">Purchase Price (₹)</Label>
@@ -372,33 +395,36 @@ export function AddProductDialog({
                                 <div />
                             </div>
 
-                            {/* Tax Section */}
                             <div className="space-y-4 pt-2">
                                 <h4 className="text-sm font-medium text-muted-foreground">Tax Configuration</h4>
 
                                 <div className="grid grid-cols-2 gap-4">
+                                    {/* GST Rate Dropdown */}
                                     <div className="space-y-2">
                                         <Label>
                                             GST Rate <span className="text-destructive">*</span>
                                         </Label>
-                                        <Select
-                                            value={String(watchGst ?? 18)}
-                                            onValueChange={(val) =>
-                                                setValue("gst_percentage", Number(val), { shouldValidate: true })
-                                            }
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
+                                        <DropdownMenu>
+                                            <DropdownTriggerButton
+                                                label={selectedGstLabel}
+                                                placeholder="Select GST rate"
+                                            />
+                                            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
                                                 {GST_RATES.map((rate) => (
-                                                    <SelectItem key={rate} value={String(rate)}>
+                                                    <DropdownMenuItem
+                                                        key={rate}
+                                                        onSelect={() =>
+                                                            setValue("gst_percentage", rate, { shouldValidate: true })
+                                                        }
+                                                        className={watchGst === rate ? "bg-accent" : ""}
+                                                    >
                                                         {rate === 0 ? "Exempt (0%)" : `${rate}%`}
-                                                    </SelectItem>
+                                                    </DropdownMenuItem>
                                                 ))}
-                                            </SelectContent>
-                                        </Select>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                     </div>
+
                                     <div className="space-y-2">
                                         <Label htmlFor="cess_percentage">Cess (%)</Label>
                                         <Input
@@ -469,6 +495,7 @@ export function AddProductDialog({
                                 expiry dates, and batch numbers for this product.
                             </p>
                         </TabsContent>
+
                     </ScrollArea>
                 </Tabs>
 
