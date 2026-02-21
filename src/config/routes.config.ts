@@ -39,6 +39,11 @@ export const ROUTE_CONFIGS: RouteConfig[] = [
     redirect: { authenticated: "/dashboard" },
     description: "Landing page",
   },
+  {
+    path: "/invite/accept",
+    type: "public",
+    description: "Accept an employee invitation — accessible by anyone",
+  },
 
   // ── Auth Routes (unauthenticated only) ───────────────────────────────────
   {

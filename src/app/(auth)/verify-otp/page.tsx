@@ -36,6 +36,8 @@ function VerifyOTPContent() {
 
     const type = (searchParams.get("type") as OTPType) || otpType || "login";
     const email = searchParams.get("email") || otpEmail;
+    // Carry the invite token through from /signup?invite_token=...
+    const inviteToken = searchParams.get("invite_token");
 
     /** Redirect if no email context */
     useEffect(() => {
@@ -95,6 +97,28 @@ function VerifyOTPContent() {
                 }
 
                 toast.success("Account verified!");
+
+                // ── Invite flow: accept the invitation immediately ──────────
+                if (inviteToken) {
+                    const { createClient } = await import("@/lib/supabase/client");
+                    const supabase = createClient();
+                    const { data: acceptData } = await (supabase.rpc as CallableFunction)("accept_invitation", {
+                        p_token: inviteToken,
+                    });
+
+                    const result = acceptData as { success: boolean; store_id?: string } | null;
+                    if (result?.success) {
+                        toast.success("Welcome aboard! Joining your store…");
+                    } else {
+                        // Token expired / email mismatch — still send to dashboard;
+                        // the onboarding hook will route them to the correct step.
+                        toast.error("Invitation could not be accepted. Please ask your admin to re-invite you.");
+                    }
+                    // Always go to /dashboard — middleware handles the rest
+                    router.push(APP_CONFIG.routes.dashboard);
+                    return;
+                }
+
                 router.push(APP_CONFIG.routes.createOrganization);
             } else {
                 // Login flow → validate user

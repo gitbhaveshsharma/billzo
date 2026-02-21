@@ -2,6 +2,8 @@
 export interface ServiceResponse<T> {
   data: T | null;
   error: string | null;
+  /** Optional extra context from the service (e.g. invitation_sent) */
+  meta?: Record<string, unknown>;
 }
 
 /** Login response from the login_user() stored procedure */

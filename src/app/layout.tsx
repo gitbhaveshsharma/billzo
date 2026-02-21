@@ -36,21 +36,23 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
       >
         <Providers>
           {children}
           <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                borderRadius: "8px",
-                background: "hsl(var(--card))",
-                color: "hsl(var(--card-foreground))",
-                border: "1px solid hsl(var(--border))",
-              },
-            }}
-          />
+  position="top-center"
+  toastOptions={{
+    duration: 4000,
+    style: {
+      borderRadius: "8px",
+      background: "hsl(var(--card))",
+      color: "hsl(var(--card-foreground))",
+      border: "1px solid hsl(var(--border))",
+      backgroundColor: "hsl(var(--card))",
+    },
+  }}
+/>
         </Providers>
       </body>
     </html>

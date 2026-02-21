@@ -84,7 +84,7 @@ export function BanUserDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-3">
+                <div className="space-y-3 p-4">
                     <div className="space-y-1.5">
                         <Label htmlFor="ban-reason">Reason for ban *</Label>
                         <Textarea
@@ -189,7 +189,7 @@ export function ChangeRoleDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-3">
+                <div className="space-y-3 p-4">
                     <div className="space-y-1.5">
                         <Label>Current Role</Label>
                         <Input value={user?.role_display_name || ""} disabled />
@@ -315,7 +315,7 @@ export function ResetAccessDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-3">
+                <div className="space-y-3 p-4">
                     {resetOptions.map((option) => (
                         <div
                             key={option.key}
@@ -391,7 +391,7 @@ export function DeleteEmployeeDialog({
 
     return (
         <Dialog open={open} onOpenChange={(v) => !isSubmitting && onOpenChange(v)}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-lg space-y-6 px-4">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-destructive">
                         <Trash2 className="h-5 w-5" />
@@ -404,7 +404,7 @@ export function DeleteEmployeeDialog({
                 </DialogHeader>
 
                 <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-2 ">
                         <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
                         <div className="text-xs text-red-700 dark:text-red-300">
                             <p className="font-medium">This action cannot be easily undone</p>

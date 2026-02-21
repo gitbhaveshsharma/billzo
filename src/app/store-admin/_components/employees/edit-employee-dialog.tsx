@@ -18,6 +18,7 @@ import {
     TabsList,
     TabsTrigger,
 } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -43,12 +44,20 @@ interface EditEmployeeDialogProps {
     availableRoles: AvailableRolesResponse | null;
     onUpdateUser: (userId: string, data: UpdateStoreUserRequest) => Promise<boolean>;
     onUpdateEmployee: (employeeId: string, data: UpdateEmployeeRequest) => Promise<boolean>;
+    onCreateEmployee: (
+        storeUserId: string,
+        email: string,
+        data: { first_name: string; last_name: string; phone?: string; employee_type?: string; employment_status?: string; salary?: number; pay_frequency?: string; notes?: string }
+    ) => Promise<boolean>;
 }
 
 const formSchema = updateStoreUserSchema.extend({
+    // Allow empty string for optional text fields — empty means "not provided / unchanged"
+    designation: z.string().min(2, "At least 2 characters").or(z.literal("")).optional(),
+    department: z.string().min(2, "At least 2 characters").or(z.literal("")).optional(),
     // Employee fields
-    first_name: z.string().min(2).optional(),
-    last_name: z.string().min(2).optional(),
+    first_name: z.string().min(2, "At least 2 characters").or(z.literal("")).optional(),
+    last_name: z.string().min(2, "At least 2 characters").or(z.literal("")).optional(),
     phone: z.string().regex(/^[6-9]\d{9}$/, "Invalid phone").optional().or(z.literal("")),
     employee_type: z.enum(["full_time", "part_time", "contractor", "intern", "trainee"]).optional(),
     employment_status: z.enum(["active", "probation", "notice_period", "terminated", "resigned", "absconded"]).optional(),
@@ -70,6 +79,7 @@ export function EditEmployeeDialog({
     availableRoles,
     onUpdateUser,
     onUpdateEmployee,
+    onCreateEmployee,
 }: EditEmployeeDialogProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -82,24 +92,24 @@ export function EditEmployeeDialog({
         resolver: zodResolver(formSchema) as any,
     });
 
-    // Reset form when user changes
+    // Reset form when user changes OR when dialog opens
     useEffect(() => {
-        if (user) {
+        if (user && open) {
             reset({
                 role_id: user.role_id || undefined,
-                designation: user.designation || undefined,
-                department: user.department || undefined,
-                first_name: user.employee?.first_name || undefined,
-                last_name: user.employee?.last_name || undefined,
-                phone: user.employee?.phone || undefined,
-                employee_type: user.employee?.employee_type || undefined,
-                employment_status: user.employee?.employment_status || undefined,
-                salary: user.employee?.salary || undefined,
-                pay_frequency: user.employee?.pay_frequency || undefined,
-                notes: user.employee?.notes || undefined,
+                designation: user.designation || "",
+                department: user.department || "",
+                first_name: user.employee?.first_name || "",
+                last_name: user.employee?.last_name || "",
+                phone: user.employee?.phone || "",
+                employee_type: user.employee?.employee_type || "full_time",
+                employment_status: user.employee?.employment_status || "active",
+                salary: user.employee?.salary ?? undefined,
+                pay_frequency: user.employee?.pay_frequency || "monthly",
+                notes: user.employee?.notes || "",
             });
         }
-    }, [user, reset]);
+    }, [user, open, reset]);
 
     const handleFormSubmit = async (values: FormValues) => {
         if (!user) return;
@@ -130,16 +140,19 @@ export function EditEmployeeDialog({
                 "notes",
             ];
 
-            // Build update objects from dirty fields only
+            // Build update objects from dirty fields only, skip empty strings (meaning "unchanged")
             const storeUserUpdates: UpdateStoreUserRequest = {};
             const employeeUpdates: UpdateEmployeeRequest = {};
 
             for (const key of Object.keys(dirtyFields) as (keyof FormValues)[]) {
+                const val = values[key];
+                // Skip empty strings — treating them as "not changed"
+                if (val === "") continue;
                 if (storeUserFields.includes(key as keyof UpdateStoreUserRequest)) {
-                    (storeUserUpdates as any)[key] = values[key];
+                    (storeUserUpdates as any)[key] = val;
                 }
                 if (employeeFields.includes(key as keyof UpdateEmployeeRequest)) {
-                    (employeeUpdates as any)[key] = values[key];
+                    (employeeUpdates as any)[key] = val;
                 }
             }
 
@@ -151,8 +164,17 @@ export function EditEmployeeDialog({
             }
 
             // Update employee if there are changes and employee exists
-            if (success && Object.keys(employeeUpdates).length > 0 && user.employee?.id) {
-                success = await onUpdateEmployee(user.employee.id, employeeUpdates);
+            if (success && Object.keys(employeeUpdates).length > 0) {
+                if (user.employee?.id) {
+                    // Employee record exists — update it
+                    success = await onUpdateEmployee(user.employee.id, employeeUpdates);
+                } else if (
+                    employeeUpdates.first_name &&
+                    employeeUpdates.last_name
+                ) {
+                    // No employee record yet — create one
+                    success = await onCreateEmployee(user.id, user.email, employeeUpdates as any);
+                }
             }
 
             if (success) {
@@ -172,77 +194,85 @@ export function EditEmployeeDialog({
 
     return (
         <Dialog open={open} onOpenChange={(v) => !isSubmitting && onOpenChange(v)}>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+            <DialogContent className="max-w-3xl max-h-[95vh] flex flex-col">
+                <DialogHeader className="flex-shrink-0">
                     <DialogTitle>Edit Employee</DialogTitle>
                     <DialogDescription>
-                        Update details for {user.full_name || user.email}
+                        Update details for{" "}
+                        {user.full_name ||
+                            (user.employee
+                                ? `${user.employee.first_name} ${user.employee.last_name}`.trim()
+                                : null) ||
+                            user.email ||
+                            "this employee"}
                     </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
-                    <Tabs defaultValue="store-user">
-                        <TabsList className="w-full">
+                <form
+                    onSubmit={handleSubmit(handleFormSubmit)}
+                    className="flex flex-col flex-1 min-h-0"
+                >
+                    <Tabs defaultValue="store-user" className="flex-1 min-h-0 flex flex-col">
+                        <TabsList className="w-full grid grid-cols-2 flex-shrink-0">
                             <TabsTrigger value="store-user" className="flex-1">Role & Store</TabsTrigger>
-                            {user.employee && (
-                                <TabsTrigger value="employee" className="flex-1">Employee</TabsTrigger>
-                            )}
+                            <TabsTrigger value="employee" className="flex-1">Employee</TabsTrigger>
                         </TabsList>
 
-                        {/* Store User Tab */}
-                        <TabsContent value="store-user" className="space-y-4 mt-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="edit-role">Role</Label>
-                                <select
-                                    id="edit-role"
-                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                                    {...register("role_id")}
-                                >
-                                    <option value="">Select a role</option>
-                                    {availableRoles?.roles.map((role) => (
-                                        <option key={role.id} value={role.id}>
-                                            {role.role_display_name}
-                                        </option>
-                                    ))}
-                                </select>
-                                {errors.role_id && (
-                                    <p className="text-xs text-destructive">{errors.role_id.message}</p>
-                                )}
-                            </div>
+                        <ScrollArea className="flex-1 min-h-0 px-1">
 
-                            <div className="space-y-1.5">
-                                <Label htmlFor="edit-designation">Designation</Label>
-                                <Input
-                                    id="edit-designation"
-                                    placeholder="e.g. Senior Cashier"
-                                    {...register("designation")}
-                                />
-                            </div>
+                            {/* Store User Tab */}
+                            <TabsContent value="store-user" className="space-y-4 mt-4 px-3">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="edit-role">Role</Label>
+                                    <select
+                                        id="edit-role"
+                                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                        {...register("role_id")}
+                                    >
+                                        <option value="">Select a role</option>
+                                        {availableRoles?.roles.map((role) => (
+                                            <option key={role.id} value={role.id}>
+                                                {role.role_display_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {errors.role_id && (
+                                        <p className="text-xs text-destructive">{errors.role_id.message}</p>
+                                    )}
+                                </div>
 
-                            <div className="space-y-1.5">
-                                <Label htmlFor="edit-department">Department</Label>
-                                <Input
-                                    id="edit-department"
-                                    placeholder="e.g. Sales"
-                                    {...register("department")}
-                                />
-                            </div>
-                        </TabsContent>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="edit-designation">Designation</Label>
+                                    <Input
+                                        id="edit-designation"
+                                        placeholder="e.g. Senior Cashier"
+                                        {...register("designation")}
+                                    />
+                                </div>
 
-                        {/* Employee Tab */}
-                        {user.employee && (
-                            <TabsContent value="employee" className="space-y-4 mt-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="edit-department">Department</Label>
+                                    <Input
+                                        id="edit-department"
+                                        placeholder="e.g. Sales"
+                                        {...register("department")}
+                                    />
+                                </div>
+                            </TabsContent>
+
+                            {/* Employee Tab — always shown */}
+                            <TabsContent value="employee" className="space-y-4 mt-4 px-3">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
                                         <Label htmlFor="edit-first-name">First Name</Label>
-                                        <Input id="edit-first-name" {...register("first_name")} />
+                                        <Input id="edit-first-name" placeholder="First name" {...register("first_name")} />
                                         {errors.first_name && (
                                             <p className="text-xs text-destructive">{errors.first_name.message}</p>
                                         )}
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label htmlFor="edit-last-name">Last Name</Label>
-                                        <Input id="edit-last-name" {...register("last_name")} />
+                                        <Input id="edit-last-name" placeholder="Last name" {...register("last_name")} />
                                         {errors.last_name && (
                                             <p className="text-xs text-destructive">{errors.last_name.message}</p>
                                         )}
@@ -251,7 +281,7 @@ export function EditEmployeeDialog({
 
                                 <div className="space-y-1.5">
                                     <Label htmlFor="edit-phone">Phone</Label>
-                                    <Input id="edit-phone" {...register("phone")} />
+                                    <Input id="edit-phone" placeholder="10-digit phone number" {...register("phone")} />
                                     {errors.phone && (
                                         <p className="text-xs text-destructive">{errors.phone.message}</p>
                                     )}
@@ -296,6 +326,7 @@ export function EditEmployeeDialog({
                                             id="edit-salary"
                                             type="number"
                                             min={0}
+                                            placeholder="0"
                                             {...register("salary")}
                                         />
                                     </div>
@@ -324,10 +355,11 @@ export function EditEmployeeDialog({
                                     />
                                 </div>
                             </TabsContent>
-                        )}
+
+                        </ScrollArea>
                     </Tabs>
 
-                    <DialogFooter className="gap-2">
+                    <DialogFooter className="flex-shrink-0 pt-4 gap-2">
                         <Button
                             type="button"
                             variant="outline"

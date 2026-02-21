@@ -1,23 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import toast from "react-hot-toast";
-import { useStoreAdmin } from "../../_context/store-admin-context";
+import { useAuth } from "@/hooks/use-auth";
 import { useCustomerStore } from "@/stores/customers.store";
+import { useSalesStore } from "@/stores/sales.store";
 import {
     CustomerTable,
     CustomerToolbar,
-    CustomerStats,
     CustomerPagination,
     AddCustomerDialog,
     EditCustomerDialog,
     CustomerDetailSheet,
-    BlacklistCustomerDialog,
-    DeleteCustomerDialog,
     RecordPaymentDialog,
     AdjustLoyaltyPointsDialog,
     type CustomerAction,
-} from "../../_components/customer";
+} from "../../store-admin/_components/customer";
+import { PosCustomerStats } from "../_components/pos-customer-stats";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import type {
     Customer,
@@ -25,21 +24,28 @@ import type {
     UpdateCustomerRequest,
     RecordPaymentRequest,
     AdjustLoyaltyPointsRequest,
-    BlacklistCustomerRequest,
     CustomerFilters,
     CustomerPagination as CustomerPaginationType,
-    CustomerType,
 } from "@/types/customers.types";
 
 // ============================================================================
-// CUSTOMER PAGE
+// POS CUSTOMERS PAGE
+// Cashier view — search, view, add, edit basic info, record payment, loyalty
+// Cannot: blacklist, delete, change credit limit, change type
 // ============================================================================
 
-export default function CustomerPage() {
-    const {
-        storeId,
-        isLoading: contextLoading,
-    } = useStoreAdmin();
+/** Actions allowed for cashier — subset of full CustomerAction */
+const CASHIER_ALLOWED_ACTIONS: CustomerAction[] = [
+    "view",
+    "edit",
+    "record-payment",
+    "adjust-loyalty",
+];
+
+export default function POSCustomersPage() {
+    const { appUser, isLoading: authLoading } = useAuth();
+    const storeId = appUser?.storeId ?? null;
+    const cashierId = appUser?.id ?? null;
 
     const {
         customers,
@@ -54,21 +60,16 @@ export default function CustomerPage() {
         fetchDashboardStats,
         createCustomer,
         updateCustomer,
-        deleteCustomer,
-        deactivateCustomer,
-        reactivateCustomer,
-        toggleBlacklist,
         recordPayment,
         adjustLoyaltyPoints,
-        bulkUpdateType,
-        bulkDeactivate,
-        bulkAddTags,
         setFilters,
         setPagination,
-        setSelectedCustomerIds,
         toggleCustomerSelection,
+        setSelectedCustomerIds,
         clearSelection,
     } = useCustomerStore();
+
+    const { todaySummaries, fetchTodaySales } = useSalesStore();
 
     // ========================================================================
     // DIALOG STATE
@@ -77,8 +78,6 @@ export default function CustomerPage() {
     const [addDialogOpen, setAddDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [detailSheetOpen, setDetailSheetOpen] = useState(false);
-    const [blacklistDialogOpen, setBlacklistDialogOpen] = useState(false);
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
     const [loyaltyDialogOpen, setLoyaltyDialogOpen] = useState(false);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -103,15 +102,36 @@ export default function CustomerPage() {
     useEffect(() => {
         if (storeId) {
             fetchDashboardStats(storeId);
+            fetchTodaySales(storeId);
         }
-    }, [storeId, fetchDashboardStats]);
+    }, [storeId, fetchDashboardStats, fetchTodaySales]);
 
     // ========================================================================
-    // ACTION HANDLERS
+    // COMPUTED STATS
+    // ========================================================================
+
+    const myCustomersToday = useMemo(() => {
+        if (!cashierId || !todaySummaries.length) return 0;
+        // Count unique customers from today's sales by this cashier
+        const uniqueCustomers = new Set(
+            todaySummaries
+                .filter((s) => s.customer_name)
+                .map((s) => s.customer_name)
+        );
+        return uniqueCustomers.size;
+    }, [cashierId, todaySummaries]);
+
+    // ========================================================================
+    // ACTION HANDLER — restricted to cashier-allowed actions
     // ========================================================================
 
     const handleAction = useCallback(
         (action: CustomerAction, customer: Customer) => {
+            if (!CASHIER_ALLOWED_ACTIONS.includes(action)) {
+                toast.error("This action is not available");
+                return;
+            }
+
             setSelectedCustomer(customer);
 
             switch (action) {
@@ -121,73 +141,19 @@ export default function CustomerPage() {
                 case "edit":
                     setEditDialogOpen(true);
                     break;
-                case "deactivate":
-                    handleDeactivate(customer);
-                    break;
-                case "reactivate":
-                    handleReactivate(customer);
-                    break;
-                case "blacklist":
-                    setBlacklistDialogOpen(true);
-                    break;
-                case "unblacklist":
-                    handleUnblacklist(customer);
-                    break;
                 case "record-payment":
                     setPaymentDialogOpen(true);
                     break;
                 case "adjust-loyalty":
                     setLoyaltyDialogOpen(true);
                     break;
-                case "delete":
-                    setDeleteDialogOpen(true);
-                    break;
             }
         },
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [storeId]
+        []
     );
 
-    const handleDeactivate = async (customer: Customer) => {
-        if (!storeId) return;
-        const toastId = toast.loading("Deactivating customer...");
-        const success = await deactivateCustomer(storeId, customer.id);
-        if (success) {
-            toast.success(`${customer.name} deactivated`, { id: toastId });
-            fetchDashboardStats(storeId);
-        } else {
-            toast.error("Failed to deactivate customer", { id: toastId });
-        }
-    };
-
-    const handleReactivate = async (customer: Customer) => {
-        if (!storeId) return;
-        const toastId = toast.loading("Reactivating customer...");
-        const success = await reactivateCustomer(storeId, customer.id);
-        if (success) {
-            toast.success(`${customer.name} reactivated`, { id: toastId });
-            fetchDashboardStats(storeId);
-        } else {
-            toast.error("Failed to reactivate customer", { id: toastId });
-        }
-    };
-
-    const handleUnblacklist = async (customer: Customer) => {
-        if (!storeId) return;
-        const toastId = toast.loading("Removing blacklist...");
-        const success = await toggleBlacklist(storeId, customer.id, {
-            is_blacklisted: false,
-        });
-        if (success) {
-            toast.success(`${customer.name} removed from blacklist`, { id: toastId });
-            fetchDashboardStats(storeId);
-        } else {
-            toast.error("Failed to remove blacklist", { id: toastId });
-        }
-    };
-
     // ========================================================================
-    // CRUD HANDLERS (passed to dialogs)
+    // CRUD HANDLERS
     // ========================================================================
 
     const handleAddCustomer = async (data: CreateCustomerRequest): Promise<boolean> => {
@@ -200,40 +166,30 @@ export default function CustomerPage() {
         return false;
     };
 
-    const handleUpdateCustomer = async (customerId: string, data: UpdateCustomerRequest): Promise<boolean> => {
+    const handleUpdateCustomer = async (
+        customerId: string,
+        data: UpdateCustomerRequest
+    ): Promise<boolean> => {
         if (!storeId) return false;
-        const success = await updateCustomer(storeId, customerId, data);
+        // Cashier can only update basic fields — strip out admin-only fields
+        const safeData: UpdateCustomerRequest = {
+            name: data.name,
+            phone: data.phone,
+            alternate_phone: data.alternate_phone,
+            email: data.email,
+            date_of_birth: data.date_of_birth,
+            anniversary_date: data.anniversary_date,
+            gender: data.gender,
+            address_line1: data.address_line1,
+            address_line2: data.address_line2,
+            city: data.city,
+            state: data.state,
+            pincode: data.pincode,
+            notes: data.notes,
+        };
+        const success = await updateCustomer(storeId, customerId, safeData);
         if (success) {
             fetchDashboardStats(storeId);
-        }
-        return success;
-    };
-
-    const handleBlacklist = async (customerId: string, reason: string): Promise<boolean> => {
-        if (!storeId) return false;
-        const toastId = toast.loading("Blacklisting customer...");
-        const success = await toggleBlacklist(storeId, customerId, {
-            is_blacklisted: true,
-            blacklist_reason: reason,
-        });
-        if (success) {
-            toast.success("Customer blacklisted", { id: toastId });
-            fetchDashboardStats(storeId);
-        } else {
-            toast.error("Failed to blacklist customer", { id: toastId });
-        }
-        return success;
-    };
-
-    const handleDeleteCustomer = async (customerId: string): Promise<boolean> => {
-        if (!storeId) return false;
-        const toastId = toast.loading("Deleting customer...");
-        const success = await deleteCustomer(storeId, customerId);
-        if (success) {
-            toast.success("Customer deleted", { id: toastId });
-            fetchDashboardStats(storeId);
-        } else {
-            toast.error("Failed to delete customer", { id: toastId });
         }
         return success;
     };
@@ -247,7 +203,10 @@ export default function CustomerPage() {
         return success;
     };
 
-    const handleAdjustLoyalty = async (customerId: string, data: AdjustLoyaltyPointsRequest): Promise<boolean> => {
+    const handleAdjustLoyalty = async (
+        customerId: string,
+        data: AdjustLoyaltyPointsRequest
+    ): Promise<boolean> => {
         if (!storeId) return false;
         const success = await adjustLoyaltyPoints(storeId, customerId, data);
         if (success) {
@@ -257,66 +216,19 @@ export default function CustomerPage() {
     };
 
     // ========================================================================
-    // BULK ACTION HANDLERS
-    // ========================================================================
-
-    const handleBulkChangeType = async (type: CustomerType) => {
-        if (!storeId || selectedCustomerIds.length === 0) return;
-        const toastId = toast.loading("Updating customer type...");
-        const success = await bulkUpdateType(storeId, selectedCustomerIds, type);
-        if (success) {
-            toast.success(`Updated ${selectedCustomerIds.length} customer(s) type`, { id: toastId });
-            clearSelection();
-            fetchDashboardStats(storeId);
-        } else {
-            toast.error("Failed to update customer type", { id: toastId });
-        }
-    };
-
-    const handleBulkDeactivate = async () => {
-        if (!storeId || selectedCustomerIds.length === 0) return;
-        const toastId = toast.loading("Deactivating customers...");
-        const success = await bulkDeactivate(storeId, selectedCustomerIds);
-        if (success) {
-            toast.success(`Deactivated ${selectedCustomerIds.length} customer(s)`, { id: toastId });
-            clearSelection();
-            fetchDashboardStats(storeId);
-        } else {
-            toast.error("Failed to deactivate customers", { id: toastId });
-        }
-    };
-
-    const handleBulkAddTags = async () => {
-        if (!storeId || selectedCustomerIds.length === 0) return;
-        const input = window.prompt("Enter tags (comma separated):");
-        if (!input) return;
-        const tags = input.split(",").map((t) => t.trim()).filter(Boolean);
-        if (tags.length === 0) return;
-        const toastId = toast.loading("Adding tags...");
-        const success = await bulkAddTags(storeId, selectedCustomerIds, tags);
-        if (success) {
-            toast.success(`Added tags to ${selectedCustomerIds.length} customer(s)`, { id: toastId });
-            clearSelection();
-        } else {
-            toast.error("Failed to add tags", { id: toastId });
-        }
-    };
-
-    // ========================================================================
-    // SELECT HANDLERS
+    // SELECT HANDLERS (for table, even though cashier has no bulk actions)
     // ========================================================================
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
-            const allIds = customers.map((c) => c.id);
-            setSelectedCustomerIds(allIds);
+            setSelectedCustomerIds(customers.map((c) => c.id));
         } else {
             clearSelection();
         }
     };
 
     // ========================================================================
-    // FILTER & PAGINATION HANDLERS
+    // FILTER & PAGINATION
     // ========================================================================
 
     const handleFiltersChange = useCallback(
@@ -334,10 +246,10 @@ export default function CustomerPage() {
     );
 
     // ========================================================================
-    // LOADING STATE
+    // LOADING
     // ========================================================================
 
-    if (contextLoading) {
+    if (authLoading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
                 <LoadingSpinner size="lg" text="Loading..." />
@@ -351,27 +263,30 @@ export default function CustomerPage() {
 
     return (
         <div className="space-y-6 p-4 sm:p-6 lg:p-8">
-            {/* Page header */}
+            {/* Page Header */}
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
                 <p className="text-sm text-muted-foreground">
-                    Manage your customers, track purchases, and handle credit accounts.
+                    Search customers, view details, and manage payments.
                 </p>
             </div>
 
-            {/* Stats */}
-            <CustomerStats stats={dashboardStats} isLoading={isLoading && !customers.length} />
+            {/* Stats — compact 3-card strip */}
+            <PosCustomerStats
+                totalCustomers={dashboardStats?.total_customers ?? 0}
+                withOutstanding={dashboardStats?.customers_with_credit ?? 0}
+                totalOutstanding={dashboardStats?.total_outstanding ?? 0}
+                myCustomersToday={myCustomersToday}
+                isLoading={isLoading && !customers.length}
+            />
 
-            {/* Toolbar */}
+            {/* Toolbar — no bulk actions for cashier */}
             <CustomerToolbar
                 filters={filters}
                 onFiltersChange={handleFiltersChange}
-                selectedCount={selectedCustomerIds.length}
+                selectedCount={0}
                 onAddCustomer={() => setAddDialogOpen(true)}
                 customers={customers}
-                onBulkChangeType={handleBulkChangeType}
-                onBulkDeactivate={handleBulkDeactivate}
-                onBulkAddTags={handleBulkAddTags}
             />
 
             {/* Table */}
@@ -403,7 +318,7 @@ export default function CustomerPage() {
                 onSubmit={handleAddCustomer}
             />
 
-            {/* Edit Customer */}
+            {/* Edit Customer (basic info only) */}
             <EditCustomerDialog
                 customer={selectedCustomer}
                 open={editDialogOpen}
@@ -411,36 +326,20 @@ export default function CustomerPage() {
                 onSubmit={handleUpdateCustomer}
             />
 
-            {/* View Customer Detail */}
+            {/* Customer Detail Sheet */}
             <CustomerDetailSheet
                 customer={selectedCustomer}
                 storeId={storeId}
                 open={detailSheetOpen}
                 onOpenChange={setDetailSheetOpen}
-                onRecordPayment={(c) => {
+                onRecordPayment={(c: Customer) => {
                     setSelectedCustomer(c);
                     setPaymentDialogOpen(true);
                 }}
-                onAdjustLoyalty={(c) => {
+                onAdjustLoyalty={(c: Customer) => {
                     setSelectedCustomer(c);
                     setLoyaltyDialogOpen(true);
                 }}
-            />
-
-            {/* Blacklist Customer */}
-            <BlacklistCustomerDialog
-                customer={selectedCustomer}
-                open={blacklistDialogOpen}
-                onOpenChange={setBlacklistDialogOpen}
-                onConfirm={handleBlacklist}
-            />
-
-            {/* Delete Customer */}
-            <DeleteCustomerDialog
-                customer={selectedCustomer}
-                open={deleteDialogOpen}
-                onOpenChange={setDeleteDialogOpen}
-                onConfirm={handleDeleteCustomer}
             />
 
             {/* Record Payment */}

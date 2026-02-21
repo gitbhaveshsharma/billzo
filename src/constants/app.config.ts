@@ -30,6 +30,7 @@ export const APP_CONFIG = {
     createStore: "/create-store",
     pendingApproval: "/pending-approval",
     dashboard: "/dashboard",
+    inviteAccept: "/invite/accept",
   },
 
   /** Supported store types */

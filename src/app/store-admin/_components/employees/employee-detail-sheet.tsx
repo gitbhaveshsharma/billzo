@@ -127,7 +127,7 @@ export function EmployeeDetailSheet({
             <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
                 <SheetHeader className="pb-4">
                     {/* Employee Header */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 ">
                         <Avatar className="h-14 w-14">
                             <AvatarImage src={user.profile_picture || undefined} />
                             <AvatarFallback className={cn("text-white text-lg", avatarColor)}>
@@ -153,7 +153,7 @@ export function EmployeeDetailSheet({
 
                 <Separator className="my-2" />
 
-                <Tabs defaultValue="overview" className="mt-4">
+                <Tabs defaultValue="overview" className="mt-4 px-4">
                     <TabsList className="w-full">
                         <TabsTrigger value="overview" className="flex-1 text-xs">Overview</TabsTrigger>
                         <TabsTrigger value="contact" className="flex-1 text-xs">Contact</TabsTrigger>
@@ -164,7 +164,7 @@ export function EmployeeDetailSheet({
                     </TabsList>
 
                     {/* Overview Tab */}
-                    <TabsContent value="overview" className="mt-4 space-y-1">
+                    <TabsContent value="overview" className="mt-4 space-y-1 ">
                         <InfoRow
                             icon={<Shield className="h-4 w-4" />}
                             label="Role"

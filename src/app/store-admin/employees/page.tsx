@@ -60,6 +60,7 @@ export default function EmployeesPage() {
         addUser,
         updateUser,
         updateEmployee,
+        createEmployee,
         removeUser,
         banUser,
         unbanUser,
@@ -96,20 +97,19 @@ export default function EmployeesPage() {
     // DATA FETCHING
     // ========================================================================
 
-    useEffect(() => {
-        if (storeId) {
-            fetchUsers(storeId);
-            fetchStats(storeId);
-        }
-    }, [storeId, fetchUsers, fetchStats]);
+    // Stable string snapshots — only change when actual VALUES change, not
+    // object references.  This prevents the infinite loop that occurs when
+    // fetchUsers writes a new pagination object on every success response and
+    // a [filters, pagination] effect sees the new reference as a "change".
+    const filtersJson = JSON.stringify(filters);
+    const paginationJson = JSON.stringify(pagination);
 
-    // Re-fetch when filters or pagination change
     useEffect(() => {
-        if (storeId) {
-            fetchUsers(storeId, true);
-        }
+        if (!storeId) return;
+        fetchUsers(storeId, true);
+        fetchStats(storeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filters, pagination]);
+    }, [storeId, filtersJson, paginationJson]);
 
     // ========================================================================
     // HELPERS
@@ -239,13 +239,13 @@ export default function EmployeesPage() {
     // CRUD HANDLERS (passed to dialogs)
     // ========================================================================
 
-    const handleAddEmployee = async (data: AddStoreUserRequest): Promise<boolean> => {
-        if (!storeId) return false;
-        const success = await addUser(storeId, data);
-        if (success) {
+    const handleAddEmployee = async (data: AddStoreUserRequest): Promise<{ success: boolean; invited?: boolean }> => {
+        if (!storeId) return { success: false };
+        const result = await addUser(storeId, data);
+        if (result.success) {
             fetchStats(storeId);
         }
-        return success;
+        return result;
     };
 
     const handleUpdateUser = async (userId: string, data: UpdateStoreUserRequest): Promise<boolean> => {
@@ -259,6 +259,15 @@ export default function EmployeesPage() {
 
     const handleUpdateEmployee = async (employeeId: string, data: UpdateEmployeeRequest): Promise<boolean> => {
         return await updateEmployee(employeeId, data);
+    };
+
+    const handleCreateEmployee = async (
+        storeUserId: string,
+        email: string,
+        data: { first_name: string; last_name: string; phone?: string; employee_type?: string; employment_status?: string; salary?: number; pay_frequency?: string; notes?: string }
+    ): Promise<boolean> => {
+        if (!storeId) return false;
+        return await createEmployee(storeId, storeUserId, email, data);
     };
 
     const handleBanUser = async (userId: string, request: BanUserRequest): Promise<boolean> => {
@@ -454,6 +463,7 @@ export default function EmployeesPage() {
                 availableRoles={availableRoles}
                 onUpdateUser={handleUpdateUser}
                 onUpdateEmployee={handleUpdateEmployee}
+                onCreateEmployee={handleCreateEmployee}
             />
 
             {/* View Employee Detail */}

@@ -80,7 +80,7 @@ export function OpenShiftDialog({
                 onOpenChange(isOpen);
             }}
         >
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <DollarSign className="h-5 w-5 text-green-600" />
@@ -91,7 +91,7 @@ export function OpenShiftDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
+                <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4 p-4">
                     {/* Opening Cash */}
                     <div className="space-y-2">
                         <Label htmlFor="opening_cash">Opening Cash (₹) *</Label>
