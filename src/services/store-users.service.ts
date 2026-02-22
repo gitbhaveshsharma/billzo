@@ -269,7 +269,7 @@ export const storeUsersService = {
             // 2. If user doesn't exist, create a pending invitation
             if (!existingProfile) {
                 // invited_by is NOT NULL in the schema — must be supplied.
-                const { error: inviteError } = await client
+                const { data: inviteRow, error: inviteError } = await client
                     .from("invitations")
                     .insert({
                         store_id: storeId,
@@ -288,17 +288,54 @@ export const storeUsersService = {
                             }
                             : {},
                     })
-                    .select()
+                    .select("id, token")
                     .maybeSingle();
 
                 if (inviteError) {
                     return { data: null, error: "Failed to create invitation: " + inviteError.message };
                 }
 
-                // For now, return error asking to invite user
+                // Fetch store & inviter names for the email
+                const [storeResult, inviterResult] = await Promise.all([
+                    client.from("stores").select("name").eq("id", storeId).maybeSingle(),
+                    currentUser?.id
+                        ? client.from("profiles").select("full_name").eq("id", currentUser.id).maybeSingle()
+                        : Promise.resolve({ data: null }),
+                ]);
+
+                // Get display name for the role
+                const { data: roleRow } = await client
+                    .from("roles")
+                    .select("display_name")
+                    .eq("id", request.role_id)
+                    .maybeSingle();
+
+                // Send the invitation email (fire-and-forget — don't block on this)
+                if (inviteRow?.token) {
+                    const appUrl =
+                        typeof window !== "undefined"
+                            ? window.location.origin
+                            : (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");
+
+                    fetch(`${appUrl}/api/invite/send`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            email: request.email,
+                            token: inviteRow.token,
+                            storeName: storeResult.data?.name || "the store",
+                            inviterName: inviterResult.data?.full_name || "the store admin",
+                            roleName: roleRow?.display_name || "team member",
+                        }),
+                    }).catch((err) =>
+                        console.error("[storeUsersService] Failed to send invite email:", err)
+                    );
+                }
+
                 return {
                     data: null,
-                    error: "User needs to be invited first. Invitation sent to " + request.email,
+                    error: null,
+                    meta: { invitation_sent: true, email: request.email },
                 };
             }
 
@@ -460,6 +497,65 @@ export const storeUsersService = {
             return {
                 data: null,
                 error: err instanceof Error ? err.message : "Failed to update employee",
+            };
+        }
+    },
+
+    /**
+     * Create a new employee record for an existing store user
+     */
+    createEmployeeForUser: async (
+        storeId: string,
+        storeUserId: string,
+        email: string,
+        data: {
+            first_name: string;
+            last_name: string;
+            phone?: string;
+            employee_type?: string;
+            employment_status?: string;
+            salary?: number;
+            pay_frequency?: string;
+            notes?: string;
+        }
+    ): Promise<ServiceResponse<Employee>> => {
+        try {
+            const client = getClient();
+
+            // Auto-generate an employee code based on name + timestamp
+            const prefix = `${data.first_name.slice(0, 2)}${data.last_name.slice(0, 2)}`.toUpperCase();
+            const suffix = Date.now().toString().slice(-4);
+            const employeeCode = `EMP-${prefix}${suffix}`;
+
+            const { data: created, error } = await client
+                .from("employees")
+                .insert({
+                    store_id: storeId,
+                    store_user_id: storeUserId,
+                    employee_code: employeeCode,
+                    first_name: data.first_name,
+                    last_name: data.last_name,
+                    full_name: `${data.first_name} ${data.last_name}`.trim(),
+                    email,
+                    phone: data.phone || "",
+                    employee_type: data.employee_type as any || "full_time",
+                    employment_status: data.employment_status as any || "probation",
+                    joining_date: new Date().toISOString().slice(0, 10),
+                    salary: data.salary,
+                    pay_frequency: data.pay_frequency as any || "monthly",
+                } as any)
+                .select()
+                .single();
+
+            if (error) {
+                return { data: null, error: error.message };
+            }
+
+            return { data: created as any as Employee, error: null };
+        } catch (err) {
+            return {
+                data: null,
+                error: err instanceof Error ? err.message : "Failed to create employee record",
             };
         }
     },
@@ -663,6 +759,22 @@ export const storeUsersService = {
     ): Promise<ServiceResponse<null>> => {
         try {
             const client = getClient();
+
+            // Get store_users.id so we can cascade-delete the employee record
+            const { data: storeUserRow } = await client
+                .from("store_users")
+                .select("id")
+                .eq("store_id", storeId)
+                .eq("user_id", userId)
+                .maybeSingle();
+
+            // Delete employee record if one exists
+            if (storeUserRow?.id) {
+                await client
+                    .from("employees")
+                    .delete()
+                    .eq("store_user_id", storeUserRow.id);
+            }
 
             // Soft delete by deactivating
             const { error } = await client

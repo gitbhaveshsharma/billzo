@@ -27,6 +27,8 @@ import {
   PackageSearch,
   AlertTriangle,
   BookOpen,
+  Clock,
+  Cpu,
 } from "lucide-react";
 import type { RoleName } from "@/types/database.types";
 import type {
@@ -235,6 +237,18 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
         href: "/store-admin/purchase",
         roles: ["store_admin", "super_admin"],
       },
+       {
+        id: "admin-inventory-sales",
+        label: "Sales",
+        href: "/store-admin/sales",
+        roles: ["store_admin", "super_admin"],
+      },
+     {
+        id: "admin-inventory-shifts",
+        label: "Shifts",
+        href: "/store-admin/shifts",
+        roles: ["store_admin", "super_admin"],
+      },
       {
         id: "admin-inventory-suppliers",
         label: "Suppliers",
@@ -304,6 +318,12 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
         id: "admin-settings-ip",
         label: "IP Whitelist",
         href: "/store-admin/settings/ip-whitelist",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-hardware",
+        label: "Hardware",
+        href: "/store-admin/settings/hardware",
         roles: ["store_admin", "super_admin"],
       },
     ],
@@ -434,14 +454,27 @@ const POS_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Refunds",
     href: "/pos/refunds",
     icon: ArrowLeftRight,
-    roles: ["manager", "store_admin", "super_admin"],
-    permissions: ["process_refunds"],
+    roles: ["cashier", "manager", "store_admin", "super_admin"],
+  },
+  {
+    id: "pos-shifts",
+    label: "Shifts",
+    href: "/pos/shifts",
+    icon: Clock,
+    roles: ["cashier", "manager", "store_admin", "super_admin"],
   },
   {
     id: "pos-daily-report",
     label: "Daily Report",
     href: "/pos/daily-report",
     icon: FileText,
+    roles: ["cashier", "manager", "store_admin", "super_admin"],
+  },
+  {
+    id: "pos-hardware",
+    label: "Hardware",
+    href: "/pos/settings/hardware",
+    icon: Cpu,
     roles: ["cashier", "manager", "store_admin", "super_admin"],
   },
 ];
@@ -730,7 +763,7 @@ const HEADER_CONFIGS: Record<PageType, HeaderConfig> = {
     showSearch: true,
     showNotifications: false,
     showUserMenu: true,
-    showBreadcrumbs: false,
+    showBreadcrumbs: true,
     showSidebarToggle: true,
   },
   accountant: {
@@ -780,7 +813,7 @@ const SIDEBAR_CONFIGS: Record<PageType, Omit<SidebarConfig, "items"> & { items: 
   },
   pos: {
     enabled: true,
-    defaultOpen: false,
+    defaultOpen: true,
     collapsible: true,
     items: POS_SIDEBAR_ITEMS,
   },
@@ -813,7 +846,7 @@ const RESPONSIVE_CONFIGS: Record<PageType, ResponsiveConfig> = {
     mobile: { sidebarMode: "sheet", headerCompact: false },
   },
   pos: {
-    mobile: { sidebarMode: "hidden", headerCompact: true },
+    mobile: { sidebarMode: "sheet", headerCompact: false },
   },
   accountant: {
     mobile: { sidebarMode: "sheet", headerCompact: false },

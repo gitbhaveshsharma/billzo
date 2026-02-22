@@ -68,7 +68,7 @@ interface AddEmployeeDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     availableRoles: AvailableRolesResponse | null;
-    onSubmit: (data: AddStoreUserRequest) => Promise<boolean>;
+    onSubmit: (data: AddStoreUserRequest) => Promise<{ success: boolean; invited?: boolean }>;
 }
 
 // ============================================================================
@@ -131,9 +131,14 @@ export function AddEmployeeDialog({
                 };
             }
 
-            const success = await onSubmit(request);
-            if (success) {
-                toast.success("Employee added successfully", { id: toastId });
+            const result = await onSubmit(request);
+            if (result.success) {
+                toast.success(
+                    result.invited
+                        ? `Invitation sent to ${request.email}`
+                        : "Employee added successfully",
+                    { id: toastId }
+                );
                 reset();
                 setCreateEmployee(false);
                 onOpenChange(false);

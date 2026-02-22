@@ -53,9 +53,15 @@ interface StoreUsersState {
     fetchAvailableRoles: (currentRole: RoleName) => Promise<void>;
 
     // Actions - CRUD
-    addUser: (storeId: string, request: AddStoreUserRequest) => Promise<boolean>;
+    addUser: (storeId: string, request: AddStoreUserRequest) => Promise<{ success: boolean; invited?: boolean }>;
     updateUser: (storeId: string, userId: string, updates: UpdateStoreUserRequest) => Promise<boolean>;
     updateEmployee: (employeeId: string, updates: UpdateEmployeeRequest) => Promise<boolean>;
+    createEmployee: (
+        storeId: string,
+        storeUserId: string,
+        email: string,
+        data: { first_name: string; last_name: string; phone?: string; employee_type?: string; employment_status?: string; salary?: number; pay_frequency?: string; notes?: string }
+    ) => Promise<boolean>;
     removeUser: (storeId: string, userId: string) => Promise<boolean>;
 
     // Actions - User Management
@@ -155,11 +161,9 @@ export const useStoreUsersStore = create<StoreUsersState>()(
                             users: result.data.users,
                             totalUsers: result.data.total,
                             totalPages: result.data.total_pages,
-                            pagination: {
-                                ...state.pagination,
-                                page: result.data.page,
-                                limit: result.data.limit,
-                            },
+                            // Do NOT write pagination here — it would create a new object
+                            // reference on every fetch and trigger an infinite re-render loop
+                            // in any component that lists pagination as a useEffect dep.
                             lastFetch: Date.now(),
                             error: null,
                             isLoading: false,
@@ -251,7 +255,15 @@ export const useStoreUsersStore = create<StoreUsersState>()(
 
                     if (result.error) {
                         set({ error: result.error, isLoading: false });
-                        return false;
+                        return { success: false };
+                    }
+
+                    // Invitation was sent — user doesn't exist yet, no row to add
+                    if (result.meta?.invitation_sent) {
+                        set({ isLoading: false, error: null });
+                        // Invalidate so that when the user accepts, next fetch is fresh
+                        get().invalidateCache();
+                        return { success: true, invited: true };
                     }
 
                     if (result.data) {
@@ -266,16 +278,16 @@ export const useStoreUsersStore = create<StoreUsersState>()(
                         // Invalidate cache to force refresh on next fetch
                         get().invalidateCache();
 
-                        return true;
+                        return { success: true };
                     }
 
-                    return false;
+                    return { success: false };
                 } catch (err) {
                     set({
                         error: err instanceof Error ? err.message : "Failed to add user",
                         isLoading: false,
                     });
-                    return false;
+                    return { success: false };
                 }
             },
 
@@ -376,6 +388,33 @@ export const useStoreUsersStore = create<StoreUsersState>()(
                         error: err instanceof Error ? err.message : "Failed to update employee",
                         isLoading: false,
                     });
+                    return false;
+                }
+            },
+
+            createEmployee: async (storeId, storeUserId, email, data) => {
+                set({ isLoading: true, error: null });
+                try {
+                    const result = await storeUsersService.createEmployeeForUser(storeId, storeUserId, email, data);
+                    if (result.error) {
+                        set({ error: result.error, isLoading: false });
+                        return false;
+                    }
+                    if (result.data) {
+                        set((state) => ({
+                            users: state.users.map((user) =>
+                                user.id === storeUserId
+                                    ? { ...user, employee: result.data! as Employee }
+                                    : user
+                            ),
+                            error: null,
+                            isLoading: false,
+                        }));
+                        return true;
+                    }
+                    return false;
+                } catch (err) {
+                    set({ error: err instanceof Error ? err.message : "Failed to create employee", isLoading: false });
                     return false;
                 }
             },

@@ -39,6 +39,11 @@ export const ROUTE_CONFIGS: RouteConfig[] = [
     redirect: { authenticated: "/dashboard" },
     description: "Landing page",
   },
+  {
+    path: "/invite/accept",
+    type: "public",
+    description: "Accept an employee invitation — accessible by anyone",
+  },
 
   // ── Auth Routes (unauthenticated only) ───────────────────────────────────
   {
@@ -256,7 +261,9 @@ export const ROUTE_CONFIGS: RouteConfig[] = [
 export const MIDDLEWARE_BYPASS_PATTERNS = [
   "/_next",
   "/api/webhooks",
+  "/api/auth",
   "/favicon.ico",
+  "/favicon_io",
   "/robots.txt",
   "/sitemap.xml",
   "/images",
