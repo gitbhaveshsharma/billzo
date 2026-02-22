@@ -427,6 +427,10 @@ export interface CreatePurchaseOrderRequest {
 }
 
 export interface UpdatePurchaseOrderRequest {
+    supplier_id?: string;
+    supplier_name?: string;
+    supplier_gstin?: string;
+    order_date?: string;
     invoice_number?: string;
     reference_number?: string;
     expected_delivery_date?: string;
@@ -449,6 +453,7 @@ export interface UpdatePurchaseOrderRequest {
     terms_and_conditions?: string;
     internal_notes?: string;
     tags?: string[];
+    items?: CreatePurchaseOrderItemRequest[];
 }
 
 // ============================================================================

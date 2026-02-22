@@ -266,7 +266,7 @@ export function BarcodeManager({ product, storeId }: BarcodeManagerProps) {
 
             {/* Add/Edit Barcode Dialog */}
             <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>{editingBarcode ? "Edit Barcode" : "Add Barcode"}</DialogTitle>
                         <DialogDescription>
@@ -276,7 +276,7 @@ export function BarcodeManager({ product, storeId }: BarcodeManagerProps) {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 py-2">
+                    <div className="space-y-4 p-4">
                         <div className="space-y-2">
                             <Label htmlFor="bc_barcode">
                                 Barcode <span className="text-destructive">*</span>

@@ -98,7 +98,7 @@ export function CreateBatchDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Create Product Batch</DialogTitle>
                     <DialogDescription>
@@ -106,7 +106,7 @@ export function CreateBatchDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto p-4">
                     <div className="space-y-2">
                         <Label>Product ID *</Label>
                         <Input

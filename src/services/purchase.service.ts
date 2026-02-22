@@ -247,21 +247,57 @@ export const purchaseService = {
         try {
             const user = (await getClient().auth.getUser()).data.user;
 
-            const { data: po, error } = await getClient()
+            // Separate items from the PO header fields — items go to a different table
+            const { items, ...headerData } = data;
+            const isInterState = headerData.is_inter_state ?? false;
+
+            // Update the PO header
+            const { error: headerError } = await getClient()
                 .from("purchase_orders")
                 .update({
-                    ...data,
+                    ...headerData,
                     updated_at: new Date().toISOString(),
                     updated_by: user?.id,
                 } as never)
                 .eq("id", poId)
                 .eq("store_id", storeId)
-                .eq("status", "draft")
-                .select()
+                .eq("status", "draft");
+
+            if (headerError) return { data: null, error: headerError.message };
+
+            // If items were provided, replace all existing items
+            if (items && items.length > 0) {
+                // Delete existing items
+                const { error: deleteError } = await getClient()
+                    .from("purchase_order_items")
+                    .delete()
+                    .eq("purchase_order_id", poId);
+
+                if (deleteError) return { data: null, error: `Failed to clear old items: ${deleteError.message}` };
+
+                // Insert new items
+                const itemPayloads = items.map((item) => ({
+                    ...buildItemPayload(item, isInterState),
+                    purchase_order_id: poId,
+                    store_id: storeId,
+                }));
+
+                const { error: insertError } = await getClient()
+                    .from("purchase_order_items")
+                    .insert(itemPayloads as never[]);
+
+                if (insertError) return { data: null, error: `Failed to update items: ${insertError.message}` };
+            }
+
+            // Re-fetch the updated PO (triggers recalculate totals)
+            const { data: refreshed, error: refetchError } = await getClient()
+                .from("purchase_orders")
+                .select("*")
+                .eq("id", poId)
                 .single();
 
-            if (error) return { data: null, error: error.message };
-            return { data: po as unknown as PurchaseOrder, error: null };
+            if (refetchError) return { data: null, error: refetchError.message };
+            return { data: refreshed as unknown as PurchaseOrder, error: null };
         } catch {
             return { data: null, error: "Failed to update purchase order" };
         }

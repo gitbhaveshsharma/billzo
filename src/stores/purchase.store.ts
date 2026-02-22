@@ -317,14 +317,18 @@ export const usePurchaseStore = create<PurchaseState>()(
                 const previousOrders = get().orders;
                 const previousCurrent = get().currentOrder;
 
-                // Optimistic update
+                // Exclude items from optimistic update — items are PurchaseOrderItem[]
+                // in the store but CreatePurchaseOrderItemRequest[] in the request
+                const { items: _items, ...headerData } = data;
+
+                // Optimistic update (header fields only)
                 set((state) => ({
                     orders: state.orders.map((o) =>
-                        o.id === poId ? { ...o, ...data } : o
+                        o.id === poId ? { ...o, ...headerData } : o
                     ),
                     currentOrder:
                         state.currentOrder?.id === poId
-                            ? { ...state.currentOrder, ...data }
+                            ? { ...state.currentOrder, ...headerData }
                             : state.currentOrder,
                 }));
 

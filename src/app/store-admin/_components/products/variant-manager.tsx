@@ -291,7 +291,7 @@ export function VariantManager({ product, storeId }: VariantManagerProps) {
 
             {/* Add/Edit Variant Dialog */}
             <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>
                             {editingVariant ? "Edit Variant" : "Add Variant"}
@@ -303,7 +303,7 @@ export function VariantManager({ product, storeId }: VariantManagerProps) {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 py-2">
+                    <div className="space-y-4 p-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="variant_code">

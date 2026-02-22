@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
@@ -29,6 +29,8 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { createProductSchema } from "@/validations/product.validation";
 import { GST_RATES } from "@/types/product.types";
 import type { CreateProductRequest, Category, UnitOfMeasure } from "@/types/product.types";
+import { productService } from "@/services/product.service";
+import { ImageUploadField } from "./image-upload-field";
 
 // ============================================================================
 // TYPES
@@ -37,6 +39,7 @@ import type { CreateProductRequest, Category, UnitOfMeasure } from "@/types/prod
 interface AddProductDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    storeId: string;
     onSubmit: (data: CreateProductRequest) => Promise<boolean>;
     categories: Category[];
     units: UnitOfMeasure[];
@@ -70,12 +73,16 @@ function DropdownTriggerButton({ label, placeholder }: { label?: string; placeho
 export function AddProductDialog({
     open,
     onOpenChange,
+    storeId,
     onSubmit,
     categories,
     units,
 }: AddProductDialogProps) {
     const [activeTab, setActiveTab] = useState("basic");
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Stable temp ID used as the storage path prefix for new product images
+    const tempProductIdRef = useRef(crypto.randomUUID());
 
     const {
         register,
@@ -116,6 +123,21 @@ export function AddProductDialog({
     const watchTaxable = watch("is_taxable");
     const watchCategoryId = watch("category_id");
     const watchUnitId = watch("unit_id");
+    const watchPrimaryImage = watch("primary_image");
+
+    // Upload handler — uses a stable temp ID so the path survives re-renders
+    const handleImageUpload = async (file: File): Promise<string | null> => {
+        const result = await productService.uploadProductImage(
+            storeId,
+            tempProductIdRef.current,
+            file
+        );
+        if (result.error) {
+            toast.error(result.error);
+            return null;
+        }
+        return result.data;
+    };
 
     // Derived display labels
     const selectedCategory = categories.find((c) => c.id === watchCategoryId);
@@ -132,6 +154,8 @@ export function AddProductDialog({
             const success = await onSubmit(data as CreateProductRequest);
             if (success) {
                 toast.success("Product created successfully", { id: toastId });
+                // Reset the temp image folder ID for next new product
+            tempProductIdRef.current = crypto.randomUUID();
                 reset();
                 setActiveTab("basic");
                 onOpenChange(false);
@@ -328,16 +352,14 @@ export function AddProductDialog({
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="primary_image">Image URL</Label>
-                                <Input
-                                    id="primary_image"
-                                    placeholder="https://example.com/image.jpg"
-                                    {...register("primary_image")}
-                                />
-                                {errors.primary_image && (
-                                    <p className="text-xs text-destructive">{String(errors.primary_image.message)}</p>
-                                )}
-                            </div>
+                                    <Label>Product Image</Label>
+                                    <ImageUploadField
+                                        value={watchPrimaryImage || ""}
+                                        onChange={(url) => setValue("primary_image", url)}
+                                        onUpload={handleImageUpload}
+                                        disabled={isSubmitting}
+                                    />
+                                </div>
                         </TabsContent>
 
                         {/* ================================ PRICING & TAX ================================ */}

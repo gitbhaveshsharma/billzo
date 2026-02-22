@@ -54,6 +54,65 @@ const getClient = () => createClient();
 
 export const productService = {
     // ========================================================================
+    // STORAGE — PRODUCT IMAGES
+    // ========================================================================
+
+    /**
+     * Upload a product image to the `product-images` bucket.
+     * Path: {storeId}/{productId}/{timestamp}-{filename}
+     * Returns the public CDN URL on success.
+     */
+    uploadProductImage: async (
+        storeId: string,
+        productId: string,
+        file: File
+    ): Promise<ServiceResponse<string>> => {
+        try {
+            const ext = file.name.split(".").pop() ?? "jpg";
+            const path = `${storeId}/${productId}/${Date.now()}.${ext}`;
+
+            const { error: uploadError } = await getClient()
+                .storage
+                .from("product-images")
+                .upload(path, file, { upsert: true, contentType: file.type });
+
+            if (uploadError) return { data: null, error: uploadError.message };
+
+            const { data } = getClient()
+                .storage
+                .from("product-images")
+                .getPublicUrl(path);
+
+            return { data: data.publicUrl, error: null };
+        } catch {
+            return { data: null, error: "Failed to upload image" };
+        }
+    },
+
+    /**
+     * Delete a product image from storage by its public URL.
+     */
+    deleteProductImage: async (publicUrl: string): Promise<ServiceResponse<null>> => {
+        try {
+            // Extract the path after "/product-images/"
+            const marker = "/product-images/";
+            const idx = publicUrl.indexOf(marker);
+            if (idx === -1) return { data: null, error: "Invalid image URL" };
+            const path = publicUrl.slice(idx + marker.length);
+
+            const { error } = await getClient()
+                .storage
+                .from("product-images")
+                .remove([path]);
+
+            if (error) return { data: null, error: error.message };
+            return { data: null, error: null };
+        } catch {
+            return { data: null, error: "Failed to delete image" };
+        }
+    },
+
+    // ========================================================================
     // PRODUCT CRUD
     // ========================================================================
 
@@ -231,18 +290,31 @@ export const productService = {
         data: UpdateProductRequest
     ): Promise<ServiceResponse<Product>> => {
         try {
-            const { data: product, error } = await getClient()
+            // Perform the update without relying on PostgREST returning the row
+            // (.single() on PATCH throws PGRST116 when RLS makes the row invisible
+            // after update, even if the update itself succeeded)
+            const { error: updateError } = await getClient()
                 .from("products")
                 .update({
                     ...data,
                     updated_at: new Date().toISOString(),
                 } as never)
                 .eq("id", productId)
-                .eq("store_id", storeId)
-                .select()
-                .single();
+                .eq("store_id", storeId);
 
-            if (error) return { data: null, error: error.message };
+            if (updateError) return { data: null, error: updateError.message };
+
+            // Re-fetch the updated product
+            const { data: product, error: fetchError } = await getClient()
+                .from("products")
+                .select("*")
+                .eq("id", productId)
+                .eq("store_id", storeId)
+                .maybeSingle();
+
+            if (fetchError) return { data: null, error: fetchError.message };
+            if (!product) return { data: null, error: "Product not found after update" };
+
             return { data: product as unknown as Product, error: null };
         } catch {
             return { data: null, error: "Failed to update product" };

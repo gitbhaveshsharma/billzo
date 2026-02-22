@@ -88,7 +88,7 @@ function InfoRow({ label, value, icon }: { label: string; value: React.ReactNode
             {icon && <span className="text-muted-foreground mt-0.5">{icon}</span>}
             <div className="min-w-0 flex-1">
                 <p className="text-muted-foreground text-xs">{label}</p>
-                <p className="text-sm font-medium truncate">{value || "—"}</p>
+                <div className="text-sm font-medium truncate">{value || "—"}</div>
             </div>
         </div>
     );

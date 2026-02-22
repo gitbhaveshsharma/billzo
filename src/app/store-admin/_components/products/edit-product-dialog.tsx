@@ -29,6 +29,8 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { updateProductSchema } from "@/validations/product.validation";
 import { GST_RATES } from "@/types/product.types";
 import type { Product, UpdateProductRequest, Category, UnitOfMeasure } from "@/types/product.types";
+import { productService } from "@/services/product.service";
+import { ImageUploadField } from "./image-upload-field";
 
 // ============================================================================
 // TYPES
@@ -38,6 +40,7 @@ interface EditProductDialogProps {
     product: Product | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    storeId: string;
     onSubmit: (productId: string, data: UpdateProductRequest) => Promise<boolean>;
     categories: Category[];
     units: UnitOfMeasure[];
@@ -73,6 +76,7 @@ export function EditProductDialog({
     product,
     open,
     onOpenChange,
+    storeId,
     onSubmit,
     categories,
     units,
@@ -127,6 +131,18 @@ export function EditProductDialog({
     const watchActive = watch("is_active");
     const watchCategoryId = watch("category_id");
     const watchUnitId = watch("unit_id");
+    const watchPrimaryImage = watch("primary_image");
+
+    // Upload handler — uses the known product.id for the storage path
+    const handleImageUpload = async (file: File): Promise<string | null> => {
+        if (!product) return null;
+        const result = await productService.uploadProductImage(storeId, product.id, file);
+        if (result.error) {
+            toast.error(result.error);
+            return null;
+        }
+        return result.data;
+    };
 
     // Derived display labels for dropdown triggers
     const selectedCategory = categories.find((c) => c.id === watchCategoryId);
@@ -311,9 +327,14 @@ export function EditProductDialog({
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="edit_primary_image">Image URL</Label>
-                                <Input id="edit_primary_image" {...register("primary_image")} />
-                            </div>
+                                    <Label>Product Image</Label>
+                                    <ImageUploadField
+                                        value={watchPrimaryImage || ""}
+                                        onChange={(url) => setValue("primary_image", url)}
+                                        onUpload={handleImageUpload}
+                                        disabled={isSubmitting}
+                                    />
+                                </div>
 
                             <div className="flex items-center gap-3">
                                 <Switch

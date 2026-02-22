@@ -164,7 +164,7 @@ export function StockCountDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto p-4">
                     {entries.map((entry, index) => (
                         <div key={index} className="space-y-3 p-3 border rounded-md relative">
                             {entries.length > 1 && (
