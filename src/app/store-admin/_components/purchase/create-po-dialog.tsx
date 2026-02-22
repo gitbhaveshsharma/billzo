@@ -266,7 +266,10 @@ export function CreatePODialog({
                 product_id: item.product_id,
                 product_name: item.product_name,
                 product_code: item.product_code,
+                barcode: item.barcode || undefined,
                 hsn_code: item.hsn_code || undefined,
+                unit_id: item.unit_id || undefined,
+                unit_code: item.unit_code || undefined,
                 ordered_quantity: item.ordered_quantity,
                 unit_price: item.unit_price,
                 mrp: item.mrp ?? undefined,
@@ -539,6 +542,16 @@ export function CreatePODialog({
                                                                             {item?.hsn_code && (
                                                                                 <span className="text-[10px] text-muted-foreground">
                                                                                     HSN: {item.hsn_code}
+                                                                                </span>
+                                                                            )}
+                                                                            {item?.barcode && (
+                                                                                <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1 py-0.5 rounded">
+                                                                                    {item.barcode}
+                                                                                </span>
+                                                                            )}
+                                                                            {item?.unit_code && (
+                                                                                <span className="text-[10px] text-purple-600 bg-purple-50 px-1 py-0.5 rounded dark:bg-purple-950 dark:text-purple-300">
+                                                                                    {item.unit_code}
                                                                                 </span>
                                                                             )}
                                                                             {item?.batch_number && (
