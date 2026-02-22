@@ -510,7 +510,7 @@ export function CreatePODialog({
                                                         <TableHead className="w-[100px] text-right">Unit Price</TableHead>
                                                         <TableHead className="w-[70px] text-center">GST</TableHead>
                                                         <TableHead className="w-[80px] text-center">Disc %</TableHead>
-                                                        <TableHead className="w-[110px] text-right">Total</TableHead>
+                                                        <TableHead className="w-[120px] text-right">Amount</TableHead>
                                                         <TableHead className="w-[80px] text-center">Actions</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
@@ -685,7 +685,30 @@ export function CreatePODialog({
                                                     <span>− {formatCurrency(orderDiscount)}</span>
                                                 </div>
                                             )}
-                                            <div className="flex justify-between text-muted-foreground">
+                                            {isInterState ? (
+                                                <div className="flex justify-between text-muted-foreground">
+                                                    <span>IGST</span>
+                                                    <span className="text-foreground">{formatCurrency(poTotals.igstTotal)}</span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex justify-between text-muted-foreground">
+                                                        <span>CGST</span>
+                                                        <span className="text-foreground">{formatCurrency(poTotals.cgstTotal)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-muted-foreground">
+                                                        <span>SGST</span>
+                                                        <span className="text-foreground">{formatCurrency(poTotals.sgstTotal)}</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {poTotals.cessTotal > 0 && (
+                                                <div className= "flex justify-between text-muted-foreground">
+                                                    <span>Cess</span>
+                                                    <span className="text-foreground">{formatCurrency(poTotals.cessTotal)}</span>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between text-muted-foreground font-medium">
                                                 <span>Total Tax</span>
                                                 <span className="text-foreground">{formatCurrency(poTotals.totalTax)}</span>
                                             </div>
@@ -850,6 +873,7 @@ export function CreatePODialog({
                 editItem={editingItem}
                 editIndex={editingIndex}
                 onSave={handleItemSave}
+                isInterState={isInterState}
             />
         </>
     );
