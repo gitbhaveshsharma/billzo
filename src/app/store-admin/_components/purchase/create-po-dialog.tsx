@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash2, X, Pencil, PackagePlus } from "lucide-react";
@@ -48,7 +48,7 @@ import { Info } from "lucide-react";
 
 import { createPurchaseOrderSchema } from "@/validations/purchase.validation";
 import type { CreatePurchaseOrderFormData } from "@/validations/purchase.validation";
-import type { PurchaseOrder, CreatePurchaseOrderRequest } from "@/types/purchase.types";
+import type { EnrichedPurchaseOrder, CreatePurchaseOrderRequest } from "@/types/purchase.types";
 import { calculateItemTotals, calculatePOTotals, formatCurrency } from "@/utils/purchase.utils";
 import { useSupplierStore } from "@/stores/supplier.store";
 import { POItemDialog, type POItemDialogItem } from "./po-item-dialog";
@@ -61,7 +61,7 @@ interface CreatePODialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     storeId: string;
-    editOrder?: PurchaseOrder | null;
+    editOrder?: EnrichedPurchaseOrder | null;
     onSubmit: (data: CreatePurchaseOrderRequest) => Promise<boolean>;
     isSaving: boolean;
 }
@@ -197,6 +197,56 @@ export function CreatePODialog({
         );
         return { itemTotals, poTotals };
     }, [watchedItems, isInterState, orderDiscount, shippingCharges, otherCharges, roundOff]);
+
+    // ── Populate form when editing ──
+    useEffect(() => {
+        if (!open) return;
+        if (editOrder) {
+            setActiveTab("details");
+            reset({
+                supplier_id: editOrder.supplier_id,
+                supplier_name: editOrder.supplier_name,
+                supplier_gstin: editOrder.supplier_gstin ?? "",
+                order_date: editOrder.order_date,
+                expected_delivery_date: editOrder.expected_delivery_date ?? "",
+                invoice_number: editOrder.invoice_number ?? "",
+                reference_number: editOrder.reference_number ?? "",
+                invoice_date: editOrder.invoice_date ?? "",
+                discount_amount: editOrder.discount_amount ?? 0,
+                discount_percentage: editOrder.discount_percentage ?? 0,
+                shipping_charges: editOrder.shipping_charges ?? 0,
+                other_charges: editOrder.other_charges ?? 0,
+                round_off: editOrder.round_off ?? 0,
+                is_inter_state: editOrder.is_inter_state ?? false,
+                place_of_supply: editOrder.place_of_supply ?? "",
+                receiving_warehouse: editOrder.receiving_warehouse ?? "",
+                notes: editOrder.notes ?? "",
+                terms_and_conditions: editOrder.terms_and_conditions ?? "",
+                internal_notes: editOrder.internal_notes ?? "",
+                tags: editOrder.tags ?? [],
+                items: (editOrder.items ?? []).map((item) => ({
+                    product_id: item.product_id,
+                    product_name: item.product_name,
+                    product_code: item.product_code ?? "",
+                    barcode: item.barcode ?? "",
+                    hsn_code: item.hsn_code ?? "",
+                    unit_id: item.unit_id ?? "",
+                    unit_code: item.unit_code ?? "",
+                    ordered_quantity: item.ordered_quantity,
+                    unit_price: item.unit_price,
+                    mrp: item.mrp ?? undefined,
+                    discount_percentage: item.discount_percentage ?? 0,
+                    discount_amount: 0,
+                    gst_percentage: item.gst_percentage ?? 18,
+                    cess_percentage: item.cess_percentage ?? 0,
+                    batch_number: item.batch_number ?? "",
+                    manufacturing_date: item.manufacturing_date ?? "",
+                    expiry_date: item.expiry_date ?? "",
+                    notes: item.notes ?? "",
+                })),
+            });
+        }
+    }, [open, editOrder, reset]);
 
     // ── Supplier handler ──
     const handleSupplierChange = useCallback(

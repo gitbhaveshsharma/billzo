@@ -165,7 +165,7 @@ export function ReceiveItemsDialog({
                             <p className="text-muted-foreground text-sm">No pending items to receive</p>
                         </div>
                     ) : (
-                        <div className="space-y-3 pr-2">
+                        <div className="space-y-3 pr-2 p-4">
                             {rows.map((row, index) => (
                                 <div
                                     key={row.item.id}
