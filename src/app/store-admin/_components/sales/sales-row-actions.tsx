@@ -65,14 +65,14 @@ export function SalesRowActions({ sale, onAction }: SalesRowActionsProps) {
                     </DropdownMenuItem>
                 )}
 
-                {canCreateReturn(sale.status) && (
+                {canCreateReturn(sale) && (
                     <DropdownMenuItem onClick={() => onAction("return", sale)}>
                         <RotateCcw className="mr-2 h-4 w-4" />
                         Process Return
                     </DropdownMenuItem>
                 )}
 
-                {canCancelSale(sale.status) && (
+                {canCancelSale(sale) && (
                     <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem

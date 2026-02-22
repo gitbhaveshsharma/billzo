@@ -373,7 +373,6 @@ export default function ShiftsPage() {
                 filters={filters}
                 shifts={shifts}
                 onFiltersChange={handleFiltersChange}
-                onOpenShift={() => setOpenDialogOpen(true)}
                 isLoading={isLoading}
             />
 
@@ -419,8 +418,8 @@ export default function ShiftsPage() {
             <SuspendShiftDialog
                 open={suspendDialogOpen}
                 onOpenChange={setSuspendDialogOpen}
-                shiftId={selectedShift?.id ?? null}
-                onSubmit={handleSuspendShift}
+                shift={selectedShift}
+                onConfirm={handleSuspendShift}
                 isSaving={isSaving}
             />
 
@@ -428,8 +427,8 @@ export default function ShiftsPage() {
             <ResumeShiftDialog
                 open={resumeDialogOpen}
                 onOpenChange={setResumeDialogOpen}
-                shiftId={selectedShift?.id ?? null}
-                onSubmit={handleResumeShift}
+                shift={selectedShift}
+                onConfirm={handleResumeShift}
                 isSaving={isSaving}
             />
 
