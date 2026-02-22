@@ -44,7 +44,7 @@ const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 // ============================================================================
 
 interface CachedResult {
-  response: NextResponse;
+  response: Response;
   timestamp: number;
 }
 

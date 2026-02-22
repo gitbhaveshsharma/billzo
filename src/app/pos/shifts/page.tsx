@@ -367,7 +367,6 @@ export default function POSShiftsPage() {
                 filters={filters}
                 shifts={shifts}
                 onFiltersChange={handleFiltersChange}
-                onOpenShift={() => setOpenDialogOpen(true)}
                 isLoading={isLoading}
             />
 
@@ -410,16 +409,16 @@ export default function POSShiftsPage() {
             <SuspendShiftDialog
                 open={suspendDialogOpen}
                 onOpenChange={setSuspendDialogOpen}
-                shiftId={selectedShift?.id ?? null}
-                onSubmit={handleSuspendShift}
+                shift={selectedShift}
+                onConfirm={handleSuspendShift}
                 isSaving={isSaving}
             />
 
             <ResumeShiftDialog
                 open={resumeDialogOpen}
                 onOpenChange={setResumeDialogOpen}
-                shiftId={selectedShift?.id ?? null}
-                onSubmit={handleResumeShift}
+                shift={selectedShift}
+                onConfirm={handleResumeShift}
                 isSaving={isSaving}
             />
 
@@ -428,7 +427,7 @@ export default function POSShiftsPage() {
                 onOpenChange={setMovementDialogOpen}
                 shiftId={selectedShift?.id ?? null}
                 defaultType={movementDefaultType}
-                onSubmit={handleCashMovement}
+                onSubmit={handleCashMovement}   
                 isSaving={isSaving}
             />
 

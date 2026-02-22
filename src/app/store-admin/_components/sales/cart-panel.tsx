@@ -55,14 +55,16 @@ function CartItemRow({
     ) => void;
 }) {
     const totals = calculateItemTotals(
-        item.quantity,
-        item.unit_price,
-        item.discount_percentage,
-        item.discount_amount,
-        item.gst_percentage,
-        item.cess_percentage,
-        isInterstate,
-        item.discount_type
+        {
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            discount_type: item.discount_type,
+            discount_percentage: item.discount_percentage,
+            discount_amount: item.discount_amount,
+            gst_percentage: item.gst_percentage,
+            cess_percentage: item.cess_percentage,
+        },
+        isInterstate
     );
 
     const handleDiscountChange = (value: string) => {
