@@ -119,7 +119,7 @@ export function CashMovementDialog({
                 onOpenChange(isOpen);
             }}
         >
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-lg">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Banknote className="h-5 w-5 text-blue-600" />
@@ -130,7 +130,7 @@ export function CashMovementDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
+                <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4 p-4">
                     {/* Movement Type */}
                     <div className="space-y-2">
                         <Label>Movement Type *</Label>

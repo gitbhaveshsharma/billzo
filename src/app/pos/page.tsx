@@ -22,6 +22,7 @@ import {
     PaymentDialog,
     HoldBillsDrawer,
     ReceiptView,
+    HardwareStatusIndicator,
 } from "../store-admin/_components/sales";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -436,6 +437,10 @@ export default function POSPage() {
                                 </Badge>
                             )}
                         </Button>
+
+                        {/* Hardware Status */}
+                        <HardwareStatusIndicator />
+
                         <div className="flex-1" />
                         <Button
                             variant="ghost"

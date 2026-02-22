@@ -10,14 +10,15 @@
 export const ROUTE_PROTECTION = {
   /** Paths that bypass middleware entirely (static assets, internals) */
   bypass: [
-    "/_next/static",
-    "/_next/image",
+    "/_next",
     "/favicon.ico",
+    "/favicon_io",
     "/sitemap.xml",
     "/robots.txt",
     "/images",
     "/fonts",
     "/api/webhooks",
+    "/api/auth",
   ],
 
   /** Onboarding-flow pages: completed users must NOT access these */

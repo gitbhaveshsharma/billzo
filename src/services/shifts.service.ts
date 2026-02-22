@@ -186,13 +186,7 @@ export const shiftsService = {
                 .from("cash_shifts")
                 .select(`
                     *,
-                    cash_movements (*),
-                    opener:opened_by (
-                        id, full_name
-                    ),
-                    closer:closed_by (
-                        id, full_name
-                    )
+                    cash_movements (*)
                 `)
                 .eq("id", shiftId)
                 .eq("store_id", storeId)
@@ -201,11 +195,34 @@ export const shiftsService = {
             if (error) return { data: null, error: error.message };
             if (!shift) return { data: null, error: "Shift not found" };
 
+            const rawShift = shift as unknown as CashShift & { cash_movements: CashMovement[] };
+
+            // Fetch profile names separately (opened_by/closed_by reference auth.users,
+            // but full_name lives in the profiles table keyed by the same UUID)
+            let cashier_name: string | null = null;
+            let closed_by_name: string | null = null;
+
+            const userIds = [rawShift.opened_by, rawShift.closed_by].filter(Boolean) as string[];
+            if (userIds.length > 0) {
+                const { data: profiles } = await getClient()
+                    .from("profiles")
+                    .select("id, full_name")
+                    .in("id", userIds);
+
+                if (profiles) {
+                    const profileMap = new Map(profiles.map((p) => [p.id, p.full_name]));
+                    cashier_name = profileMap.get(rawShift.opened_by) ?? null;
+                    if (rawShift.closed_by) {
+                        closed_by_name = profileMap.get(rawShift.closed_by) ?? null;
+                    }
+                }
+            }
+
             const enriched: EnrichedCashShift = {
-                ...(shift as unknown as CashShift),
-                movements: (shift.cash_movements ?? []) as unknown as CashMovement[],
-                cashier_name: (shift.opener as unknown as Record<string, unknown>)?.full_name as string | null,
-                closed_by_name: (shift.closer as unknown as Record<string, unknown>)?.full_name as string | null,
+                ...rawShift,
+                movements: rawShift.cash_movements ?? [],
+                cashier_name,
+                closed_by_name,
             };
 
             return { data: enriched, error: null };

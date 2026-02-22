@@ -45,11 +45,11 @@ export default function RootLayout({
   toastOptions={{
     duration: 4000,
     style: {
+      background: "bg-black/80 backdrop-blur-sm",
       borderRadius: "8px",
-      background: "hsl(var(--card))",
       color: "hsl(var(--card-foreground))",
       border: "1px solid hsl(var(--border))",
-      backgroundColor: "hsl(var(--card))",
+      
     },
   }}
 />

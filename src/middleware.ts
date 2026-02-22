@@ -38,6 +38,47 @@ function verbose(label: string, data: Record<string, unknown>) {
 
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
+// ============================================================================
+// Request deduplication — prevents duplicate Supabase calls during HMR / fast
+// refresh. Caches middleware results per (userId × path) for a short window.
+// ============================================================================
+
+interface CachedResult {
+  response: NextResponse;
+  timestamp: number;
+}
+
+const DEDUP_WINDOW_MS = 2000; // 2 seconds
+const requestCache = new Map<string, CachedResult>();
+
+function getCachedResponse(userId: string, pathname: string): NextResponse | null {
+  const key = `${userId}:${pathname}`;
+  const cached = requestCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > DEDUP_WINDOW_MS) {
+    requestCache.delete(key);
+    return null;
+  }
+  // Return a cloned response so headers aren't shared
+  return new NextResponse(cached.response.body, {
+    status: cached.response.status,
+    headers: new Headers(cached.response.headers),
+  });
+}
+
+function cacheResponse(userId: string, pathname: string, response: NextResponse): void {
+  const key = `${userId}:${pathname}`;
+  requestCache.set(key, { response: response.clone(), timestamp: Date.now() });
+
+  // Periodic cleanup of stale entries
+  if (requestCache.size > 200) {
+    const now = Date.now();
+    for (const [k, v] of requestCache) {
+      if (now - v.timestamp > DEDUP_WINDOW_MS) requestCache.delete(k);
+    }
+  }
+}
+
 function checkRateLimit(ip: string, pathname: string): { allowed: boolean; retryAfterMs: number } {
   const cfg = MIDDLEWARE_CONFIG.rateLimit;
   if (!cfg.enabled) return { allowed: true, retryAfterMs: 0 };
@@ -160,12 +201,18 @@ export async function middleware(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const { routes, redirects } = MIDDLEWARE_CONFIG;
 
-  verbose("🚀 [MW]", { path: pathname, ts: new Date().toISOString() });
-
   // ── 1. Bypass static / internal paths ────────────────────────────────────
+  //    Also bypass paths that look like static assets (images, fonts, etc.)
   if (matchesAny(pathname, routes.bypass)) {
     return NextResponse.next();
   }
+
+  // Bypass files with extensions (static assets like .png, .jpg, .svg, .woff)
+  if (/\.[a-z0-9]{2,6}$/i.test(pathname) && !pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
+  verbose("🚀 [MW]", { path: pathname, ts: new Date().toISOString() });
 
   // ── 2. Dev bypass ────────────────────────────────────────────────────────
   if (process.env.NODE_ENV === "development" && MIDDLEWARE_CONFIG.dev.bypassAuth) {
@@ -199,6 +246,15 @@ export async function middleware(request: NextRequest) {
     authenticated: !!user,
     userId: user?.id,
   });
+
+  // ── 4b. Check dedup cache to avoid repeated Supabase RPCs on HMR ────────
+  if (user) {
+    const cached = getCachedResponse(user.id, pathname);
+    if (cached) {
+      log("debug", "Returning cached middleware result", { path: pathname });
+      return cached;
+    }
+  }
 
   // ── 5. Resolve route config ──────────────────────────────────────────────
   const routeConfig = getRouteConfig(pathname);
@@ -399,10 +455,15 @@ export async function middleware(request: NextRequest) {
   // ── 17. All checks passed — grant access ────────────────────────────────
   log("info", "Access granted", { path: pathname, userId: user.id, role: userRow.role_name });
 
-  return stamp(getResponse(), {
+  const finalResponse = stamp(getResponse(), {
     "X-Middleware-Executed": "true",
     "X-User-Id": user.id,
   });
+
+  // Cache the result to prevent duplicate Supabase calls during HMR
+  cacheResponse(user.id, pathname, finalResponse);
+
+  return finalResponse;
 }
 
 // ============================================================================
@@ -413,10 +474,12 @@ export const config = {
   matcher: [
     /*
      * Match all paths EXCEPT:
-     * - _next/static, _next/image (build assets)
-     * - favicon.ico, sitemap.xml, robots.txt (meta files)
+     * - _next (all build assets, static, image, data)
+     * - favicon.ico, favicon_io/ (favicon assets)
+     * - sitemap.xml, robots.txt (meta files)
      * - images/, fonts/ (public asset dirs)
+     * - Files with extensions like .png, .jpg, .svg, .woff2
      */
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|images/|fonts/).*)",
+    "/((?!_next|favicon.ico|favicon_io|sitemap.xml|robots.txt|images/|fonts/|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot|css|js|map)$).*)",
   ],
 };

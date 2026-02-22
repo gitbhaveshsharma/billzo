@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   BookOpen,
   Clock,
+  Cpu,
 } from "lucide-react";
 import type { RoleName } from "@/types/database.types";
 import type {
@@ -319,6 +320,12 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
         href: "/store-admin/settings/ip-whitelist",
         roles: ["store_admin", "super_admin"],
       },
+      {
+        id: "admin-settings-hardware",
+        label: "Hardware",
+        href: "/store-admin/settings/hardware",
+        roles: ["store_admin", "super_admin"],
+      },
     ],
   },
 ];
@@ -461,6 +468,13 @@ const POS_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Daily Report",
     href: "/pos/daily-report",
     icon: FileText,
+    roles: ["cashier", "manager", "store_admin", "super_admin"],
+  },
+  {
+    id: "pos-hardware",
+    label: "Hardware",
+    href: "/pos/settings/hardware",
+    icon: Cpu,
     roles: ["cashier", "manager", "store_admin", "super_admin"],
   },
 ];

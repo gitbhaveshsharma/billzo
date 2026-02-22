@@ -23,3 +23,4 @@ export { HoldBillsDrawer } from "./hold-bills-drawer";
 export { NoShiftGuard } from "./no-shift-guard";
 export { ProductSalesReportTable } from "./product-sales-report-table";
 export { CreditSalesView } from "./credit-sales-view";
+export { HardwareStatusIndicator } from "../../../../components/shared/hardware-status-indicator";

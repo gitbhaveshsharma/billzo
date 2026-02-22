@@ -108,7 +108,7 @@ export function CloseShiftDialog({
                 onOpenChange(isOpen);
             }}
         >
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Lock className="h-5 w-5 text-red-600" />
@@ -119,7 +119,7 @@ export function CloseShiftDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
+                <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4 p-4">
                     {/* Cash Breakdown (read-only) */}
                     <div className="space-y-2 rounded-lg border bg-muted/50 p-3">
                         <p className="text-sm font-medium">Expected Cash Breakdown</p>

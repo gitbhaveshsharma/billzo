@@ -261,7 +261,9 @@ export const ROUTE_CONFIGS: RouteConfig[] = [
 export const MIDDLEWARE_BYPASS_PATTERNS = [
   "/_next",
   "/api/webhooks",
+  "/api/auth",
   "/favicon.ico",
+  "/favicon_io",
   "/robots.txt",
   "/sitemap.xml",
   "/images",

@@ -29,6 +29,7 @@ import {
   HelpCircle,
   Zap,
   ShoppingBag,
+  Cpu,
 } from "lucide-react";
 import type { SearchItem } from "../types";
 
@@ -479,6 +480,27 @@ export const SEARCH_INDEX: SearchItem[] = [
     priority: "low",
     roles: ["store_admin", "super_admin"],
     permissions: ["manage_ip_whitelist"],
+  },
+  {
+    id: "set-hardware",
+    name: "Hardware Settings",
+    description: "Manage barcode scanners, receipt printers, and POS hardware",
+    category: "settings",
+    icon: Cpu,
+    href: "/store-admin/settings/hardware",
+    keywords: [
+      "hardware",
+      "scanner",
+      "barcode",
+      "printer",
+      "receipt",
+      "thermal",
+      "USB",
+      "device",
+      "POS hardware",
+    ],
+    priority: "high",
+    roles: ["store_admin", "super_admin", "cashier", "manager"],
   },
   {
     id: "set-profile",

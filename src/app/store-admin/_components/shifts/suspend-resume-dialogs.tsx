@@ -55,7 +55,7 @@ export function SuspendShiftDialog({
                 onOpenChange(isOpen);
             }}
         >
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-lg">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-amber-600">
                         <PauseCircle className="h-5 w-5" />
@@ -69,7 +69,7 @@ export function SuspendShiftDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-2">
+                <div className="space-y-2 p-4">
                     <Label>Reason *</Label>
                     <Textarea
                         value={reason}
