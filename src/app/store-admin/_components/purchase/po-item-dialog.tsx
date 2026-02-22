@@ -263,132 +263,135 @@ export function POItemDialog({
                                 Product Identity
                             </h4>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="col-span-2 space-y-1.5">
-                                    <FieldLabel required tooltip="Full descriptive name of the product as it appears on the invoice or catalogue.">
-                                        Product Name
-                                    </FieldLabel>
-                                    <Input
-                                        {...register("product_name")}
-                                        placeholder="e.g. Paracetamol 500mg Strip"
-                                    />
-                                    {errors.product_name && (
-                                        <p className="text-xs text-red-500">{errors.product_name.message}</p>
-                                    )}
-                                </div>
-
+                            
                                 <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <FieldLabel required tooltip="SKU or internal product code used for inventory lookup and barcode matching.">
-                                        Product Code / SKU
-                                    </FieldLabel>
-                                    <Input {...register("product_code")} placeholder="e.g. SKU-10023" />
-                                    {errors.product_code && (
-                                        <p className="text-xs text-red-500">{errors.product_code.message}</p>
-                                    )}
-                                </div>
+  <div className="col-span-2 space-y-1.5">
+    <FieldLabel required tooltip="Full descriptive name of the product as it appears on the invoice or catalogue.">
+      Product Name
+    </FieldLabel>
+    <Input
+      {...register("product_name")}
+      placeholder="e.g. Paracetamol 500mg Strip"
+    />
+    {errors.product_name && (
+      <p className="text-xs text-red-500">{errors.product_name.message}</p>
+    )}
+  </div>
 
-                                <div className="space-y-1.5">
-                                    <FieldLabel tooltip="Barcode printed on the product (EAN-13, UPC, Code 128, QR, etc.). Used for fast POS lookup and scanner matching.">
-                                        Barcode
-                                    </FieldLabel>
-                                    <div className="relative">
-                                        <Input
-                                            {...rhfBarcodeProps}
-                                            ref={(el) => {
-                                                rhfBarcodeRef(el);
-                                                barcodeInputRef.current = el;
-                                            }}
-                                            placeholder="Click here, then scan…"
-                                            maxLength={50}
-                                            onKeyDown={handleBarcodeKeyDown}
-                                            onFocus={() => setBarcodeScanReady(true)}
-                                            onBlur={() => setBarcodeScanReady(false)}
-                                            className={barcodeScanReady
-                                                ? "pr-20 ring-2 ring-blue-500 border-blue-400 focus-visible:ring-blue-500"
-                                                : "pr-20"
-                                            }
-                                        />
-                                        {/* Scanner status badge */}
-                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
-                                            {barcodeScanReady ? (
-                                                <span className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">
-                                                    <ScanLine className="h-3 w-3" />
-                                                    Scan ready
-                                                </span>
-                                            ) : (
-                                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                                    <ScanLine className="h-3 w-3" />
-                                                    Scanner
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {barcodeScanReady && (
-                                        <p className="text-[11px] text-blue-600 dark:text-blue-400">
-                                            Scanner active — scan a barcode or type manually.
-                                        </p>
-                                    )}
-                                    {errors.barcode && (
-                                        <p className="text-xs text-red-500">{errors.barcode.message}</p>
-                                    )}
-                                </div>
-                            </div>
+  {/* Product Code - first column */}
+  <div className="space-y-1.5">
+    <FieldLabel required tooltip="SKU or internal product code used for inventory lookup and barcode matching.">
+      Product Code / SKU
+    </FieldLabel>
+    <Input {...register("product_code")} placeholder="e.g. SKU-10023" />
+    {errors.product_code && (
+      <p className="text-xs text-red-500">{errors.product_code.message}</p>
+    )}
+  </div>
 
-                                <div className="space-y-1.5">
-                                    <FieldLabel tooltip="Harmonized System of Nomenclature code (4–8 digits). Required for GST filing; identifies the category of goods.">
-                                        HSN Code
-                                    </FieldLabel>
-                                    <Input
-                                        {...register("hsn_code")}
-                                        placeholder="e.g. 30049099"
-                                        maxLength={8}
-                                    />
-                                    {errors.hsn_code && (
-                                        <p className="text-xs text-red-500">{errors.hsn_code.message}</p>
-                                    )}
-                                </div>
+  {/* Barcode - spans both columns for extra width */}
+  <div className="col-span-2 space-y-1.5">
+    <FieldLabel tooltip="Barcode printed on the product (EAN-13, UPC, Code 128, QR, etc.). Used for fast POS lookup and scanner matching.">
+      Barcode
+    </FieldLabel>
+    <div className="relative">
+      <Input
+        {...rhfBarcodeProps}
+        ref={(el) => {
+          rhfBarcodeRef(el);
+          barcodeInputRef.current = el;
+        }}
+        placeholder="Click here, then scan…"
+        maxLength={50}
+        onKeyDown={handleBarcodeKeyDown}
+        onFocus={() => setBarcodeScanReady(true)}
+        onBlur={() => setBarcodeScanReady(false)}
+        className={barcodeScanReady
+          ? "pr-20 ring-2 ring-blue-500 border-blue-400 focus-visible:ring-blue-500"
+          : "pr-20"
+        }
+      />
+      {/* Scanner status badge */}
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+        {barcodeScanReady ? (
+          <span className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">
+            <ScanLine className="h-3 w-3" />
+            Scan ready
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <ScanLine className="h-3 w-3" />
+            Scanner
+          </span>
+        )}
+      </div>
+    </div>
+    {barcodeScanReady && (
+      <p className="text-[11px] text-blue-600 dark:text-blue-400">
+        Scanner active — scan a barcode or type manually.
+      </p>
+    )}
+    {errors.barcode && (
+      <p className="text-xs text-red-500">{errors.barcode.message}</p>
+    )}
+  </div>
 
-                                <div className="space-y-1.5">
-                                    <FieldLabel tooltip="Unit of measure for this item (e.g. Pieces, Kilograms, Box). Managed in your store's Units of Measure settings.">
-                                        Unit of Measure
-                                    </FieldLabel>
-                                    <Select
-                                        value={watch("unit_id") ?? ""}
-                                        onValueChange={(val) => {
-                                            const selected = units.find((u) => u.id === val);
-                                            setValue("unit_id", val);
-                                            setValue("unit_code", selected?.code ?? "");
-                                        }}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder={
-                                                activeUnits.length === 0
-                                                    ? "No units configured"
-                                                    : "Select unit…"
-                                            } />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {activeUnits.map((u) => (
-                                                <SelectItem key={u.id} value={u.id}>
-                                                    <span className="font-medium">{u.name}</span>
-                                                    <span className="ml-1.5 text-xs text-muted-foreground">
-                                                        {u.symbol ?? u.code}
-                                                    </span>
-                                                </SelectItem>
-                                            ))}
-                                            {activeUnits.length === 0 && (
-                                                <div className="px-3 py-2 text-xs text-muted-foreground">
-                                                    No active units found for this store.
-                                                </div>
-                                            )}
-                                        </SelectContent>
-                                    </Select>
-                                    {errors.unit_code && (
-                                        <p className="text-xs text-red-500">{errors.unit_code.message}</p>
-                                    )}
-                                </div>
-                            </div>
+  {/* HSN Code - first column */}
+  <div className="space-y-1.5">
+    <FieldLabel tooltip="Harmonized System of Nomenclature code (4–8 digits). Required for GST filing; identifies the category of goods.">
+      HSN Code
+    </FieldLabel>
+    <Input
+      {...register("hsn_code")}
+      placeholder="e.g. 30049099"
+      maxLength={8}
+    />
+    {errors.hsn_code && (
+      <p className="text-xs text-red-500">{errors.hsn_code.message}</p>
+    )}
+  </div>
+
+  {/* Unit of Measure - second column */}
+  <div className="space-y-1.5">
+    <FieldLabel tooltip="Unit of measure for this item (e.g. Pieces, Kilograms, Box). Managed in your store's Units of Measure settings.">
+      Unit of Measure
+    </FieldLabel>
+    <Select
+      value={watch("unit_id") ?? ""}
+      onValueChange={(val) => {
+        const selected = units.find((u) => u.id === val);
+        setValue("unit_id", val);
+        setValue("unit_code", selected?.code ?? "");
+      }}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={
+          activeUnits.length === 0
+            ? "No units configured"
+            : "Select unit…"
+        } />
+      </SelectTrigger>
+      <SelectContent>
+        {activeUnits.map((u) => (
+          <SelectItem key={u.id} value={u.id}>
+            <span className="font-medium">{u.name}</span>
+            <span className="ml-1.5 text-xs text-muted-foreground">
+              {u.symbol ?? u.code}
+            </span>
+          </SelectItem>
+        ))}
+        {activeUnits.length === 0 && (
+          <div className="px-3 py-2 text-xs text-muted-foreground">
+            No active units found for this store.
+          </div>
+        )}
+      </SelectContent>
+    </Select>
+    {errors.unit_code && (
+      <p className="text-xs text-red-500">{errors.unit_code.message}</p>
+    )}
+  </div>
+</div>
                         </section>
 
                         <Separator />
