@@ -150,14 +150,13 @@ export function EditSupplierDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-2xl max-h-[90vh]">
+            <DialogContent className="max-w-3xl max-h-[95vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Edit Supplier</DialogTitle>
                     <DialogDescription>
                         Update &ldquo;{supplier.name}&rdquo; ({supplier.supplier_code}) details.
                     </DialogDescription>
                 </DialogHeader>
-
                 <form onSubmit={handleSubmit(onFormSubmit)}>
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
                         <TabsList className="grid w-full grid-cols-4">
@@ -166,8 +165,8 @@ export function EditSupplierDialog({
                             <TabsTrigger value="address">Address</TabsTrigger>
                             <TabsTrigger value="bank">Bank & Payment</TabsTrigger>
                         </TabsList>
+                    <ScrollArea className="flex-1 min-h-0 p-4 overflow-x-auto">
 
-                        <ScrollArea className="h-[400px] mt-4 pr-4">
                             {/* ================================ BASIC INFO ================================ */}
                             <TabsContent value="basic" className="space-y-4 mt-0">
                                 <div className="grid grid-cols-2 gap-4">
@@ -466,7 +465,6 @@ export function EditSupplierDialog({
                             </TabsContent>
                         </ScrollArea>
                     </Tabs>
-
                     <DialogFooter className="mt-6">
                         <Button
                             type="button"

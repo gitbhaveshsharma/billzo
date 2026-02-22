@@ -82,7 +82,7 @@ export function BlacklistSupplierDialog({
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit(onFormSubmit)}>
-                    <div className="space-y-2 py-2">
+                    <div className="space-y-2 py-2 p-4">
                         <Label htmlFor="blacklist_reason">
                             Reason <span className="text-destructive">*</span>
                         </Label>
@@ -161,7 +161,7 @@ export function DeleteSupplierDialog({
                         <Trash2 className="h-5 w-5" />
                         Delete Supplier
                     </DialogTitle>
-                    <DialogDescription>
+                         <DialogDescription>
                         Are you sure you want to permanently delete{" "}
                         <strong>{supplier.name}</strong> (#{supplier.supplier_code})?
                         This action cannot be undone.
