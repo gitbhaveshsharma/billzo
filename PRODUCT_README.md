@@ -55,6 +55,7 @@ Source: `supabase/migrations/5_inventory_supplier.sql`
 - **Auto inventory updates**: `update_inventory_on_transaction()` trigger adjusts inventory on every transaction INSERT
 - **Low stock alerts**: `check_low_stock()` trigger auto-creates alerts when `quantity_on_hand <= reorder_point`
 - **Barcode validation**: `validate_barcode_format()` trigger warns on non-standard barcode formats
+- **Auto-create from Purchase**: `auto_create_product_from_po_item()` trigger on `purchase_order_items` automatically creates a product when a purchase order item references a `product_id` that doesn't exist yet. Fields like name, SKU, HSN, barcode, GST, MRP, unit are copied from the PO item. See `9_auto_create_product_from_po.sql`
 - **RLS**: `manage_products` permission for products/variants/barcodes; `manage_inventory` for inventory/batches/alerts
 
 ---

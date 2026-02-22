@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -31,7 +31,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Info, AlertTriangle } from "lucide-react";
+import { Info, AlertTriangle, ScanLine } from "lucide-react";
 
 import { createPurchaseOrderItemSchema } from "@/validations/purchase.validation";
 import type { CreatePurchaseOrderItemFormData } from "@/validations/purchase.validation";
@@ -166,6 +166,32 @@ export function POItemDialog({
 
     const activeUnits = units.filter((u) => u.is_active);
 
+    // ── Barcode scanner capture ──
+    // When the barcode input is focused, keystrokes from a keyboard-wedge scanner
+    // flow naturally into the input. We only intercept Enter so it doesn't
+    // submit the form, and we mark the field as "scan ready" visually.
+    const [barcodeScanReady, setBarcodeScanReady] = useState(false);
+    const barcodeInputRef = useRef<HTMLInputElement | null>(null);
+
+    const handleBarcodeKeyDown = useCallback(
+        (e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === "Enter") {
+                e.preventDefault();   // don't submit the dialog form
+                e.stopPropagation();
+                const val = (e.currentTarget.value ?? "").trim();
+                if (val) {
+                    setValue("barcode", val, { shouldValidate: true });
+                    // blur after scan so the user can move on naturally
+                    barcodeInputRef.current?.blur();
+                }
+            }
+        },
+        [setValue]
+    );
+
+    // Merge react-hook-form's ref with our local ref
+    const { ref: rhfBarcodeRef, ...rhfBarcodeProps } = register("barcode");
+
     const gstPercentage = watch("gst_percentage");
 
     // ── Live calculation ──
@@ -266,11 +292,43 @@ export function POItemDialog({
                                     <FieldLabel tooltip="Barcode printed on the product (EAN-13, UPC, Code 128, QR, etc.). Used for fast POS lookup and scanner matching.">
                                         Barcode
                                     </FieldLabel>
-                                    <Input
-                                        {...register("barcode")}
-                                        placeholder="e.g. 8901234567890"
-                                        maxLength={50}
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            {...rhfBarcodeProps}
+                                            ref={(el) => {
+                                                rhfBarcodeRef(el);
+                                                barcodeInputRef.current = el;
+                                            }}
+                                            placeholder="Click here, then scan…"
+                                            maxLength={50}
+                                            onKeyDown={handleBarcodeKeyDown}
+                                            onFocus={() => setBarcodeScanReady(true)}
+                                            onBlur={() => setBarcodeScanReady(false)}
+                                            className={barcodeScanReady
+                                                ? "pr-20 ring-2 ring-blue-500 border-blue-400 focus-visible:ring-blue-500"
+                                                : "pr-20"
+                                            }
+                                        />
+                                        {/* Scanner status badge */}
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+                                            {barcodeScanReady ? (
+                                                <span className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">
+                                                    <ScanLine className="h-3 w-3" />
+                                                    Scan ready
+                                                </span>
+                                            ) : (
+                                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                                    <ScanLine className="h-3 w-3" />
+                                                    Scanner
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {barcodeScanReady && (
+                                        <p className="text-[11px] text-blue-600 dark:text-blue-400">
+                                            Scanner active — scan a barcode or type manually.
+                                        </p>
+                                    )}
                                     {errors.barcode && (
                                         <p className="text-xs text-red-500">{errors.barcode.message}</p>
                                     )}

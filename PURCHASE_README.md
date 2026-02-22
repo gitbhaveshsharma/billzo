@@ -48,6 +48,7 @@ supabase/
 - Triggers prevent deletion of non-draft orders
 - Triggers update inventory when items received (creates `inventory_transactions`)
 - Triggers handle purchase return completion (inventory adjustment)
+- **Auto-create product**: `auto_create_product_from_po_item()` BEFORE INSERT trigger on `purchase_order_items` — if the referenced `product_id` doesn't exist in `products`, a minimal product row is auto-created using data from the PO item (name, SKU, HSN, barcode, prices, GST, unit). If the product already exists, its `purchase_price` is updated to the latest value. Migration: `9_auto_create_product_from_po.sql`
 
 ### RLS Policies
 - **SELECT**: Users with `manage_inventory`, `manage_suppliers`, `view_reports`, or `view_financials` permission, or super admin
@@ -413,3 +414,4 @@ downloadCSV(csv, `purchase-orders-${new Date().toISOString().split("T")[0]}.csv`
 | `src/services/purchase.service.ts` | Service | Supabase CRUD + items + payments + returns + stats |
 | `src/stores/purchase.store.ts` | Store | Zustand state with cache + optimistic UI |
 | `supabase/migrations/6_purchase_orders.sql` | DB | Tables + RLS + triggers + RPC functions |
+| `supabase/migrations/9_auto_create_product_from_po.sql` | DB | Auto-create product trigger when PO item references a new product |
