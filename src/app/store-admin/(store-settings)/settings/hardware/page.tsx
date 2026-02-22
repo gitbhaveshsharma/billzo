@@ -53,6 +53,7 @@ export default function HardwareSettingsPage() {
     isScannerConnected,
     isPrinterConnected,
     lastScannedBarcode,
+    scanLog,
     scannerConfig,
     printerConfig,
     isDetecting,
@@ -162,7 +163,7 @@ export default function HardwareSettingsPage() {
   // ========================================================================
 
   return (
-    <div className="container max-w-4xl mx-auto py-6 px-4 space-y-6">
+    <div className="container max-w-4xl mx-auto py-6 px-4 space-y-6" data-hardware-settings>
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -269,6 +270,64 @@ export default function HardwareSettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ================================================================ */}
+      {/* LIVE SCAN LOG — Debug Panel */}
+      {/* ================================================================ */}
+      <Card className="border-blue-200 dark:border-blue-800">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <ScanBarcode className="h-5 w-5 text-blue-500" />
+            Live Scan Log
+            {scanLog.length > 0 && (
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {scanLog.length} scan(s)
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            Real-time log of all barcode scans. Open browser DevTools (F12 → Console) for detailed debug output.
+            Scan any barcode to see it appear here instantly.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {scanLog.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <ScanBarcode className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground">No scans yet.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Point your barcode scanner at any barcode and scan it.
+                The barcode number will appear here and in the browser console.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {scanLog.map((entry, idx) => (
+                <div
+                  key={`${entry.barcode}-${entry.timestamp.getTime()}`}
+                  className={cn(
+                    "flex items-center justify-between px-3 py-2 rounded-md text-sm font-mono",
+                    idx === 0
+                      ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+                      : "bg-muted/50"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-xs">#{scanLog.length - idx}</span>
+                    <code className="font-bold text-sm">{entry.barcode}</code>
+                    <Badge variant="outline" className="text-[10px]">
+                      {entry.source}
+                    </Badge>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {entry.timestamp.toLocaleTimeString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ================================================================ */}
       {/* BARCODE SCANNER SECTION */}
@@ -397,41 +456,54 @@ export default function HardwareSettingsPage() {
           <Separator />
 
           {/* Scanner Test */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Test Scanner</p>
-              <p className="text-xs text-muted-foreground">
-                Scan any barcode to verify the scanner is working correctly.
-              </p>
-              {lastScannedBarcode && (
-                <p className="text-xs mt-1">
-                  Last scanned: <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{lastScannedBarcode}</code>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Test Scanner</p>
+                <p className="text-xs text-muted-foreground">
+                  Scan any barcode to verify the scanner is working correctly.
                 </p>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {scannerTestResult !== null && (
-                scannerTestResult ? (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : (
-                  <XCircle className="h-5 w-5 text-red-500" />
-                )
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTestScanner}
-                disabled={isScannerTesting}
-                className="gap-2"
-              >
-                {isScannerTesting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <TestTube className="h-4 w-4" />
+                {lastScannedBarcode && (
+                  <p className="text-xs mt-1">
+                    Last scanned: <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{lastScannedBarcode}</code>
+                  </p>
                 )}
-                {isScannerTesting ? "Waiting for scan..." : "Test Scanner"}
-              </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                {scannerTestResult !== null && (
+                  scannerTestResult ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-red-500" />
+                  )
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestScanner}
+                  disabled={isScannerTesting}
+                  className="gap-2"
+                >
+                  {isScannerTesting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <TestTube className="h-4 w-4" />
+                  )}
+                  {isScannerTesting ? "Waiting for scan..." : "Test Scanner"}
+                </Button>
+              </div>
             </div>
+
+            {/* Focus warning during test */}
+            {isScannerTesting && (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm">
+                <Loader2 className="h-4 w-4 text-blue-500 animate-spin flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-blue-700 dark:text-blue-400">Click here first, then scan your barcode</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-500">This page must be focused (not DevTools console). Click anywhere on this page, then scan.</p>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

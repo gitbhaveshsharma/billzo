@@ -41,12 +41,19 @@ export interface PrinterConfig {
   useWebUsb: boolean;
 }
 
+export interface ScanLogEntry {
+  barcode: string;
+  timestamp: Date;
+  source: "keyboard-wedge" | "serial";
+}
+
 export interface HardwareState {
   scanners: HardwareDevice[];
   printers: HardwareDevice[];
   isScannerConnected: boolean;
   isPrinterConnected: boolean;
   lastScannedBarcode: string | null;
+  scanLog: ScanLogEntry[];
   scannerConfig: ScannerConfig;
   printerConfig: PrinterConfig;
 }
@@ -71,6 +78,7 @@ export function useHardware() {
   const [scanners, setScanners] = useState<HardwareDevice[]>([]);
   const [printers, setPrinters] = useState<HardwareDevice[]>([]);
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null);
+  const [scanLog, setScanLog] = useState<ScanLogEntry[]>([]);
   const [scannerConfig, setScannerConfig] = useState<ScannerConfig>(DEFAULT_SCANNER_CONFIG);
   const [printerConfig, setPrinterConfig] = useState<PrinterConfig>(DEFAULT_PRINTER_CONFIG);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -80,6 +88,13 @@ export function useHardware() {
   const lastKeystrokeTime = useRef<number>(0);
   const keystrokeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onBarcodeCallbackRef = useRef<((barcode: string) => void) | null>(null);
+
+  // Keep config in a ref so the keystroke listener is STABLE and never
+  // recreates mid-scan (which would lose the buffer and break detection)
+  const scannerConfigRef = useRef<ScannerConfig>(DEFAULT_SCANNER_CONFIG);
+  useEffect(() => {
+    scannerConfigRef.current = scannerConfig;
+  }, [scannerConfig]);
 
   // Serial port ref for active scanner connection
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,20 +107,39 @@ export function useHardware() {
   // ========================================================================
 
   const startKeystrokeListener = useCallback(() => {
+    console.log("[HW-Scanner] 🎧 Keyboard-wedge listener STARTED (stable — reads config from ref)");
+
     const handleKeypress = (e: KeyboardEvent) => {
-      // Ignore if user is typing in an input (except our POS search bar)
+      // Read config from ref (NOT from closure) so listener is stable
+      const config = scannerConfigRef.current;
+
       const target = e.target as HTMLElement;
       const isPosInput = target.closest("[data-pos-scanner]");
+      const isHardwarePage = target.closest("[data-hardware-settings]");
 
-      // For POS page, we allow scanner input even in the search field
-      if (target.tagName === "INPUT" && !isPosInput) return;
+      // Block typing in regular inputs/textareas (not POS or hardware page)
       if (target.tagName === "TEXTAREA") return;
+      if (target.tagName === "INPUT" && !isPosInput && !isHardwarePage) return;
 
       const now = Date.now();
       const gap = now - lastKeystrokeTime.current;
 
+      // If this looks like scanner-speed input on the hardware page,
+      // prevent the characters from going into config input fields
+      const isFastKeystroke = gap <= config.maxKeystrokeGap && gap > 0;
+      if (isHardwarePage && target.tagName === "INPUT" && (isFastKeystroke || e.key === "Enter")) {
+        e.preventDefault();
+      }
+
       // If gap is too large, start a new sequence
-      if (gap > scannerConfig.maxKeystrokeGap) {
+      if (gap > config.maxKeystrokeGap) {
+        if (keystrokeBuffer.current.length > 0) {
+          console.log(
+            "[HW-Scanner] ⏰ Buffer reset (gap too large:",
+            gap + "ms, max=" + config.maxKeystrokeGap + "ms). Discarded:",
+            JSON.stringify(keystrokeBuffer.current)
+          );
+        }
         keystrokeBuffer.current = "";
       }
 
@@ -113,14 +147,30 @@ export function useHardware() {
 
       // Enter key = end of barcode
       if (e.key === "Enter") {
-        if (keystrokeBuffer.current.length >= scannerConfig.minLength) {
-          const barcode = keystrokeBuffer.current.trim();
-          setLastScannedBarcode(barcode);
-          onBarcodeCallbackRef.current?.(barcode);
+        const bufferContent = keystrokeBuffer.current.trim();
+        console.log(
+          "[HW-Scanner] ⏎ Enter pressed. Buffer:",
+          JSON.stringify(bufferContent),
+          `(length=${bufferContent.length}, required=${config.minLength})`
+        );
+
+        if (bufferContent.length >= config.minLength) {
+          console.log("[HW-Scanner] ✅ BARCODE DETECTED:", bufferContent);
+          setLastScannedBarcode(bufferContent);
+          setScanLog((prev) => [
+            { barcode: bufferContent, timestamp: new Date(), source: "keyboard-wedge" },
+            ...prev.slice(0, 49), // keep last 50
+          ]);
+          onBarcodeCallbackRef.current?.(bufferContent);
 
           // Prevent form submission when scanner sends Enter
           e.preventDefault();
           e.stopPropagation();
+        } else if (bufferContent.length > 0) {
+          console.log(
+            "[HW-Scanner] ⚠️ Buffer too short, ignoring:",
+            JSON.stringify(bufferContent)
+          );
         }
         keystrokeBuffer.current = "";
         return;
@@ -129,18 +179,36 @@ export function useHardware() {
       // Only accept printable characters
       if (e.key.length === 1) {
         keystrokeBuffer.current += e.key;
+        // Log buffer build-up (first char + every 5th to avoid spam)
+        if (keystrokeBuffer.current.length === 1 || keystrokeBuffer.current.length % 5 === 0) {
+          console.log(
+            "[HW-Scanner] 📝 Buffer:",
+            JSON.stringify(keystrokeBuffer.current),
+            `(gap=${gap}ms)`
+          );
+        }
       }
 
       // Auto-clear buffer after timeout
       if (keystrokeTimer.current) clearTimeout(keystrokeTimer.current);
       keystrokeTimer.current = setTimeout(() => {
+        if (keystrokeBuffer.current.length > 0) {
+          console.log(
+            "[HW-Scanner] ⏰ Buffer auto-cleared:",
+            JSON.stringify(keystrokeBuffer.current)
+          );
+        }
         keystrokeBuffer.current = "";
-      }, scannerConfig.maxKeystrokeGap * 3);
+      }, config.maxKeystrokeGap * 3);
     };
 
     document.addEventListener("keydown", handleKeypress, true);
-    return () => document.removeEventListener("keydown", handleKeypress, true);
-  }, [scannerConfig.maxKeystrokeGap, scannerConfig.minLength]);
+    return () => {
+      console.log("[HW-Scanner] 🔇 Keyboard-wedge listener STOPPED");
+      document.removeEventListener("keydown", handleKeypress, true);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // No deps! Listener is stable — reads config from scannerConfigRef
 
   // ========================================================================
   // WEB SERIAL API — For USB barcode scanners
@@ -150,19 +218,25 @@ export function useHardware() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nav = navigator as any;
     if (!nav.serial) {
-      console.warn("Web Serial API not supported");
+      console.warn("[HW-Scanner] ❌ Web Serial API not supported in this browser");
       return null;
     }
+    console.log("[HW-Scanner] 🔌 Requesting serial port...");
 
     try {
       const port = await nav.serial.requestPort();
       await port.open({ baudRate: 9600 });
 
+      const portInfo = port.getInfo?.() ?? {};
+      console.log("[HW-Scanner] ✅ Serial port opened. Port info:", portInfo);
+
       const device: HardwareDevice = {
         id: `serial-${Date.now()}`,
-        name: "USB Barcode Scanner",
+        name: portInfo.usbVendorId ? `USB Scanner (VID:${portInfo.usbVendorId})` : "USB Barcode Scanner",
         type: "scanner",
         status: "connected",
+        vendorId: portInfo.usbVendorId ? `0x${portInfo.usbVendorId.toString(16)}` : undefined,
+        productId: portInfo.usbProductId ? `0x${portInfo.usbProductId.toString(16)}` : undefined,
         lastSeen: new Date(),
         port,
       };
@@ -190,7 +264,12 @@ export function useHardware() {
                 for (let i = 0; i < lines.length - 1; i++) {
                   const barcode = lines[i].trim();
                   if (barcode.length >= scannerConfig.minLength) {
+                    console.log("[HW-Scanner] ✅ SERIAL BARCODE:", barcode);
                     setLastScannedBarcode(barcode);
+                    setScanLog((prev) => [
+                      { barcode, timestamp: new Date(), source: "serial" },
+                      ...prev.slice(0, 49),
+                    ]);
                     onBarcodeCallbackRef.current?.(barcode);
                   }
                 }
@@ -208,7 +287,7 @@ export function useHardware() {
       setScanners((prev) => [...prev.filter((s) => s.id !== device.id), device]);
       return device;
     } catch (err) {
-      console.error("Failed to connect serial scanner:", err);
+      console.error("[HW-Scanner] ❌ Failed to connect serial scanner:", err);
       return null;
     }
   }, [scannerConfig.minLength]);
@@ -232,6 +311,7 @@ export function useHardware() {
   // ========================================================================
 
   const detectPrinters = useCallback(async (): Promise<HardwareDevice[]> => {
+    console.log("[HW-Printer] 🔍 Detecting printers...");
     const detected: HardwareDevice[] = [];
 
     // Check Web USB for thermal printers
@@ -271,6 +351,7 @@ export function useHardware() {
       lastSeen: new Date(),
     });
 
+    console.log("[HW-Printer] 📋 Detected printers:", detected.map((d) => d.name));
     setPrinters(detected);
     return detected;
   }, []);
@@ -318,6 +399,7 @@ export function useHardware() {
   // ========================================================================
 
   const testScanner = useCallback(async (): Promise<boolean> => {
+    console.log("[HW-Scanner] 🧪 Scanner test started — scan any barcode within 10s...");
     setScanners((prev) =>
       prev.map((s) => ({ ...s, status: "testing" as ConnectionStatus }))
     );
@@ -337,6 +419,7 @@ export function useHardware() {
       const originalCallback = onBarcodeCallbackRef.current;
       onBarcodeCallbackRef.current = (barcode) => {
         clearTimeout(timeout);
+        console.log("[HW-Scanner] 🧪✅ Test PASSED — received barcode:", barcode);
         setScanners((prev) =>
           prev.map((s) => ({ ...s, status: "connected" as ConnectionStatus, lastSeen: new Date() }))
         );
@@ -348,6 +431,7 @@ export function useHardware() {
   }, []);
 
   const testPrinter = useCallback(async (): Promise<boolean> => {
+    console.log("[HW-Printer] 🧪 Printer test started...");
     setPrinters((prev) =>
       prev.map((p) => ({ ...p, status: "testing" as ConnectionStatus }))
     );
@@ -406,12 +490,13 @@ export function useHardware() {
         testWindow.close();
       }, 500);
 
+      console.log("[HW-Printer] 🧪✅ Test page sent to printer.");
       setPrinters((prev) =>
         prev.map((p) => ({ ...p, status: "connected" as ConnectionStatus, lastSeen: new Date() }))
       );
       return true;
     } catch (err) {
-      console.error("Printer test failed:", err);
+      console.error("[HW-Printer] 🧪❌ Printer test failed:", err);
       setPrinters((prev) =>
         prev.map((p) => ({ ...p, status: "error" as ConnectionStatus }))
       );
@@ -424,27 +509,32 @@ export function useHardware() {
   // ========================================================================
 
   const detectAllDevices = useCallback(async () => {
+    console.log("[HW] 🔍 Detecting all devices...");
     setIsDetecting(true);
 
     // Detect keyboard-wedge scanner (always available)
+    // Most USB barcode scanners work as HID keyboard devices
     const keyboardScanner: HardwareDevice = {
       id: "keyboard-wedge",
-      name: "Keyboard Wedge Scanner",
+      name: "USB Scanner (Keyboard Wedge / HID)",
       type: "scanner",
       status: "connected",
-      manufacturer: "Generic",
+      manufacturer: "Auto-detected (HID)",
       lastSeen: new Date(),
     };
 
     setScanners((prev) => {
       const hasSerial = prev.some((s) => s.id.startsWith("serial-"));
-      return hasSerial ? prev : [keyboardScanner];
+      const result = hasSerial ? prev : [keyboardScanner];
+      console.log("[HW-Scanner] 📋 Scanners:", result.map((s) => `${s.name} [${s.status}]`));
+      return result;
     });
 
     // Detect printers
     await detectPrinters();
 
     setIsDetecting(false);
+    console.log("[HW] ✅ Device detection complete.");
   }, [detectPrinters]);
 
   // Set up keyboard-wedge listener on mount
@@ -471,6 +561,7 @@ export function useHardware() {
     isScannerConnected,
     isPrinterConnected,
     lastScannedBarcode,
+    scanLog,
     scannerConfig,
     printerConfig,
     isDetecting,

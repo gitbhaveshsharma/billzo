@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -31,10 +31,13 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Info } from "lucide-react";
+import { Info, AlertTriangle } from "lucide-react";
 
 import { createPurchaseOrderItemSchema } from "@/validations/purchase.validation";
 import type { CreatePurchaseOrderItemFormData } from "@/validations/purchase.validation";
+import { calculateItemTotals, formatCurrency } from "@/utils/purchase.utils";
+import { useProductStore } from "@/stores/product.store";
+import { useStoreAdmin } from "../../_context/store-admin-context";
 
 // ============================================================================
 // TYPES
@@ -52,6 +55,8 @@ interface POItemDialogProps {
     editItem?: POItemDialogItem | null;
     editIndex?: number | null;
     onSave: (item: POItemDialogItem, index: number | null) => void;
+    /** Whether this PO is inter-state (affects IGST vs CGST+SGST split) */
+    isInterState?: boolean;
 }
 
 // ============================================================================
@@ -123,7 +128,11 @@ export function POItemDialog({
     editItem,
     editIndex,
     onSave,
+    isInterState = false,
 }: POItemDialogProps) {
+    const { storeId } = useStoreAdmin();
+    const { units, fetchUnits } = useProductStore();
+
     const {
         register,
         handleSubmit,
@@ -148,7 +157,55 @@ export function POItemDialog({
         }
     }, [open, editItem, reset]);
 
+    // Fetch units on first open if not already loaded
+    useEffect(() => {
+        if (open && storeId && units.length === 0) {
+            fetchUnits(storeId);
+        }
+    }, [open, storeId]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+    const activeUnits = units.filter((u) => u.is_active);
+
     const gstPercentage = watch("gst_percentage");
+
+    // ── Live calculation ──
+    const liveCalc = useMemo(() => {
+        const qty = watch("ordered_quantity");
+        const price = watch("unit_price");
+        const disc = watch("discount_percentage") ?? 0;
+        const gst = watch("gst_percentage") ?? 0;
+        const cess = watch("cess_percentage") ?? 0;
+
+        // Detect which inputs are causing NaN
+        const nanFields: string[] = [];
+        if (isNaN(Number(qty)) || qty === undefined) nanFields.push("Ordered Qty");
+        if (isNaN(Number(price)) || price === undefined) nanFields.push("Unit Price");
+        if (isNaN(Number(disc))) nanFields.push("Discount %");
+        if (isNaN(Number(gst))) nanFields.push("GST %");
+        if (isNaN(Number(cess))) nanFields.push("Cess %");
+
+        if (nanFields.length > 0 || !qty || price === undefined) {
+            return { nanFields, totals: null };
+        }
+
+        const totals = calculateItemTotals(
+            Number(qty),
+            Number(price),
+            Number(disc),
+            Number(gst),
+            Number(cess),
+            isInterState
+        );
+        return { nanFields: [], totals };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        watch("ordered_quantity"),
+        watch("unit_price"),
+        watch("discount_percentage"),
+        watch("gst_percentage"),
+        watch("cess_percentage"),
+        isInterState,
+    ]);
 
     const onFormSubmit = (data: CreatePurchaseOrderItemFormData) => {
         onSave(data as POItemDialogItem, editIndex ?? null);
@@ -162,7 +219,7 @@ export function POItemDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col ">
+            <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col ">
                 <DialogHeader className="shrink-0">
                     <DialogTitle>{editItem ? "Edit Item" : "Add Item"}</DialogTitle>
                     <DialogDescription>
@@ -194,6 +251,7 @@ export function POItemDialog({
                                     )}
                                 </div>
 
+                                <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
                                     <FieldLabel required tooltip="SKU or internal product code used for inventory lookup and barcode matching.">
                                         Product Code / SKU
@@ -203,6 +261,21 @@ export function POItemDialog({
                                         <p className="text-xs text-red-500">{errors.product_code.message}</p>
                                     )}
                                 </div>
+
+                                <div className="space-y-1.5">
+                                    <FieldLabel tooltip="Barcode printed on the product (EAN-13, UPC, Code 128, QR, etc.). Used for fast POS lookup and scanner matching.">
+                                        Barcode
+                                    </FieldLabel>
+                                    <Input
+                                        {...register("barcode")}
+                                        placeholder="e.g. 8901234567890"
+                                        maxLength={50}
+                                    />
+                                    {errors.barcode && (
+                                        <p className="text-xs text-red-500">{errors.barcode.message}</p>
+                                    )}
+                                </div>
+                            </div>
 
                                 <div className="space-y-1.5">
                                     <FieldLabel tooltip="Harmonized System of Nomenclature code (4–8 digits). Required for GST filing; identifies the category of goods.">
@@ -215,6 +288,46 @@ export function POItemDialog({
                                     />
                                     {errors.hsn_code && (
                                         <p className="text-xs text-red-500">{errors.hsn_code.message}</p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <FieldLabel tooltip="Unit of measure for this item (e.g. Pieces, Kilograms, Box). Managed in your store's Units of Measure settings.">
+                                        Unit of Measure
+                                    </FieldLabel>
+                                    <Select
+                                        value={watch("unit_id") ?? ""}
+                                        onValueChange={(val) => {
+                                            const selected = units.find((u) => u.id === val);
+                                            setValue("unit_id", val);
+                                            setValue("unit_code", selected?.code ?? "");
+                                        }}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={
+                                                activeUnits.length === 0
+                                                    ? "No units configured"
+                                                    : "Select unit…"
+                                            } />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {activeUnits.map((u) => (
+                                                <SelectItem key={u.id} value={u.id}>
+                                                    <span className="font-medium">{u.name}</span>
+                                                    <span className="ml-1.5 text-xs text-muted-foreground">
+                                                        {u.symbol ?? u.code}
+                                                    </span>
+                                                </SelectItem>
+                                            ))}
+                                            {activeUnits.length === 0 && (
+                                                <div className="px-3 py-2 text-xs text-muted-foreground">
+                                                    No active units found for this store.
+                                                </div>
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                    {errors.unit_code && (
+                                        <p className="text-xs text-red-500">{errors.unit_code.message}</p>
                                     )}
                                 </div>
                             </div>
@@ -409,6 +522,176 @@ export function POItemDialog({
                                     <p className="text-xs text-red-500">{errors.notes.message}</p>
                                 )}
                             </div>
+                        </section>
+
+                        <Separator />
+
+                        {/* ── LIVE CALCULATION PREVIEW ── */}
+                        <section className="space-y-3">
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                Calculation Preview
+                            </h4>
+
+                            {/* NaN warning */}
+                            {liveCalc.nanFields.length > 0 && (
+                                <div className="flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2.5 text-xs">
+                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                                    <span className="text-amber-700 dark:text-amber-400">
+                                        Grand Total shows <strong>—</strong> because these fields have no valid value yet:
+                                        {" "}<strong>{liveCalc.nanFields.join(", ")}</strong>.
+                                        Fill them to see the calculated totals.
+                                    </span>
+                                </div>
+                            )}
+
+                            {liveCalc.totals ? (
+                                <div className="rounded-lg border bg-muted/30 divide-y text-sm">
+                                    {/* Gross */}
+                                    <div className="flex justify-between px-3 py-2 text-muted-foreground">
+                                        <TooltipProvider delayDuration={200}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span className="cursor-help underline decoration-dotted">Gross Amount</span>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="left" className="max-w-[200px] text-xs">
+                                                    Qty × Unit Price = {watch("ordered_quantity")} × {formatCurrency(watch("unit_price") ?? 0)}
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                        <span>{formatCurrency((watch("ordered_quantity") ?? 0) * (watch("unit_price") ?? 0))}</span>
+                                    </div>
+
+                                    {/* Discount */}
+                                    {liveCalc.totals.discountAmount > 0 && (
+                                        <div className="flex justify-between px-3 py-2 text-red-600 dark:text-red-400">
+                                            <TooltipProvider delayDuration={200}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <span className="cursor-help underline decoration-dotted">Discount ({watch("discount_percentage")}%)</span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="left" className="max-w-[200px] text-xs">
+                                                        Line discount applied on gross amount before tax. Reduces the taxable value.
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                            <span>− {formatCurrency(liveCalc.totals.discountAmount)}</span>
+                                        </div>
+                                    )}
+
+                                    {/* Taxable (before GST) */}
+                                    <div className="flex justify-between px-3 py-2 font-medium">
+                                        <TooltipProvider delayDuration={200}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span className="cursor-help underline decoration-dotted">Taxable Value (Before GST)</span>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="left" className="max-w-[220px] text-xs">
+                                                    Gross minus discount. This is the amount on which GST is calculated. Also called <em>line_total</em> in the database.
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                        <span className="text-foreground">{formatCurrency(liveCalc.totals.lineTotal)}</span>
+                                    </div>
+
+                                    {/* Tax breakdown */}
+                                    {isInterState ? (
+                                        <div className="flex justify-between px-3 py-2 text-muted-foreground">
+                                            <TooltipProvider delayDuration={200}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <span className="cursor-help underline decoration-dotted">IGST ({watch("gst_percentage")}%)</span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="left" className="max-w-[220px] text-xs">
+                                                        Integrated GST — applied on inter-state purchases. Full GST rate goes to IGST (no split). Goes to central government.
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                            <span>{formatCurrency(liveCalc.totals.igstAmount)}</span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex justify-between px-3 py-2 text-muted-foreground">
+                                                <TooltipProvider delayDuration={200}>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <span className="cursor-help underline decoration-dotted">CGST ({(watch("gst_percentage") ?? 0) / 2}%)</span>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="left" className="max-w-[220px] text-xs">
+                                                            Central GST — half the GST rate, charged on intra-state purchases. Goes to the central government.
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                                <span>{formatCurrency(liveCalc.totals.cgstAmount)}</span>
+                                            </div>
+                                            <div className="flex justify-between px-3 py-2 text-muted-foreground">
+                                                <TooltipProvider delayDuration={200}>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <span className="cursor-help underline decoration-dotted">SGST ({(watch("gst_percentage") ?? 0) / 2}%)</span>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="left" className="max-w-[220px] text-xs">
+                                                            State GST — half the GST rate, charged on intra-state purchases. Goes to the state government.
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                                <span>{formatCurrency(liveCalc.totals.sgstAmount)}</span>
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* Cess */}
+                                    {liveCalc.totals.cessAmount > 0 && (
+                                        <div className="flex justify-between px-3 py-2 text-muted-foreground">
+                                            <TooltipProvider delayDuration={200}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <span className="cursor-help underline decoration-dotted">Cess ({watch("cess_percentage")}%)</span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="left" className="max-w-[220px] text-xs">
+                                                        Additional levy on top of GST for specific goods (tobacco, luxury, coal). Added after GST is computed.
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                            <span>{formatCurrency(liveCalc.totals.cessAmount)}</span>
+                                        </div>
+                                    )}
+
+                                    {/* Total tax */}
+                                    <div className="flex justify-between px-3 py-2 text-muted-foreground">
+                                        <TooltipProvider delayDuration={200}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span className="cursor-help underline decoration-dotted">Total Tax</span>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="left" className="max-w-[200px] text-xs">
+                                                    Sum of all tax components: {isInterState ? "IGST" : "CGST + SGST"}{liveCalc.totals.cessAmount > 0 ? " + Cess" : ""}.
+                                                    Stored as <em>tax_amount</em> in the database.
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                        <span>{formatCurrency(liveCalc.totals.taxAmount)}</span>
+                                    </div>
+
+                                    {/* Total */}
+                                    <div className="flex justify-between px-3 py-2.5 font-bold text-base bg-muted/50 rounded-b-lg">
+                                        <TooltipProvider delayDuration={200}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span className="cursor-help underline decoration-dotted">Line Total (incl. tax)</span>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="left" className="max-w-[220px] text-xs">
+                                                    Taxable Value + Total Tax. This is the amount posted as <em>total_amount</em> for this line item in the database.
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                        <span>{formatCurrency(liveCalc.totals.totalAmount)}</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="rounded-lg border bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">
+                                    Enter Qty and Unit Price to see calculation.
+                                </div>
+                            )}
                         </section>
                     </div>
                 </ScrollArea>

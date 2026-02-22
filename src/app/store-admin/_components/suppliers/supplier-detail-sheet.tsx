@@ -218,7 +218,7 @@ function AddContactInlineDialog({
                     <DialogTitle>Add Contact</DialogTitle>
                     <DialogDescription>Add a new contact person for this supplier.</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-3">
+                <div className="space-y-3 p-4">
                     <div className="space-y-1.5">
                         <Label>Name <span className="text-destructive">*</span></Label>
                         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Contact name" />
@@ -431,7 +431,7 @@ export function SupplierDetailSheet({
                     </div>
                 </SheetHeader>
 
-                <Tabs defaultValue="overview" className="mt-2">
+                <Tabs defaultValue="overview" className="mt-2 p-4">
                     <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger value="contacts">Contacts</TabsTrigger>
