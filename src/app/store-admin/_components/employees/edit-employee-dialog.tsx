@@ -87,12 +87,12 @@ export function EditEmployeeDialog({
         register,
         handleSubmit,
         reset,
-        formState: { errors, dirtyFields },
+        formState: { errors },
     } = useForm<FormValues>({
         resolver: zodResolver(formSchema) as any,
     });
 
-    // Reset form when user changes OR when dialog opens
+    // Pre-populate form with current employee data whenever dialog opens
     useEffect(() => {
         if (user && open) {
             reset({
@@ -118,43 +118,22 @@ export function EditEmployeeDialog({
         const toastId = toast.loading("Updating employee...");
 
         try {
-            // Separate store user updates from employee updates
-            const storeUserFields: (keyof UpdateStoreUserRequest)[] = [
-                "role_id",
-                "designation",
-                "department",
-                "reporting_manager_id",
-                "is_active",
-                "custom_permissions",
-                "work_schedule",
-            ];
-
-            const employeeFields: (keyof UpdateEmployeeRequest)[] = [
-                "first_name",
-                "last_name",
-                "phone",
-                "employee_type",
-                "employment_status",
-                "salary",
-                "pay_frequency",
-                "notes",
-            ];
-
-            // Build update objects from dirty fields only, skip empty strings (meaning "unchanged")
+            // Build store user update — only include fields that have values
             const storeUserUpdates: UpdateStoreUserRequest = {};
-            const employeeUpdates: UpdateEmployeeRequest = {};
+            if (values.role_id) storeUserUpdates.role_id = values.role_id;
+            if (values.designation) storeUserUpdates.designation = values.designation;
+            if (values.department) storeUserUpdates.department = values.department;
 
-            for (const key of Object.keys(dirtyFields) as (keyof FormValues)[]) {
-                const val = values[key];
-                // Skip empty strings — treating them as "not changed"
-                if (val === "") continue;
-                if (storeUserFields.includes(key as keyof UpdateStoreUserRequest)) {
-                    (storeUserUpdates as any)[key] = val;
-                }
-                if (employeeFields.includes(key as keyof UpdateEmployeeRequest)) {
-                    (employeeUpdates as any)[key] = val;
-                }
-            }
+            // Build employee update — always send all relevant fields so the DB reflects what the user sees
+            const employeeUpdates: UpdateEmployeeRequest = {};
+            if (values.first_name) employeeUpdates.first_name = values.first_name;
+            if (values.last_name) employeeUpdates.last_name = values.last_name;
+            if (values.phone) employeeUpdates.phone = values.phone;
+            if (values.employee_type) employeeUpdates.employee_type = values.employee_type;
+            if (values.employment_status) employeeUpdates.employment_status = values.employment_status;
+            if (values.salary !== undefined && values.salary !== null) employeeUpdates.salary = values.salary;
+            if (values.pay_frequency) employeeUpdates.pay_frequency = values.pay_frequency;
+            if (values.notes !== undefined) employeeUpdates.notes = values.notes;
 
             let success = true;
 

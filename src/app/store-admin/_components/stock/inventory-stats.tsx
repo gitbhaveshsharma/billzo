@@ -106,57 +106,64 @@ export function InventoryStats({ stats, isLoading }: InventoryStatsProps) {
     }
 
     return (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
-            <StatCard
-                label="Total SKUs"
-                value={stats.total_products}
-                icon={<Package className="h-4 w-4" />}
-                variant="default"
-            />
-            <StatCard
-                label="Stock Value"
-                value={formatCurrency(stats.total_stock_value)}
-                icon={<IndianRupee className="h-4 w-4" />}
-                variant="success"
-            />
-            <StatCard
-                label="Low Stock"
-                value={stats.low_stock_count}
-                icon={<AlertTriangle className="h-4 w-4" />}
-                description="Below reorder point"
-                variant="warning"
-            />
-            <StatCard
-                label="Out of Stock"
-                value={stats.out_of_stock_count}
-                icon={<PackageX className="h-4 w-4" />}
-                variant="danger"
-            />
-            <StatCard
-                label="Expiring Soon"
-                value={stats.expiring_soon_count}
-                icon={<Clock className="h-4 w-4" />}
-                description="Within 30 days"
-                variant="warning"
-            />
-            <StatCard
-                label="Overstock"
-                value={stats.overstock_count}
-                icon={<TrendingUp className="h-4 w-4" />}
-                variant="info"
-            />
-            <StatCard
-                label="Today's Moves"
-                value={stats.total_transactions_today}
-                icon={<ArrowDownUp className="h-4 w-4" />}
-                variant="default"
-            />
-            <StatCard
-                label="Unresolved Alerts"
-                value={stats.unresolved_alerts_count}
-                icon={<BarChart3 className="h-4 w-4" />}
-                variant="danger"
-            />
+        <div className="space-y-3">
+            {/* First Row - Core Inventory Metrics */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <StatCard
+                    label="Total SKUs"
+                    value={stats.total_products}
+                    icon={<Package className="h-4 w-4" />}
+                    variant="default"
+                />
+                <StatCard
+                    label="Stock Value"
+                    value={formatCurrency(stats.total_stock_value)}
+                    icon={<IndianRupee className="h-4 w-4" />}
+                    variant="success"
+                />
+                <StatCard
+                    label="Low Stock"
+                    value={stats.low_stock_count}
+                    icon={<AlertTriangle className="h-4 w-4" />}
+                    description="Below reorder point"
+                    variant="warning"
+                />
+                <StatCard
+                    label="Out of Stock"
+                    value={stats.out_of_stock_count}
+                    icon={<PackageX className="h-4 w-4" />}
+                    variant="danger"
+                />
+            </div>
+
+            {/* Second Row - Inventory Health & Activity */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <StatCard
+                    label="Expiring Soon"
+                    value={stats.expiring_soon_count}
+                    icon={<Clock className="h-4 w-4" />}
+                    description="Within 30 days"
+                    variant="warning"
+                />
+                <StatCard
+                    label="Overstock"
+                    value={stats.overstock_count}
+                    icon={<TrendingUp className="h-4 w-4" />}
+                    variant="info"
+                />
+                <StatCard
+                    label="Today's Moves"
+                    value={stats.total_transactions_today}
+                    icon={<ArrowDownUp className="h-4 w-4" />}
+                    variant="default"
+                />
+                <StatCard
+                    label="Unresolved Alerts"
+                    value={stats.unresolved_alerts_count}
+                    icon={<BarChart3 className="h-4 w-4" />}
+                    variant="danger"
+                />
+            </div>
         </div>
     );
 }

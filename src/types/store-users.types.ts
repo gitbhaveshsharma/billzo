@@ -55,7 +55,7 @@ export interface Employee {
     first_name: string;
     middle_name: string | null;
     last_name: string;
-    full_name: string;
+    full_name?: string | null; // computed: not stored in DB, derived from first/last
     date_of_birth: string | null;
     gender: GenderType | null;
     blood_group: BloodGroupType | null;

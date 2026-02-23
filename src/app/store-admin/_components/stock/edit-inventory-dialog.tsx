@@ -84,7 +84,7 @@ export function EditInventoryDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Edit Inventory Settings</DialogTitle>
                     <DialogDescription>
@@ -97,7 +97,7 @@ export function EditInventoryDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4">
+                <div className="space-y-4 p-4">
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-2">
                             <Label>Reorder Point</Label>

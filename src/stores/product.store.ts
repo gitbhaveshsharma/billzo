@@ -382,13 +382,18 @@ export const useProductStore = create<ProductState>()(
                     }
 
                     if (result.data) {
+                        // Three-layer merge: existing fields → server response → update
+                        // payload.  The update payload always wins so any read-replica
+                        // staleness in the GET can never overwrite what we just wrote.
                         set((state) => ({
                             products: state.products.map((p) =>
-                                p.id === productId ? result.data! : p
+                                p.id === productId
+                                    ? { ...p, ...result.data!, ...data }
+                                    : p
                             ),
                             currentProduct:
                                 state.currentProduct?.id === productId
-                                    ? { ...state.currentProduct, ...result.data! }
+                                    ? { ...state.currentProduct, ...result.data!, ...data }
                                     : state.currentProduct,
                             error: null,
                             isSaving: false,
