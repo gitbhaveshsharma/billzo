@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Upload, X, ImageIcon, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -47,6 +47,12 @@ export function ImageUploadField({
     const [isDragging, setIsDragging] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [imgLoadError, setImgLoadError] = useState(false);
+
+    // Reset image error whenever the src URL changes
+    useEffect(() => {
+        setImgLoadError(false);
+    }, [value]);
 
     // ── Validate & upload ──
     const processFile = useCallback(
@@ -122,14 +128,26 @@ export function ImageUploadField({
     if (value) {
         return (
             <div className={cn("relative group w-full rounded-lg overflow-hidden border bg-muted/30", className)}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                    src={value}
-                    alt="Product image"
-                    className="w-full h-40 object-contain"
-                />
-                {/* Overlay on hover */}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                {imgLoadError ? (
+                    <div className="w-full h-40 flex flex-col items-center justify-center gap-2 bg-muted/40 px-4 text-center">
+                        <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
+                        <p className="text-xs text-muted-foreground">Image could not be loaded</p>
+                        <p className="text-[10px] text-muted-foreground/70 break-all line-clamp-2">{value}</p>
+                    </div>
+                ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={value}
+                        alt="Product image"
+                        className="w-full h-40 object-contain"
+                        onError={() => setImgLoadError(true)}
+                    />
+                )}
+                {/* Overlay on hover — always visible when image errored */}
+                <div className={cn(
+                    "absolute inset-0 bg-black/40 transition-opacity flex items-center justify-center gap-2",
+                    imgLoadError ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                )}>
                     <Button
                         type="button"
                         size="sm"

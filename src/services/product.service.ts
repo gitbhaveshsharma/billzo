@@ -290,32 +290,46 @@ export const productService = {
         data: UpdateProductRequest
     ): Promise<ServiceResponse<Product>> => {
         try {
-            // Perform the update without relying on PostgREST returning the row
-            // (.single() on PATCH throws PGRST116 when RLS makes the row invisible
-            // after update, even if the update itself succeeded)
-            const { error: updateError } = await getClient()
+            const updatedAt = new Date().toISOString();
+
+            // Use Prefer: return=representation so the updated row is returned from
+            // the same write connection — no read-replica staleness.
+            // If RLS silently blocks the UPDATE (USING clause fails), Supabase returns
+            // 204 with no row, causing `updated` to be null with no error object.
+            // We detect that case and surface a real error instead of silently
+            // falling back to a GET of the stale row.
+            const { data: updated, error: updateError } = await getClient()
                 .from("products")
                 .update({
                     ...data,
-                    updated_at: new Date().toISOString(),
+                    updated_at: updatedAt,
                 } as never)
                 .eq("id", productId)
-                .eq("store_id", storeId);
+                .eq("store_id", storeId)
+                .select("*")
+                .maybeSingle();
 
             if (updateError) return { data: null, error: updateError.message };
 
-            // Re-fetch the updated product
-            const { data: product, error: fetchError } = await getClient()
-                .from("products")
-                .select("*")
-                .eq("id", productId)
-                .eq("store_id", storeId)
-                .maybeSingle();
+            if (!updated) {
+                // 204 with no row returned → RLS USING clause silently blocked the
+                // UPDATE (0 rows affected).  The user can read the row but lacks
+                // write permission.  Surface this as a real error.
+                return {
+                    data: null,
+                    error: "Update failed: your role does not have permission to modify this product. Run the latest migration (12_fix_role_permissions_and_has_permission.sql) to grant store_admin write access.",
+                };
+            }
 
-            if (fetchError) return { data: null, error: fetchError.message };
-            if (!product) return { data: null, error: "Product not found after update" };
+            // Merge server-returned row with the local payload so that any
+            // fields the UPDATE set are guaranteed to reflect the new value.
+            const merged = {
+                ...(updated as unknown as Product),
+                ...data,
+                updated_at: updatedAt,
+            } as Product;
 
-            return { data: product as unknown as Product, error: null };
+            return { data: merged, error: null };
         } catch {
             return { data: null, error: "Failed to update product" };
         }

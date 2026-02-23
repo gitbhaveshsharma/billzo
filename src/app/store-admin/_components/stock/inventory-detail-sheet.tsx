@@ -423,13 +423,14 @@ function DetailField({ label, value, mono, highlight, icon }: DetailFieldProps) 
                 {icon}
                 {label}
             </p>
-            <p
+            {/* Use div instead of p to allow block-level children like Badge */}
+            <div
                 className={`text-sm ${mono ? "font-mono" : ""} ${
                     highlight ? "font-semibold text-primary" : ""
                 }`}
             >
                 {value}
-            </p>
+            </div>
         </div>
     );
 }

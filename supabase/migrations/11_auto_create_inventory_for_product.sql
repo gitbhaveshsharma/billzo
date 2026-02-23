@@ -447,3 +447,719 @@ BEGIN
     ============================================================================
     ';
 END $$;
+
+-- ============================================================================
+-- SMART AUTO-MAPPING: SUPPLIER + PRODUCT BATCH ON PURCHASE ORDER
+-- 
+-- Two things happen automatically when PO items are inserted or received:
+--
+-- 1. SUPPLIER-PRODUCT MAPPING (supplier_products table)
+--    When: PO item is inserted (any status)
+--    What: Upsert supplier_products with latest pricing & lead time
+--    Why:  Next PO creation can auto-suggest this supplier for this product
+--
+-- 2. PRODUCT BATCH AUTO-CREATE (product_batches table)
+--    When: PO item is marked as received (received_quantity > 0)
+--    What: Create product_batches if batch_number or expiry_date present
+--    Why:  Batch tracking for medicines, food items, etc. — zero manual entry
+--
+-- Dependencies:
+--   purchase_orders        → has supplier_id, store_id, expected_delivery_date
+--   purchase_order_items   → has product_id, unit_price, mrp, batch_number,
+--                            expiry_date, manufacturing_date, received_quantity
+--   supplier_products      → upserted automatically
+--   product_batches        → created automatically if batch info present
+-- ============================================================================
+
+
+-- ============================================================================
+-- TRIGGER 1: AUTO-UPSERT SUPPLIER-PRODUCT MAPPING
+-- Fires: AFTER INSERT OR UPDATE on purchase_order_items
+-- 
+-- Smart logic:
+--   - INSERT       → creates initial supplier_products record
+--   - UPDATE price → updates purchase_price only if new price is different
+--   - Sets is_preferred if this is the only/cheapest supplier for this product
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION auto_map_supplier_product()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_supplier_id       UUID;
+    v_store_id          UUID;
+    v_po_number         TEXT;
+    v_expected_delivery DATE;
+    v_lead_time_days    INTEGER;
+    v_existing_price    DECIMAL(12,2);
+    v_supplier_count    INTEGER;
+BEGIN
+    -- Only proceed if product_id is set
+    IF NEW.product_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    -- Get supplier and store from parent purchase_order
+    SELECT
+        po.supplier_id,
+        po.store_id,
+        po.po_number,
+        po.expected_delivery_date::DATE
+    INTO
+        v_supplier_id,
+        v_store_id,
+        v_po_number,
+        v_expected_delivery
+    FROM purchase_orders po
+    WHERE po.id = NEW.purchase_order_id;
+
+    -- Can't map without a supplier
+    IF v_supplier_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    -- Calculate lead time from PO creation to expected delivery
+    -- (used to auto-fill lead_time_days for future POs)
+    SELECT EXTRACT(DAY FROM (v_expected_delivery - NOW()::DATE))::INTEGER
+    INTO v_lead_time_days;
+
+    v_lead_time_days := GREATEST(COALESCE(v_lead_time_days, 0), 0);
+
+    -- Get existing price to detect price change
+    SELECT purchase_price INTO v_existing_price
+    FROM supplier_products
+    WHERE supplier_id = v_supplier_id
+      AND product_id  = NEW.product_id
+      AND store_id    = v_store_id;
+
+    -- Count how many active suppliers provide this product
+    SELECT COUNT(*) INTO v_supplier_count
+    FROM supplier_products
+    WHERE product_id = NEW.product_id
+      AND store_id   = v_store_id
+      AND is_active  = true;
+
+    -- UPSERT supplier_products
+    -- On conflict: update price, mrp, lead_time only if values have changed
+    INSERT INTO supplier_products (
+        supplier_id,
+        product_id,
+        store_id,
+        supplier_product_code,
+        supplier_product_name,
+        purchase_price,
+        mrp,
+        discount_percentage,
+        lead_time_days,
+        minimum_order_quantity,
+        is_preferred,
+        is_active,
+        created_at,
+        updated_at,
+        created_by
+    )
+    SELECT
+        v_supplier_id,
+        NEW.product_id,
+        v_store_id,
+        NEW.product_code,                           -- supplier's SKU for this product
+        NEW.product_name,                           -- supplier's name for this product
+        NEW.unit_price,                             -- purchase price from this PO
+        COALESCE(NEW.mrp, NEW.unit_price),          -- MRP from PO item
+        COALESCE(NEW.discount_percentage, 0),       -- discount on this PO
+        v_lead_time_days,                           -- calculated from PO dates
+        COALESCE(NEW.ordered_quantity, 1)::INTEGER, -- MOQ based on what was ordered
+        -- is_preferred: true if this is the ONLY supplier for this product
+        (v_supplier_count = 0),
+        true,
+        NOW(),
+        NOW(),
+        NEW.created_by
+    ON CONFLICT (supplier_id, product_id)
+    DO UPDATE SET
+        -- Always update these — latest PO has the latest data
+        supplier_product_code  = EXCLUDED.supplier_product_code,
+        supplier_product_name  = EXCLUDED.supplier_product_name,
+        purchase_price         = EXCLUDED.purchase_price,
+        mrp                    = EXCLUDED.mrp,
+        discount_percentage    = EXCLUDED.discount_percentage,
+        -- Update lead_time only if it was calculated (> 0)
+        lead_time_days         = CASE
+                                     WHEN EXCLUDED.lead_time_days > 0
+                                     THEN EXCLUDED.lead_time_days
+                                     ELSE supplier_products.lead_time_days
+                                 END,
+        -- Update MOQ only if new order was larger
+        minimum_order_quantity = GREATEST(
+                                     EXCLUDED.minimum_order_quantity,
+                                     supplier_products.minimum_order_quantity
+                                 ),
+        is_active              = true,
+        updated_at             = NOW();
+
+    -- ── Price Change Detection ──
+    -- If price changed vs last recorded, log to price_history
+    IF v_existing_price IS NOT NULL
+       AND v_existing_price <> NEW.unit_price THEN
+
+        INSERT INTO price_history (
+            store_id,
+            product_id,
+            variant_id,
+            price_type,
+            old_price,
+            new_price,
+            reason,
+            effective_from,
+            changed_by,
+            created_at
+        ) VALUES (
+            v_store_id,
+            NEW.product_id,
+            NULL,
+            'COST',
+            v_existing_price,
+            NEW.unit_price,
+            'Purchase price updated via PO ' || COALESCE(v_po_number, '(unknown)'),
+            NOW(),
+            NEW.created_by,
+            NOW()
+        );
+
+        RAISE LOG '[AutoSupplierMap] Price changed for product % — ₹% → ₹% via PO %',
+            NEW.product_id, v_existing_price, NEW.unit_price, v_po_number;
+    END IF;
+
+    RAISE LOG '[AutoSupplierMap] Upserted supplier_products: supplier=% product=% price=₹%',
+        v_supplier_id, NEW.product_id, NEW.unit_price;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS auto_map_supplier_product_on_insert ON purchase_order_items;
+DROP TRIGGER IF EXISTS auto_map_supplier_product_on_update ON purchase_order_items;
+
+-- Fire on INSERT (new PO item added)
+CREATE TRIGGER auto_map_supplier_product_on_insert
+    AFTER INSERT ON purchase_order_items
+    FOR EACH ROW
+    WHEN (NEW.product_id IS NOT NULL)
+    EXECUTE FUNCTION auto_map_supplier_product();
+
+-- Fire on UPDATE when price changes (PO item edited before receiving)
+CREATE TRIGGER auto_map_supplier_product_on_update
+    AFTER UPDATE OF unit_price, mrp, discount_percentage ON purchase_order_items
+    FOR EACH ROW
+    WHEN (
+        NEW.product_id IS NOT NULL
+        AND (
+            OLD.unit_price        IS DISTINCT FROM NEW.unit_price
+            OR OLD.mrp            IS DISTINCT FROM NEW.mrp
+            OR OLD.discount_percentage IS DISTINCT FROM NEW.discount_percentage
+        )
+    )
+    EXECUTE FUNCTION auto_map_supplier_product();
+
+
+-- ============================================================================
+-- TRIGGER 2: AUTO-CREATE PRODUCT BATCH ON RECEIVE
+-- Fires: AFTER UPDATE on purchase_order_items
+--        specifically when received_quantity goes from 0 → >0
+--
+-- Smart logic:
+--   - Only creates batch if batch_number OR expiry_date is present
+--   - If product is NOT batch_tracked, marks it as batch_tracked automatically
+--   - If batch already exists (same batch_number + product), UPDATES quantity
+--   - Handles partial receives (multiple receives for one PO item)
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION auto_create_batch_on_receive()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_supplier_id       UUID;
+    v_store_id          UUID;
+    v_po_number         TEXT;
+    v_received_delta    DECIMAL(12,3);
+    v_effective_expiry  DATE;
+    v_batch_num         TEXT;
+    v_existing_batch_id UUID;
+BEGIN
+    -- Only proceed when received_quantity actually increased
+    -- (handles partial receives correctly)
+    v_received_delta := COALESCE(NEW.received_quantity, 0) - COALESCE(OLD.received_quantity, 0);
+
+    IF v_received_delta <= 0 THEN
+        RETURN NEW;
+    END IF;
+
+    -- Need at least one of: batch_number or expiry_date to create a batch
+    IF NEW.batch_number IS NULL AND NEW.expiry_date IS NULL THEN
+        -- Product doesn't have batch info — skip silently
+        RETURN NEW;
+    END IF;
+
+    -- Get store and supplier from parent PO
+    SELECT po.store_id, po.supplier_id, po.po_number
+      INTO v_store_id, v_supplier_id, v_po_number
+      FROM purchase_orders po
+     WHERE po.id = NEW.purchase_order_id;
+
+    -- Auto-generate batch number if not provided but expiry is
+    -- Format: PO{PO_NUMBER}-{PRODUCT_CODE}-{EXPIRY}
+    v_batch_num := COALESCE(
+        NULLIF(TRIM(NEW.batch_number), ''),
+        'PO-' || COALESCE(v_po_number, 'AUTO') || '-' || NEW.product_code || '-' ||
+        TO_CHAR(COALESCE(NEW.expiry_date, CURRENT_DATE + INTERVAL '1 year'), 'YYYYMMDD')
+    );
+
+    -- Expiry date: use provided or default to 1 year from today
+    -- (for products with no expiry, this won't be triggered anyway)
+    v_effective_expiry := COALESCE(
+        NEW.expiry_date,
+        CURRENT_DATE + INTERVAL '1 year'
+    );
+
+    -- Check if this exact batch already exists (partial receive scenario)
+    SELECT id INTO v_existing_batch_id
+    FROM product_batches
+    WHERE store_id     = v_store_id
+      AND product_id   = NEW.product_id
+      AND batch_number = v_batch_num;
+
+    IF v_existing_batch_id IS NOT NULL THEN
+        -- ── Partial Receive: Update existing batch quantity ──
+        UPDATE product_batches
+           SET current_quantity  = current_quantity + v_received_delta,
+               initial_quantity  = initial_quantity + v_received_delta,
+               updated_at        = NOW()
+         WHERE id = v_existing_batch_id;
+
+        RAISE LOG '[AutoBatch] Updated existing batch % for product % — added % units',
+            v_batch_num, NEW.product_id, v_received_delta;
+
+    ELSE
+        -- ── New Receive: Create fresh batch record ──
+        INSERT INTO product_batches (
+            store_id,
+            product_id,
+            batch_number,
+            manufacturing_date,
+            expiry_date,
+            mrp,
+            initial_quantity,
+            current_quantity,
+            purchase_date,
+            purchase_price,
+            supplier_id,
+            purchase_invoice,
+            is_active,
+            created_at,
+            updated_at
+        ) VALUES (
+            v_store_id,
+            NEW.product_id,
+            v_batch_num,
+            NEW.manufacturing_date,
+            v_effective_expiry,
+            COALESCE(NEW.mrp, NEW.unit_price),
+            v_received_delta,               -- initial = how much we received today
+            v_received_delta,               -- current = same at creation
+            NOW()::DATE,                    -- purchase date = today
+            NEW.unit_price,                 -- cost at time of purchase
+            v_supplier_id,                  -- supplier who sent this batch
+            v_po_number,                    -- PO number as invoice reference
+            true,
+            NOW(),
+            NOW()
+        );
+
+        RAISE LOG '[AutoBatch] Created batch % for product % — % units, expiry %',
+            v_batch_num, NEW.product_id, v_received_delta, v_effective_expiry;
+    END IF;
+
+    -- ── Auto-enable batch tracking on the product if not already set ──
+    -- If this product has a batch being created, it IS batch-tracked
+    UPDATE products
+       SET is_batch_tracked = true,
+           updated_at       = NOW()
+     WHERE id              = NEW.product_id
+       AND is_batch_tracked = false;
+
+    IF FOUND THEN
+        RAISE LOG '[AutoBatch] Enabled is_batch_tracked on product %', NEW.product_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS auto_create_batch_on_receive ON purchase_order_items;
+
+CREATE TRIGGER auto_create_batch_on_receive
+    AFTER UPDATE OF received_quantity ON purchase_order_items
+    FOR EACH ROW
+    WHEN (
+        -- Only when received_quantity actually increased
+        COALESCE(NEW.received_quantity, 0) > COALESCE(OLD.received_quantity, 0)
+        -- And product exists
+        AND NEW.product_id IS NOT NULL
+        -- And has batch or expiry info
+        AND (
+            (NEW.batch_number IS NOT NULL AND NEW.batch_number <> '')
+            OR NEW.expiry_date IS NOT NULL
+        )
+    )
+    EXECUTE FUNCTION auto_create_batch_on_receive();
+
+
+-- ============================================================================
+-- TRIGGER 3: AUTO-SET PREFERRED SUPPLIER
+-- Fires: AFTER UPDATE on supplier_products
+-- 
+-- Smart logic:
+--   - When a new supplier_products row is added for a product that already
+--     had a preferred supplier, keep the existing preferred one
+--   - If only one supplier exists for a product → auto-set as preferred
+--   - If a supplier is deactivated/deleted → auto-promote cheapest as preferred
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION auto_set_preferred_supplier()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_supplier_count    INTEGER;
+    v_preferred_exists  BOOLEAN;
+    v_cheapest_id       UUID;
+BEGIN
+    -- Count active suppliers for this product
+    SELECT COUNT(*), BOOL_OR(is_preferred)
+      INTO v_supplier_count, v_preferred_exists
+      FROM supplier_products
+     WHERE product_id = NEW.product_id
+       AND store_id   = NEW.store_id
+       AND is_active  = true;
+
+    -- If only one active supplier → they are preferred by default
+    IF v_supplier_count = 1 THEN
+        UPDATE supplier_products
+           SET is_preferred = true,
+               updated_at   = NOW()
+         WHERE product_id  = NEW.product_id
+           AND store_id    = NEW.store_id
+           AND is_active   = true;
+        RETURN NEW;
+    END IF;
+
+    -- If multiple suppliers but none is preferred → auto-pick cheapest
+    IF v_supplier_count > 1 AND NOT v_preferred_exists THEN
+        SELECT id INTO v_cheapest_id
+          FROM supplier_products
+         WHERE product_id = NEW.product_id
+           AND store_id   = NEW.store_id
+           AND is_active  = true
+         ORDER BY purchase_price ASC
+         LIMIT 1;
+
+        UPDATE supplier_products
+           SET is_preferred = (id = v_cheapest_id),
+               updated_at   = NOW()
+         WHERE product_id = NEW.product_id
+           AND store_id   = NEW.store_id;
+
+        RAISE LOG '[AutoPreferred] Set cheapest supplier % as preferred for product %',
+            v_cheapest_id, NEW.product_id;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS auto_set_preferred_supplier_trigger ON supplier_products;
+
+CREATE TRIGGER auto_set_preferred_supplier_trigger
+    AFTER INSERT OR UPDATE OF is_active, purchase_price ON supplier_products
+    FOR EACH ROW
+    EXECUTE FUNCTION auto_set_preferred_supplier();
+
+
+-- ============================================================================
+-- TRIGGER 4: AUTO-CREATE EXPIRY ALERT WHEN BATCH IS CREATED
+-- Fires: AFTER INSERT on product_batches
+--
+-- Smart logic:
+--   - Creates a stock_alert immediately if batch expires within alert threshold
+--   - Threshold from store_settings.inventory_settings.expiry_alert_days
+--   - Default threshold: 30 days
+--   - Severity: CRITICAL < 7 days, HIGH < 30 days, MEDIUM < 90 days
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION auto_create_expiry_alert_on_batch()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_alert_days        INTEGER;
+    v_days_to_expiry    INTEGER;
+    v_severity          TEXT;
+    v_settings          JSONB;
+BEGIN
+    -- Get store's expiry alert threshold
+    SELECT (ss.inventory_settings->>'expiry_alert_days')::INTEGER
+      INTO v_alert_days
+      FROM store_settings ss
+     WHERE ss.store_id = NEW.store_id;
+
+    v_alert_days := COALESCE(v_alert_days, 30);
+
+    -- Calculate days until expiry
+    v_days_to_expiry := (NEW.expiry_date - CURRENT_DATE);
+
+    -- Only create alert if expiry is within threshold
+    IF v_days_to_expiry > v_alert_days THEN
+        -- Batch is fine — no alert needed
+        RETURN NEW;
+    END IF;
+
+    -- Determine severity
+    v_severity := CASE
+        WHEN v_days_to_expiry <= 0  THEN 'CRITICAL'  -- Already expired!
+        WHEN v_days_to_expiry <= 7  THEN 'CRITICAL'  -- Expires this week
+        WHEN v_days_to_expiry <= 30 THEN 'HIGH'      -- Expires this month
+        ELSE                             'MEDIUM'     -- Expires soon
+    END;
+
+    -- Create expiry alert (only if not already resolved for this batch)
+    INSERT INTO stock_alerts (
+        store_id,
+        product_id,
+        batch_id,
+        alert_type,
+        severity,
+        current_quantity,
+        threshold_quantity,
+        expiry_date,
+        is_resolved,
+        created_at,
+        updated_at
+    )
+    SELECT
+        NEW.store_id,
+        NEW.product_id,
+        NEW.id,
+        CASE WHEN v_days_to_expiry <= 0 THEN 'EXPIRY_CRITICAL' ELSE 'EXPIRY_WARNING' END,
+        v_severity,
+        NEW.current_quantity,
+        NULL,
+        NEW.expiry_date,
+        false,
+        NOW(),
+        NOW()
+    WHERE NOT EXISTS (
+        -- Don't duplicate alerts for the same batch
+        SELECT 1 FROM stock_alerts
+         WHERE batch_id     = NEW.id
+           AND alert_type   IN ('EXPIRY_WARNING', 'EXPIRY_CRITICAL')
+           AND is_resolved  = false
+    );
+
+    IF FOUND THEN
+        RAISE LOG '[AutoExpiryAlert] Created % alert for batch % — expires in % days',
+            v_severity, NEW.batch_number, v_days_to_expiry;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS auto_create_expiry_alert_on_batch ON product_batches;
+
+CREATE TRIGGER auto_create_expiry_alert_on_batch
+    AFTER INSERT ON product_batches
+    FOR EACH ROW
+    EXECUTE FUNCTION auto_create_expiry_alert_on_batch();
+
+
+-- ============================================================================
+-- HELPER FUNCTION: Get preferred supplier for a product
+-- Used by PO creation UI to auto-suggest the best supplier
+-- Returns: supplier info + last price + lead time
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION get_preferred_supplier(
+    p_product_id UUID,
+    p_store_id   UUID DEFAULT NULL
+)
+RETURNS TABLE (
+    supplier_id           UUID,
+    supplier_name         TEXT,
+    supplier_code         TEXT,
+    supplier_phone        TEXT,
+    purchase_price        DECIMAL(12,2),
+    mrp                   DECIMAL(12,2),
+    discount_percentage   DECIMAL(5,2),
+    lead_time_days        INTEGER,
+    minimum_order_quantity INTEGER,
+    is_preferred          BOOLEAN,
+    gstin                 TEXT
+) AS $$
+DECLARE
+    v_store_id UUID;
+BEGIN
+    v_store_id := COALESCE(p_store_id, public.get_user_store());
+
+    RETURN QUERY
+    SELECT
+        s.id                        AS supplier_id,
+        s.name                      AS supplier_name,
+        s.supplier_code             AS supplier_code,
+        s.phone                     AS supplier_phone,
+        sp.purchase_price,
+        sp.mrp,
+        sp.discount_percentage,
+        sp.lead_time_days,
+        sp.minimum_order_quantity,
+        sp.is_preferred,
+        s.gstin
+    FROM supplier_products sp
+    JOIN suppliers s ON s.id = sp.supplier_id
+    WHERE sp.product_id = p_product_id
+      AND sp.store_id   = v_store_id
+      AND sp.is_active  = true
+      AND s.is_active   = true
+      AND NOT s.blacklisted
+    ORDER BY
+        sp.is_preferred DESC,      -- preferred first
+        sp.purchase_price ASC,     -- then cheapest
+        sp.lead_time_days ASC;     -- then fastest
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+-- ============================================================================
+-- HELPER FUNCTION: Get active batches for a product at POS
+-- Used by POS when selecting batch for a batch-tracked product
+-- Returns batches sorted by FEFO (First Expiry First Out)
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION get_active_batches_for_pos(
+    p_product_id UUID,
+    p_store_id   UUID DEFAULT NULL
+)
+RETURNS TABLE (
+    batch_id         UUID,
+    batch_number     TEXT,
+    expiry_date      DATE,
+    days_to_expiry   INTEGER,
+    current_quantity DECIMAL(12,3),
+    mrp              DECIMAL(12,2),
+    purchase_price   DECIMAL(12,2),
+    supplier_name    TEXT,
+    expiry_status    TEXT
+) AS $$
+DECLARE
+    v_store_id UUID;
+BEGIN
+    v_store_id := COALESCE(p_store_id, public.get_user_store());
+
+    RETURN QUERY
+    SELECT
+        pb.id                               AS batch_id,
+        pb.batch_number,
+        pb.expiry_date,
+        (pb.expiry_date - CURRENT_DATE)::INTEGER AS days_to_expiry,
+        pb.current_quantity,
+        pb.mrp,
+        pb.purchase_price,
+        s.name                              AS supplier_name,
+        CASE
+            WHEN pb.expiry_date < CURRENT_DATE     THEN 'EXPIRED'
+            WHEN pb.expiry_date < CURRENT_DATE + 7 THEN 'CRITICAL'
+            WHEN pb.expiry_date < CURRENT_DATE + 30 THEN 'WARNING'
+            ELSE                                        'OK'
+        END                                 AS expiry_status
+    FROM product_batches pb
+    LEFT JOIN suppliers s ON s.id = pb.supplier_id
+    WHERE pb.product_id     = p_product_id
+      AND pb.store_id       = v_store_id
+      AND pb.is_active      = true
+      AND pb.current_quantity > 0
+      AND pb.expiry_date    >= CURRENT_DATE   -- Exclude expired batches from POS
+    ORDER BY
+        pb.expiry_date ASC;   -- FEFO: sell nearest-expiry first
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+-- ============================================================================
+-- SUCCESS MESSAGE
+-- ============================================================================
+DO $$
+BEGIN
+    RAISE NOTICE '
+    ============================================================================
+    ✅ SMART AUTO-MAPPING: SUPPLIER + BATCH — APPLIED SUCCESSFULLY
+    ============================================================================
+
+    Triggers Created (4):
+
+    1. auto_map_supplier_product_on_insert   (purchase_order_items AFTER INSERT)
+       → Upserts supplier_products with latest price, lead time, MOQ
+       → Logs price change to price_history if cost changed vs last PO
+       → Sets is_preferred = true if first/only supplier for this product
+
+    2. auto_map_supplier_product_on_update   (purchase_order_items AFTER UPDATE)
+       → Same as above but fires only when unit_price, mrp or discount changes
+       → Prevents unnecessary DB writes on non-price updates
+
+    3. auto_create_batch_on_receive          (purchase_order_items AFTER UPDATE)
+       → Fires ONLY when received_quantity increases AND batch/expiry info exists
+       → Creates product_batches with supplier, PO reference, dates
+       → Handles partial receives (updates existing batch qty instead of duplicate)
+       → Auto-enables is_batch_tracked on the product if not already set
+       → Auto-generates batch_number if missing: PO-{PO_NUM}-{SKU}-{EXPIRY}
+
+    4. auto_create_expiry_alert_on_batch     (product_batches AFTER INSERT)
+       → Reads expiry_alert_days from store_settings.inventory_settings
+       → Creates stock_alert immediately if batch expires within threshold
+       → Severity: CRITICAL ≤7 days | HIGH ≤30 days | MEDIUM ≤90 days
+       → Skips if alert already exists for same batch
+
+    Helper Trigger:
+    5. auto_set_preferred_supplier_trigger   (supplier_products AFTER INSERT/UPDATE)
+       → 1 supplier  → auto-set as preferred
+       → 0 preferred → auto-promote cheapest active supplier
+       → Fires automatically — no manual preferred management needed
+
+    Helper Functions (2):
+    ✓ get_preferred_supplier(product_id, store_id)
+      → Used by PO creation to auto-suggest best supplier (preferred → cheapest → fastest)
+    ✓ get_active_batches_for_pos(product_id, store_id)
+      → Used by POS barcode scan to show available batches sorted by FEFO
+
+    Full Auto-Flow:
+    ┌──────────────────────────────────────────────────────────────────────┐
+    │  User creates Purchase Order → adds items                            │
+    │  ↓                                                                   │
+    │  [T1] auto_create_product_from_po_item (existing)                   │
+    │       → Creates product if new                                       │
+    │  ↓                                                                   │
+    │  [T-NEW] auto_map_supplier_product_on_insert                        │
+    │          → Upserts supplier_products mapping                         │
+    │          → Logs price_history if cost changed                        │
+    │  ↓                                                                   │
+    │  User marks PO items as Received (received_quantity increases)       │
+    │  ↓                                                                   │
+    │  [T-NEW] auto_create_batch_on_receive                               │
+    │          → Creates/updates product_batches                           │
+    │          → Enables is_batch_tracked on product                       │
+    │  ↓                                                                   │
+    │  [T-NEW] auto_create_expiry_alert_on_batch                          │
+    │          → Creates EXPIRY_WARNING / EXPIRY_CRITICAL alert            │
+    │  ↓                                                                   │
+    │  [Existing] update_inventory_on_po_receive                          │
+    │             → Inserts inventory_transactions                         │
+    │  ↓                                                                   │
+    │  [Existing] update_inventory_on_transaction (fixed)                 │
+    │             → Updates inventory.quantity_on_hand ✅                 │
+    └──────────────────────────────────────────────────────────────────────┘
+
+    ============================================================================
+    ';
+END $$;
