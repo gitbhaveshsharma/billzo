@@ -167,6 +167,10 @@ interface ProductState {
     clearBatchesCache: (key?: string) => void;
     clearTransactionsCache: (key?: string) => void;
 
+    // Actions - Storage
+    uploadProductImage: (storeId: string, productId: string, file: File) => Promise<string | null>;
+    deleteProductImage: (publicUrl: string) => Promise<boolean>;
+
     // Actions - Reset
     reset: () => void;
 }
@@ -1785,6 +1789,21 @@ export const useProductStore = create<ProductState>()(
                     }
                     return { transactionsCache: newCache };
                 });
+            },
+
+            // ================================================================
+            // STORAGE ACTIONS
+            // ================================================================
+
+            uploadProductImage: async (storeId: string, productId: string, file: File) => {
+                const result = await productService.uploadProductImage(storeId, productId, file);
+                if (result.error) return null;
+                return result.data;
+            },
+
+            deleteProductImage: async (publicUrl: string) => {
+                const result = await productService.deleteProductImage(publicUrl);
+                return !result.error;
             },
 
             // ================================================================

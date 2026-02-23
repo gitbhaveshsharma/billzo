@@ -29,7 +29,7 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { updateProductSchema } from "@/validations/product.validation";
 import { GST_RATES } from "@/types/product.types";
 import type { Product, UpdateProductRequest, Category, UnitOfMeasure } from "@/types/product.types";
-import { productService } from "@/services/product.service";
+import { useProductStore } from "@/stores/product.store";
 import { ImageUploadField } from "./image-upload-field";
 
 // ============================================================================
@@ -84,6 +84,8 @@ export function EditProductDialog({
     const [activeTab, setActiveTab] = useState("basic");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const uploadProductImage = useProductStore((s) => s.uploadProductImage);
+
     const {
         register,
         handleSubmit,
@@ -136,12 +138,7 @@ export function EditProductDialog({
     // Upload handler — uses the known product.id for the storage path
     const handleImageUpload = async (file: File): Promise<string | null> => {
         if (!product) return null;
-        const result = await productService.uploadProductImage(storeId, product.id, file);
-        if (result.error) {
-            toast.error(result.error);
-            return null;
-        }
-        return result.data;
+        return uploadProductImage(storeId, product.id, file);
     };
 
     // Derived display labels for dropdown triggers
@@ -327,14 +324,14 @@ export function EditProductDialog({
                             </div>
 
                             <div className="space-y-2">
-                                    <Label>Product Image</Label>
-                                    <ImageUploadField
-                                        value={watchPrimaryImage || ""}
-                                        onChange={(url) => setValue("primary_image", url)}
-                                        onUpload={handleImageUpload}
-                                        disabled={isSubmitting}
-                                    />
-                                </div>
+                                <Label>Product Image</Label>
+                                <ImageUploadField
+                                    value={watchPrimaryImage || ""}
+                                    onChange={(url) => setValue("primary_image", url)}
+                                    onUpload={handleImageUpload}
+                                    disabled={isSubmitting}
+                                />
+                            </div>
 
                             <div className="flex items-center gap-3">
                                 <Switch

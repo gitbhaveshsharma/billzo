@@ -29,7 +29,7 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { createProductSchema } from "@/validations/product.validation";
 import { GST_RATES } from "@/types/product.types";
 import type { CreateProductRequest, Category, UnitOfMeasure } from "@/types/product.types";
-import { productService } from "@/services/product.service";
+import { useProductStore } from "@/stores/product.store";
 import { ImageUploadField } from "./image-upload-field";
 
 // ============================================================================
@@ -81,6 +81,8 @@ export function AddProductDialog({
     const [activeTab, setActiveTab] = useState("basic");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const uploadProductImage = useProductStore((s) => s.uploadProductImage);
+
     // Stable temp ID used as the storage path prefix for new product images
     const tempProductIdRef = useRef(crypto.randomUUID());
 
@@ -127,16 +129,7 @@ export function AddProductDialog({
 
     // Upload handler — uses a stable temp ID so the path survives re-renders
     const handleImageUpload = async (file: File): Promise<string | null> => {
-        const result = await productService.uploadProductImage(
-            storeId,
-            tempProductIdRef.current,
-            file
-        );
-        if (result.error) {
-            toast.error(result.error);
-            return null;
-        }
-        return result.data;
+        return uploadProductImage(storeId, tempProductIdRef.current, file);
     };
 
     // Derived display labels
@@ -155,7 +148,7 @@ export function AddProductDialog({
             if (success) {
                 toast.success("Product created successfully", { id: toastId });
                 // Reset the temp image folder ID for next new product
-            tempProductIdRef.current = crypto.randomUUID();
+                tempProductIdRef.current = crypto.randomUUID();
                 reset();
                 setActiveTab("basic");
                 onOpenChange(false);
@@ -352,14 +345,14 @@ export function AddProductDialog({
                             </div>
 
                             <div className="space-y-2">
-                                    <Label>Product Image</Label>
-                                    <ImageUploadField
-                                        value={watchPrimaryImage || ""}
-                                        onChange={(url) => setValue("primary_image", url)}
-                                        onUpload={handleImageUpload}
-                                        disabled={isSubmitting}
-                                    />
-                                </div>
+                                <Label>Product Image</Label>
+                                <ImageUploadField
+                                    value={watchPrimaryImage || ""}
+                                    onChange={(url) => setValue("primary_image", url)}
+                                    onUpload={handleImageUpload}
+                                    disabled={isSubmitting}
+                                />
+                            </div>
                         </TabsContent>
 
                         {/* ================================ PRICING & TAX ================================ */}
