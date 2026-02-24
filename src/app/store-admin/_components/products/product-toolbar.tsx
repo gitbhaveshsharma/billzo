@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
     Search,
+    Plus,
     Filter,
     Download,
     ChevronDown,
@@ -147,6 +148,25 @@ export function ProductToolbar({
 
                 {/* Action buttons */}
                 <div className="flex items-center gap-2">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span tabIndex={0}>
+                                <Button
+                                    size="sm"
+                                    disabled
+                                    className="pointer-events-none opacity-50"
+                                    aria-label="Add Product (coming soon)"
+                                >
+                                    <Plus className="mr-1 h-4 w-4" />
+                                    <span className="hidden sm:inline">Add Product</span>
+                                    <span className="sm:hidden">Add</span>
+                                </Button>
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                            This feature is currently in progress
+                        </TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button variant="outline" size="sm" onClick={handleExportCSV}>
