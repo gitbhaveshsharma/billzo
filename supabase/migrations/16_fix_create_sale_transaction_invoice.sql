@@ -17,6 +17,10 @@
 --   sale_payments INSERT cast status as `'SUCCESS'::payment_record_status`.
 --   `payment_record_status` is not a custom type — status is plain TEXT.
 --   Fix: use bare string literal 'SUCCESS'.
+--
+-- Bug 5 (this migration):
+--   sale_payments INSERT used `reference_number` which does not exist.
+--   The correct column for generic transaction references is `transaction_id`.
 -- ============================================================================
 
 DROP FUNCTION IF EXISTS create_sale_transaction(jsonb);
@@ -207,7 +211,7 @@ BEGIN
             sale_id, store_id,
             payment_method, amount,
             cash_tendered, change_returned,
-            reference_number, notes,
+            transaction_id, notes,
             status, created_by
         ) VALUES (
             v_sale_id,
@@ -223,7 +227,12 @@ BEGIN
                      THEN (v_payment->>'change_amount')::DECIMAL
                 ELSE NULL
             END,
-            v_payment->>'reference_number',
+            COALESCE(
+                v_payment->>'transaction_id',
+                v_payment->>'reference_number',
+                v_payment->>'upi_ref_number',
+                v_payment->>'authorization_code'
+            ),
             v_payment->>'notes',
             'SUCCESS',
             v_user_id
