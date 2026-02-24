@@ -1425,4 +1425,116 @@ export const salesService = {
             return { data: null, error: "Failed to update invoice sequence" };
         }
     },
+
+    // ========================================================================
+    // SINGLE-RPC SALE COMMIT (POS optimized)
+    // ========================================================================
+
+    /**
+     * Commit an entire sale in a single DB roundtrip.
+     * Creates sale header + items + payments + completes in one atomic transaction.
+     * This is the POS-optimized path — use instead of create → addPayment → completeSale.
+     */
+    commitSale: async (
+        storeId: string,
+        data: CreateSaleRequest,
+        payments: CreateSalePaymentRequest[],
+        isInterstate: boolean
+    ): Promise<ServiceResponse<CompleteSaleResult & { sale_id: string }>> => {
+        try {
+            const { items, ...headerData } = data;
+
+            // Build cart items for totals calculation
+            const cartItems = items.map((item) => ({
+                cart_key: "",
+                product_id: item.product_id,
+                variant_id: item.variant_id ?? null,
+                batch_id: item.batch_id ?? null,
+                product_name: item.product_name,
+                product_code: item.product_code,
+                barcode: item.barcode ?? null,
+                hsn_code: item.hsn_code ?? null,
+                unit_name: item.unit_name ?? null,
+                mrp: item.mrp,
+                unit_price: item.unit_price,
+                unit_cost: item.unit_cost ?? null,
+                gst_percentage: item.gst_percentage ?? 0,
+                cess_percentage: item.cess_percentage ?? 0,
+                quantity: item.quantity,
+                discount_type: item.discount_type ?? ("PERCENTAGE" as const),
+                discount_percentage: item.discount_percentage ?? 0,
+                discount_amount: item.discount_amount ?? 0,
+                serial_numbers: item.serial_numbers ?? [],
+                sort_order: item.sort_order ?? 0,
+            }));
+
+            // Calculate sale-level totals
+            const saleTotals = calculateSaleTotals(
+                cartItems,
+                headerData.bill_discount_percentage ?? 0,
+                headerData.bill_discount_amount ?? 0,
+                isInterstate
+            );
+
+            // Build fully calculated item payloads
+            const itemPayloads = items.map((item) =>
+                buildSaleItemPayload(item, isInterstate)
+            );
+
+            // Build the single RPC payload
+            const payload = {
+                store_id: storeId,
+                shift_id: headerData.shift_id ?? null,
+                customer_id: headerData.customer_id ?? null,
+                customer_name: headerData.customer_name ?? null,
+                customer_phone: headerData.customer_phone ?? null,
+                customer_gstin: headerData.customer_gstin ?? null,
+                is_interstate: isInterstate,
+                gst_type: headerData.gst_type ?? "B2C",
+                supply_type: headerData.supply_type ?? "intra",
+                bill_discount_percentage: headerData.bill_discount_percentage ?? 0,
+                ...saleTotals,
+                is_credit_sale: headerData.is_credit_sale ?? false,
+                credit_due_date: headerData.credit_due_date ?? null,
+                notes: headerData.notes ?? null,
+                internal_notes: headerData.internal_notes ?? null,
+                tags: headerData.tags ?? null,
+                reference_type: headerData.reference_type ?? null,
+                reference_id: headerData.reference_id ?? null,
+                reference_number: headerData.reference_number ?? null,
+                items: itemPayloads,
+                payments: payments.map((p) => ({ ...p })),
+            };
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: result, error } = await (getClient() as any).rpc(
+                "create_sale_transaction",
+                { payload }
+            );
+
+            if (error) return { data: null, error: error.message };
+
+            const rpcResult = result as unknown as Record<string, unknown>;
+
+            if (!rpcResult?.success) {
+                return {
+                    data: null,
+                    error: (rpcResult?.error as string) ?? "Sale commit failed",
+                };
+            }
+
+            return {
+                data: {
+                    success: true,
+                    sale_id: rpcResult.sale_id as string,
+                    invoice_number: rpcResult.invoice_number as string,
+                    total_paid: rpcResult.total_paid as number,
+                    status: rpcResult.status as string as CompleteSaleResult["status"],
+                },
+                error: null,
+            };
+        } catch {
+            return { data: null, error: "Failed to commit sale" };
+        }
+    },
 };

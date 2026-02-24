@@ -6,8 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Barcode, PackageX, Loader2 } from "lucide-react";
-import type { Product } from "@/types/product.types";
-import { useProductStore } from "@/stores/product.store";
+import type { SellableItem } from "@/types/pos.types";
+import { usePosCatalogStore } from "@/stores/pos-catalog.store";
 import { formatCurrency } from "@/utils/sales.utils";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 
 interface ProductSearchBarProps {
     storeId: string | null;
-    onAddProduct: (product: Product) => void;
+    onAddProduct: (item: SellableItem) => void;
     className?: string;
     autoFocus?: boolean;
 }
@@ -43,8 +43,10 @@ export function ProductSearchBar({
     className,
     autoFocus = true,
 }: ProductSearchBarProps) {
-    const { products, isLoading: productsLoading, fetchProducts, lookupByBarcode } =
-        useProductStore();
+    const status = usePosCatalogStore((s) => s.status);
+    const search = usePosCatalogStore((s) => s.search);
+    const lookupBarcode = usePosCatalogStore((s) => s.lookupBarcode);
+    const productsLoading = status === "loading";
 
     const [query, setQuery] = useState("");
     const [isOpen, setIsOpen] = useState(false);
@@ -55,7 +57,6 @@ export function ProductSearchBar({
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // ── Scanner detection refs ─────────────────────────────────────────────
-    // Track keystroke timing to distinguish scanner from human typing
     const keystrokeTimestamps = useRef<number[]>([]);
     const scannerBufferRef = useRef<string>("");
     const isScannerInputRef = useRef(false);
@@ -65,13 +66,6 @@ export function ProductSearchBar({
     const globalBufferRef = useRef<string>("");
     const globalLastKeystrokeRef = useRef<number>(0);
     const globalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    // Fetch products on mount
-    useEffect(() => {
-        if (storeId) {
-            fetchProducts(storeId);
-        }
-    }, [storeId, fetchProducts]);
 
     // ── Global keyboard listener for barcode scanner ───────────────────────
     // This catches scanner input even when the search input isn't focused
@@ -121,16 +115,11 @@ export function ProductSearchBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [storeId]);
 
-    // Filter products by search query (only for manual typing)
-    const filteredProducts = (!isScannerInputRef.current && query.length >= 2)
-        ? products.filter(
-              (p) =>
-                  p.is_active &&
-                  (p.name.toLowerCase().includes(query.toLowerCase()) ||
-                      p.product_code.toLowerCase().includes(query.toLowerCase()) ||
-                      (p.barcode && p.barcode.includes(query)))
-          ).slice(0, 10)
-        : [];
+    // Filter products by search query — O(n) scan but on flat in-memory list
+    const filteredProducts: SellableItem[] =
+        !isScannerInputRef.current && query.length >= 2
+            ? search(query, 10)
+            : [];
 
     // Open dropdown when results exist
     useEffect(() => {
@@ -162,47 +151,32 @@ export function ProductSearchBar({
             setIsOpen(false);
 
             try {
-                // First try exact barcode lookup via the store
-                const product = await lookupByBarcode(storeId, barcode.trim());
-                if (product) {
-                    onAddProduct(product);
+                // O(1) in-memory lookup → DB fallback if miss
+                const item = await lookupBarcode(storeId, barcode.trim());
+                if (item) {
+                    onAddProduct(item);
                     setQuery("");
                     setIsOpen(false);
                     inputRef.current?.focus();
                 } else {
-                    // Try matching in local products list
-                    const localMatch = products.find(
-                        (p) =>
-                            p.is_active &&
-                            (p.barcode === barcode.trim() ||
-                             p.product_code === barcode.trim())
-                    );
-                    if (localMatch) {
-                        onAddProduct(localMatch);
-                        setQuery("");
-                        setIsOpen(false);
-                        inputRef.current?.focus();
-                    } else {
-                        // Show no results
-                        setQuery(barcode);
-                        setIsOpen(true);
-                    }
+                    // Show no results
+                    setQuery(barcode);
+                    setIsOpen(true);
                 }
             } finally {
                 setIsScanning(false);
                 scanLockRef.current = false;
-                // Reset scanner detection state
                 isScannerInputRef.current = false;
                 keystrokeTimestamps.current = [];
                 scannerBufferRef.current = "";
             }
         },
-        [storeId, lookupByBarcode, onAddProduct, products]
+        [storeId, lookupBarcode, onAddProduct]
     );
 
     const handleSelect = useCallback(
-        (product: Product) => {
-            onAddProduct(product);
+        (item: SellableItem) => {
+            onAddProduct(item);
             setQuery("");
             setIsOpen(false);
             inputRef.current?.focus();
@@ -357,13 +331,14 @@ export function ProductSearchBar({
                             </div>
                         )}
 
-                        {filteredProducts.map((product, index) => {
-                            // Check stock using product's minimum_stock as proxy
-                            const isOutOfStock = false; // Stock check would come from inventory store
+                        {filteredProducts.map((item, index) => {
+                            const isOutOfStock = item.stock <= 0;
+                            const isLowStock =
+                                item.stock > 0 && item.stock <= item.reorder_point;
 
                             return (
                                 <button
-                                    key={product.id}
+                                    key={item.id}
                                     type="button"
                                     disabled={isOutOfStock}
                                     className={cn(
@@ -373,42 +348,52 @@ export function ProductSearchBar({
                                             : "hover:bg-accent cursor-pointer",
                                         highlightedIndex === index && "bg-accent"
                                     )}
-                                    onClick={() => !isOutOfStock && handleSelect(product)}
+                                    onClick={() => !isOutOfStock && handleSelect(item)}
                                 >
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-1.5">
                                             <span className="text-sm font-medium truncate">
-                                                {product.name}
+                                                {item.name}
                                             </span>
-                                            {product.barcode && (
+                                            {item.barcode && (
                                                 <Badge variant="outline" className="text-[9px] flex-shrink-0">
-                                                    {product.barcode}
+                                                    {item.barcode}
                                                 </Badge>
                                             )}
                                         </div>
                                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                            <span>{product.product_code}</span>
-                                            {product.hsn_code && (
+                                            <span>{item.sku}</span>
+                                            {item.hsn_code && (
                                                 <>
                                                     <span className="text-muted-foreground/50">·</span>
-                                                    <span>HSN: {product.hsn_code}</span>
+                                                    <span>HSN: {item.hsn_code}</span>
                                                 </>
                                             )}
-                                            {product.gst_percentage > 0 && (
+                                            {item.gst_percentage > 0 && (
                                                 <>
                                                     <span className="text-muted-foreground/50">·</span>
-                                                    <span>GST: {product.gst_percentage}%</span>
+                                                    <span>GST: {item.gst_percentage}%</span>
                                                 </>
+                                            )}
+                                            {isLowStock && (
+                                                <Badge variant="outline" className="text-[9px] text-yellow-600 border-yellow-300">
+                                                    Low: {item.stock}
+                                                </Badge>
+                                            )}
+                                            {isOutOfStock && (
+                                                <Badge variant="destructive" className="text-[9px]">
+                                                    Out of stock
+                                                </Badge>
                                             )}
                                         </div>
                                     </div>
                                     <div className="text-right flex-shrink-0">
                                         <p className="text-sm font-bold">
-                                            {formatCurrency(product.selling_price)}
+                                            {formatCurrency(item.price)}
                                         </p>
-                                        {product.mrp !== product.selling_price && (
+                                        {item.mrp !== item.price && (
                                             <p className="text-xs text-muted-foreground line-through">
-                                                {formatCurrency(product.mrp)}
+                                                {formatCurrency(item.mrp)}
                                             </p>
                                         )}
                                     </div>

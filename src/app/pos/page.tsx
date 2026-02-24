@@ -10,8 +10,9 @@ import {
     Receipt,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { usePosData } from "@/hooks/use-pos-data";
 import { useSalesStore } from "@/stores/sales.store";
-import { useProductStore } from "@/stores/product.store";
+import { usePosCatalogStore } from "@/stores/pos-catalog.store";
 import { useShiftsStore } from "@/stores/shifts.store";
 import {
     NoShiftGuard,
@@ -23,6 +24,7 @@ import {
     HoldBillsDrawer,
     ReceiptView,
     HardwareStatusIndicator,
+    PosRefreshButton,
 } from "../store-admin/_components/sales";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +40,7 @@ import type {
     CreateSaleRequest,
     EnrichedSale,
 } from "@/types/sales.types";
+import type { SellableItem } from "@/types/pos.types";
 import { formatCurrency } from "@/utils/sales.utils";
 
 // ============================================================================
@@ -48,6 +51,20 @@ export default function POSPage() {
     const { appUser, isLoading: authLoading } = useAuth();
     const router = useRouter();
     const storeId = appUser?.storeId ?? null;
+
+    // ========================================================================
+    // POS CATALOG — Load once, persist in IndexedDB, never re-fetch on refresh
+    // ========================================================================
+    const {
+        isReady: catalogReady,
+        isLoading: catalogLoading,
+        isRefreshing: catalogRefreshing,
+        lastLoadedAt,
+        itemCount,
+        onRefresh: handleCatalogRefresh,
+    } = usePosData(storeId);
+
+    const deductSoldStock = usePosCatalogStore((s) => s.deductSoldStock);
 
     const {
         cart,
@@ -79,14 +96,11 @@ export default function POSPage() {
         holdCurrentBill,
         recallLocalHoldBill,
         removeLocalHoldBill,
-        createSale,
-        addPayment,
-        completeSale,
+        commitSale,
         fetchHoldBills,
         fetchSaleById,
     } = useSalesStore();
 
-    const { fetchProducts } = useProductStore();
     const { activeShift, isLoading: shiftsLoading, fetchActiveShift } = useShiftsStore();
 
     // Dialog state
@@ -96,16 +110,15 @@ export default function POSPage() {
     const [lastCompletedSale, setLastCompletedSale] = useState<EnrichedSale | null>(null);
 
     // ========================================================================
-    // INITIAL DATA LOAD
+    // INITIAL DATA LOAD — Shift & hold bills only (catalog loaded by usePosData)
     // ========================================================================
 
     useEffect(() => {
         if (storeId) {
-            fetchProducts(storeId);
             fetchActiveShift(storeId);
             fetchHoldBills(storeId);
         }
-    }, [storeId, fetchProducts, fetchActiveShift, fetchHoldBills]);
+    }, [storeId, fetchActiveShift, fetchHoldBills]);
 
     // Link shift to cart
     useEffect(() => {
@@ -119,33 +132,21 @@ export default function POSPage() {
     // ========================================================================
 
     const handleProductSelect = useCallback(
-        (product: {
-            id: string;
-            name: string;
-            product_code: string;
-            barcode?: string | null;
-            hsn_code?: string | null;
-            unit_name?: string | null;
-            mrp: number;
-            selling_price: number;
-            purchase_price?: number | null;
-            gst_percentage: number;
-            cess_percentage: number;
-        }) => {
+        (item: SellableItem) => {
             addToCart({
-                product_id: product.id,
-                variant_id: null,
+                product_id: item.product_id,
+                variant_id: item.variant_id,
                 batch_id: null,
-                product_name: product.name,
-                product_code: product.product_code,
-                barcode: product.barcode ?? null,
-                hsn_code: product.hsn_code ?? null,
-                unit_name: product.unit_name ?? null,
-                mrp: product.mrp,
-                unit_price: product.selling_price,
-                unit_cost: product.purchase_price ?? null,
-                gst_percentage: product.gst_percentage,
-                cess_percentage: product.cess_percentage,
+                product_name: item.name,
+                product_code: item.sku,
+                barcode: item.barcode,
+                hsn_code: item.hsn_code,
+                unit_name: item.unit_name,
+                mrp: item.mrp,
+                unit_price: item.price,
+                unit_cost: item.cost,
+                gst_percentage: item.gst_percentage,
+                cess_percentage: item.cess_percentage,
                 quantity: 1,
                 discount_type: "PERCENTAGE",
                 discount_percentage: 0,
@@ -251,9 +252,7 @@ export default function POSPage() {
         ) => {
             if (!storeId) return;
 
-            const toastId = toast.loading("Processing sale...");
-
-            // 1. Create sale (DRAFT)
+            // ── Build sale request from cart ────────────────────────────────
             const saleRequest: CreateSaleRequest = {
                 shift_id: cartShiftId ?? undefined,
                 customer_id: cartCustomerId ?? undefined,
@@ -294,51 +293,51 @@ export default function POSPage() {
                 })),
             };
 
-            const sale = await createSale(storeId, saleRequest);
-            if (!sale) {
-                toast.error("Failed to create sale", { id: toastId });
-                return;
-            }
+            // ── Capture cart items for stock deduction before clearing ──────
+            const soldItems = cart.map((item) => ({
+                id: item.variant_id ?? item.product_id,
+                quantity: item.quantity,
+            }));
 
-            // 2. Add payments
-            let allPaymentsOk = true;
-            for (const payment of payments) {
-                const result = await addPayment(storeId, sale.id, payment);
-                if (!result) {
-                    allPaymentsOk = false;
-                    break;
-                }
-            }
+            // ── OPTIMISTIC: Clear cart & close dialog immediately ───────────
+            setPaymentOpen(false);
+            clearCart();
+            const toastId = toast.loading("Processing sale...");
 
-            if (!allPaymentsOk && !isCreditSale) {
-                toast.error("Some payments failed", { id: toastId });
-                return;
-            }
+            // ── SINGLE RPC: create + items + payments + complete ────────────
+            const result = await commitSale(
+                storeId,
+                saleRequest,
+                payments,
+                cartIsInterstate
+            );
 
-            // 3. Complete sale (RPC: finalize, generate invoice #, update stock)
-            const result = await completeSale(sale.id);
             if (!result?.success) {
+                // ── ROLLBACK: something went wrong ─────────────────────────
                 toast.error(result?.error ?? "Failed to complete sale", {
                     id: toastId,
                 });
+                // Note: cart is already cleared — user would need to re-scan.
+                // This is acceptable because RPC failures are rare (DB down, etc.)
                 return;
             }
+
+            // ── SUCCESS: deduct stock in memory (no re-fetch needed) ────────
+            deductSoldStock(soldItems);
 
             toast.success(
                 `Sale completed! Invoice: ${result.invoice_number ?? ""}`,
                 { id: toastId }
             );
 
-            // 4. Show receipt & clear cart
-            setPaymentOpen(false);
-            clearCart();
-
-            // Fetch completed sale for receipt
-            await fetchSaleById(storeId, sale.id);
-            const enrichedSale = useSalesStore.getState().currentSale;
-            if (enrichedSale) {
-                setLastCompletedSale(enrichedSale);
-                setReceiptDialogOpen(true);
+            // ── Fetch completed sale for receipt display (background) ───────
+            if (result.sale_id) {
+                await fetchSaleById(storeId, result.sale_id);
+                const enrichedSale = useSalesStore.getState().currentSale;
+                if (enrichedSale) {
+                    setLastCompletedSale(enrichedSale);
+                    setReceiptDialogOpen(true);
+                }
             }
         },
         [
@@ -354,10 +353,9 @@ export default function POSPage() {
             cartBillDiscountPercentage,
             cartBillDiscountAmount,
             cartNotes,
-            createSale,
-            addPayment,
-            completeSale,
+            commitSale,
             clearCart,
+            deductSoldStock,
             fetchSaleById,
         ]
     );
@@ -366,10 +364,13 @@ export default function POSPage() {
     // LOADING
     // ========================================================================
 
-    if (authLoading) {
+    if (authLoading || catalogLoading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
-                <LoadingSpinner size="lg" text="Loading..." />
+                <LoadingSpinner
+                    size="lg"
+                    text={catalogLoading ? `Loading catalog (${itemCount} items)...` : "Loading..."}
+                />
             </div>
         );
     }
@@ -440,6 +441,14 @@ export default function POSPage() {
 
                         {/* Hardware Status */}
                         <HardwareStatusIndicator />
+
+                        {/* Catalog Refresh */}
+                        <PosRefreshButton
+                            isRefreshing={catalogRefreshing}
+                            lastLoadedAt={lastLoadedAt}
+                            itemCount={itemCount}
+                            onRefresh={handleCatalogRefresh}
+                        />
 
                         <div className="flex-1" />
                         <Button

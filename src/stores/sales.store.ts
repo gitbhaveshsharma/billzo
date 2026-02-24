@@ -123,6 +123,17 @@ interface SalesState {
     cancelSale: (storeId: string, saleId: string, data: CancelSaleRequest) => Promise<boolean>;
     markReceiptPrinted: (storeId: string, saleId: string, data: MarkReceiptPrintedRequest) => Promise<boolean>;
 
+    /**
+     * Single-RPC POS commit: create sale + items + payments + complete in one DB roundtrip.
+     * Returns sale_id + invoice_number on success, or null on failure.
+     */
+    commitSale: (
+        storeId: string,
+        data: CreateSaleRequest,
+        payments: CreateSalePaymentRequest[],
+        isInterstate: boolean
+    ) => Promise<(CompleteSaleResult & { sale_id: string }) | null>;
+
     // ACTIONS — ITEMS
     fetchItems: (storeId: string, saleId: string, forceRefresh?: boolean) => Promise<SaleItem[]>;
     addItem: (storeId: string, saleId: string, item: CreateSaleItemRequest, isInterstate: boolean) => Promise<SaleItem | null>;
@@ -642,6 +653,40 @@ export const useSalesStore = create<SalesState>()(
                 } catch (err) {
                     set({
                         error: err instanceof Error ? err.message : "Failed to complete sale",
+                        isSaving: false,
+                    });
+                    return null;
+                }
+            },
+
+            commitSale: async (storeId, data, payments, isInterstate) => {
+                set({ isSaving: true, error: null });
+
+                try {
+                    const result = await salesService.commitSale(
+                        storeId,
+                        data,
+                        payments,
+                        isInterstate
+                    );
+
+                    if (result.error || !result.data) {
+                        set({
+                            error: result.error ?? "Sale commit failed",
+                            isSaving: false,
+                        });
+                        return null;
+                    }
+
+                    set({ isSaving: false });
+                    get().invalidateCache();
+                    return result.data;
+                } catch (err) {
+                    set({
+                        error:
+                            err instanceof Error
+                                ? err.message
+                                : "Failed to commit sale",
                         isSaving: false,
                     });
                     return null;
