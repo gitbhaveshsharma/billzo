@@ -385,7 +385,6 @@ export const storeUsersService = {
                         first_name: employeeData.first_name,
                         middle_name: employeeData.middle_name,
                         last_name: employeeData.last_name,
-                        full_name: `${employeeData.first_name} ${employeeData.middle_name || ""} ${employeeData.last_name}`.trim(),
                         email: request.email,
                         phone: existingProfile?.phone || "",
                         employee_type: employeeData.employee_type,
@@ -461,27 +460,10 @@ export const storeUsersService = {
         try {
             const client = getClient();
 
-            // If name fields are updated, update full_name
-            const fullNameUpdate: any = {};
-            if (updates.first_name || updates.middle_name || updates.last_name) {
-                const { data: currentEmployee } = await client
-                    .from("employees")
-                    .select("first_name, middle_name, last_name")
-                    .eq("id", employeeId)
-                    .single();
-
-                const current = currentEmployee as any;
-                const firstName = updates.first_name || current?.first_name || "";
-                const middleName = updates.middle_name || current?.middle_name || "";
-                const lastName = updates.last_name || current?.last_name || "";
-                fullNameUpdate.full_name = `${firstName} ${middleName} ${lastName}`.trim();
-            }
-
             const { data, error } = await client
                 .from("employees")
                 .update({
                     ...updates,
-                    ...fullNameUpdate,
                     updated_at: new Date().toISOString(),
                 })
                 .eq("id", employeeId)
@@ -535,7 +517,6 @@ export const storeUsersService = {
                     employee_code: employeeCode,
                     first_name: data.first_name,
                     last_name: data.last_name,
-                    full_name: `${data.first_name} ${data.last_name}`.trim(),
                     email,
                     phone: data.phone || "",
                     employee_type: data.employee_type as any || "full_time",

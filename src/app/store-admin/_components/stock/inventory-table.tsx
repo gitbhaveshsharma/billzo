@@ -11,7 +11,13 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Package } from "lucide-react";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Info, Package } from "lucide-react";
 import type { EnrichedInventoryRecord } from "@/types/inventory.types";
 import {
     getStockLevelStatus,
@@ -34,6 +40,28 @@ interface InventoryTableProps {
     onToggleSelect: (id: string) => void;
     onSelectAll: (ids: string[]) => void;
     onAction: (action: InventoryAction, item: EnrichedInventoryRecord) => void;
+}
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+function TipHead({ children, tip }: { children: React.ReactNode; tip: string }) {
+    return (
+        <TooltipProvider delayDuration={200}>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <span className="flex items-center gap-1 cursor-default select-none">
+                        {children}
+                        <Info className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[220px] text-xs">
+                    {tip}
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    );
 }
 
 // ============================================================================
@@ -201,11 +229,31 @@ export function InventoryTable({
                         <TableHead>SKU</TableHead>
                         <TableHead>Warehouse</TableHead>
                         <TableHead>Location</TableHead>
-                        <TableHead className="text-right">On Hand</TableHead>
-                        <TableHead className="text-right">Reserved</TableHead>
-                        <TableHead className="text-right">Available</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Value</TableHead>
+                        <TableHead className="text-right">
+                            <TipHead tip="Total physical units in the warehouse. Includes both available stock and units reserved for pending orders.">
+                                On Hand
+                            </TipHead>
+                        </TableHead>
+                        <TableHead className="text-right">
+                            <TipHead tip="Units committed to pending sales or transfers but not yet dispatched. Cannot be sold until released.">
+                                Reserved
+                            </TipHead>
+                        </TableHead>
+                        <TableHead className="text-right">
+                            <TipHead tip="On Hand minus Reserved. The quantity you can freely sell right now.">
+                                Available
+                            </TipHead>
+                        </TableHead>
+                        <TableHead>
+                            <TipHead tip="Stock health level: Normal, Low (at reorder point), or Out of Stock.">
+                                Status
+                            </TipHead>
+                        </TableHead>
+                        <TableHead className="text-right">
+                            <TipHead tip="Average Cost × On Hand quantity. The total book value of your current stock for this product.">
+                                Value
+                            </TipHead>
+                        </TableHead>
                         <TableHead>Updated</TableHead>
                         <TableHead className="w-10" />
                     </TableRow>

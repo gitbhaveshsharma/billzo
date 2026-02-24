@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef } from "react";
-import { Printer, Download, Share2 } from "lucide-react";
+import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { EnrichedSale } from "@/types/sales.types";
@@ -10,6 +10,8 @@ import {
     formatCurrency,
     formatDate,
 } from "@/utils/sales.utils";
+import type { ReceiptLayoutConfig } from "@/hooks/use-hardware";
+import { DEFAULT_RECEIPT_LAYOUT_CONFIG } from "@/hooks/use-hardware";
 
 // ============================================================================
 // TYPES
@@ -24,6 +26,8 @@ interface ReceiptViewProps {
     onPrint?: () => void;
     /** Compact mode for POS thermal printer style */
     compact?: boolean;
+    /** Full layout config — takes precedence over `compact` when provided */
+    layoutConfig?: ReceiptLayoutConfig;
 }
 
 // ============================================================================
@@ -40,9 +44,17 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
             storePhone = null,
             onPrint,
             compact = false,
+            layoutConfig,
         },
         ref
     ) {
+        const cfg: ReceiptLayoutConfig = layoutConfig ?? {
+            ...DEFAULT_RECEIPT_LAYOUT_CONFIG,
+            // respect the legacy `compact` flag
+            layout: compact ? "thermal-compact" : "thermal-detailed",
+            fontSize: compact ? "small" : "medium",
+        };
+
         const receipt = buildReceiptData(
             sale,
             storeName,
@@ -50,6 +62,28 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
             storeGstin ?? null,
             storePhone ?? null
         );
+
+        const isCompact = cfg.layout === "thermal-compact" || cfg.fontSize === "small";
+        const isInvoice = cfg.layout === "invoice-a4" || cfg.layout === "invoice-a5";
+
+        // Width based on paper size
+        const widthClass = (() => {
+            switch (cfg.paperSize) {
+                case 58: return "max-w-[220px]";
+                case 80: return "max-w-[300px]";
+                case "A5": return "max-w-[420px]";
+                case "A4": return "max-w-[600px]";
+                default: return "max-w-[300px]";
+            }
+        })();
+
+        const textClass = (() => {
+            switch (cfg.fontSize) {
+                case "small": return "text-xs";
+                case "medium": return "text-sm";
+                case "large": return "text-base";
+            }
+        })();
 
         return (
             <div className="space-y-3">
@@ -60,31 +94,41 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
                             <Printer className="h-3.5 w-3.5" />
                             Print
                         </Button>
+                        {cfg.printCopies > 1 && (
+                            <span className="text-xs text-muted-foreground self-center">
+                                {cfg.printCopies} copies
+                            </span>
+                        )}
                     </div>
                 )}
 
                 {/* Receipt Content */}
                 <div
                     ref={ref}
-                    className={`bg-white text-black p-4 rounded-md border print:border-none print:p-0 ${
-                        compact ? "max-w-[300px] text-xs" : "max-w-[400px] text-sm"
-                    }`}
+                    className={`bg-white text-black p-4 rounded-md border print:border-none print:p-0 ${widthClass} ${textClass}`}
                 >
                     {/* Store Header */}
-                    <div className="text-center space-y-0.5">
-                        <h2 className={compact ? "text-sm font-bold" : "text-base font-bold"}>
-                            {receipt.store.name}
-                        </h2>
-                        <p className="text-xs text-gray-600">{receipt.store.address}</p>
-                        {receipt.store.phone && (
+                    <div className={`text-center space-y-0.5 ${isInvoice ? "border-b pb-2 mb-2" : ""}`}>
+                        {cfg.showStoreName && (
+                            <h2 className={isCompact ? "text-sm font-bold" : "text-base font-bold"}>
+                                {receipt.store.name}
+                            </h2>
+                        )}
+                        {cfg.showStoreAddress && (
+                            <p className="text-xs text-gray-600">{receipt.store.address}</p>
+                        )}
+                        {cfg.showStorePhone && receipt.store.phone && (
                             <p className="text-xs text-gray-600">
                                 Ph: {receipt.store.phone}
                             </p>
                         )}
-                        {receipt.store.gstin && (
+                        {cfg.showStoreGstin && receipt.store.gstin && (
                             <p className="text-xs text-gray-600">
                                 GSTIN: {receipt.store.gstin}
                             </p>
+                        )}
+                        {cfg.headerNote && (
+                            <p className="text-xs text-gray-500 italic">{cfg.headerNote}</p>
                         )}
                     </div>
 
@@ -101,7 +145,7 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
                     </div>
 
                     {/* Customer */}
-                    {receipt.customer.name && (
+                    {cfg.showCustomerInfo && receipt.customer.name && (
                         <div className="text-xs mt-1">
                             <span className="text-gray-600">Customer: </span>
                             {receipt.customer.name}
@@ -121,8 +165,8 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
                         <thead>
                             <tr className="border-b border-dashed">
                                 <th className="text-left py-0.5 font-medium">Item</th>
-                                <th className="text-right py-0.5 font-medium">Qty</th>
-                                <th className="text-right py-0.5 font-medium">Rate</th>
+                                {cfg.showQty && <th className="text-right py-0.5 font-medium">Qty</th>}
+                                {cfg.showRate && <th className="text-right py-0.5 font-medium">Rate</th>}
                                 <th className="text-right py-0.5 font-medium">Amt</th>
                             </tr>
                         </thead>
@@ -131,22 +175,26 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
                                 <tr key={i} className="border-b border-dotted">
                                     <td className="py-0.5">
                                         <div>{item.name}</div>
-                                        {!compact && item.hsn && (
+                                        {cfg.showHsn && item.hsn && (
                                             <div className="text-gray-500 text-[10px]">
                                                 HSN: {item.hsn}
                                             </div>
                                         )}
                                     </td>
-                                    <td className="text-right py-0.5">
-                                        {item.qty}
-                                        {item.unit ? ` ${item.unit}` : ""}
-                                    </td>
-                                    <td className="text-right py-0.5">
-                                        {formatCurrency(item.price)}
-                                    </td>
+                                    {cfg.showQty && (
+                                        <td className="text-right py-0.5">
+                                            {item.qty}
+                                            {item.unit ? ` ${item.unit}` : ""}
+                                        </td>
+                                    )}
+                                    {cfg.showRate && (
+                                        <td className="text-right py-0.5">
+                                            {formatCurrency(item.price)}
+                                        </td>
+                                    )}
                                     <td className="text-right py-0.5">
                                         {formatCurrency(item.total)}
-                                        {item.discount > 0 && (
+                                        {cfg.showItemDiscount && item.discount > 0 && (
                                             <div className="text-gray-500 text-[10px]">
                                                 Disc: -{formatCurrency(item.discount)}
                                             </div>
@@ -171,25 +219,25 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
                                 <span>-{formatCurrency(receipt.totals.discount)}</span>
                             </div>
                         )}
-                        {receipt.totals.cgst > 0 && (
+                        {cfg.showGstBreakdown && receipt.totals.cgst > 0 && (
                             <div className="flex justify-between">
                                 <span>CGST</span>
                                 <span>{formatCurrency(receipt.totals.cgst)}</span>
                             </div>
                         )}
-                        {receipt.totals.sgst > 0 && (
+                        {cfg.showGstBreakdown && receipt.totals.sgst > 0 && (
                             <div className="flex justify-between">
                                 <span>SGST</span>
                                 <span>{formatCurrency(receipt.totals.sgst)}</span>
                             </div>
                         )}
-                        {receipt.totals.igst > 0 && (
+                        {cfg.showGstBreakdown && receipt.totals.igst > 0 && (
                             <div className="flex justify-between">
                                 <span>IGST</span>
                                 <span>{formatCurrency(receipt.totals.igst)}</span>
                             </div>
                         )}
-                        {receipt.totals.cess > 0 && (
+                        {cfg.showGstBreakdown && receipt.totals.cess > 0 && (
                             <div className="flex justify-between">
                                 <span>Cess</span>
                                 <span>{formatCurrency(receipt.totals.cess)}</span>
@@ -265,9 +313,11 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
 
                     {/* Footer */}
                     <Separator className="my-2 border-dashed" />
-                    <p className="text-xs text-center text-gray-500">
-                        Thank you for your purchase!
-                    </p>
+                    {cfg.showThankYou && cfg.footerText && (
+                        <p className="text-xs text-center text-gray-500">
+                            {cfg.footerText}
+                        </p>
+                    )}
                 </div>
             </div>
         );

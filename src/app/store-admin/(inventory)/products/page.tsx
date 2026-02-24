@@ -294,6 +294,7 @@ export default function ProductsPage() {
             <AddProductDialog
                 open={addDialogOpen}
                 onOpenChange={setAddDialogOpen}
+                storeId={storeId!}
                 onSubmit={handleAddProduct}
                 categories={categories}
                 units={units}
@@ -304,6 +305,7 @@ export default function ProductsPage() {
                 product={selectedProduct}
                 open={editDialogOpen}
                 onOpenChange={setEditDialogOpen}
+                storeId={storeId!}
                 onSubmit={handleUpdateProduct}
                 categories={categories}
                 units={units}

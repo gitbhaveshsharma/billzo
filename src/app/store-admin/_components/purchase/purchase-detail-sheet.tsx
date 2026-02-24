@@ -6,6 +6,8 @@ import {
     Package,
     CreditCard,
     Undo2,
+    Pencil,
+    Plus,
     Calendar,
     MapPin,
     FileText,
@@ -57,6 +59,7 @@ import {
     canReceiveItems,
     canAddPayment,
     canCreateReturn,
+    canEditPO,
 } from "@/utils/purchase.utils";
 import { usePurchaseStore } from "@/stores/purchase.store";
 
@@ -69,6 +72,7 @@ interface PurchaseDetailSheetProps {
     onOpenChange: (open: boolean) => void;
     storeId: string;
     orderId: string | null;
+    onEdit: () => void;
     onReceive: () => void;
     onAddPayment: () => void;
     onCreateReturn: () => void;
@@ -84,7 +88,7 @@ function InfoRow({ label, value, icon }: { label: string; value: React.ReactNode
             {icon && <span className="text-muted-foreground mt-0.5">{icon}</span>}
             <div className="min-w-0 flex-1">
                 <p className="text-muted-foreground text-xs">{label}</p>
-                <p className="text-sm font-medium truncate">{value || "—"}</p>
+                <div className="text-sm font-medium truncate">{value || "—"}</div>
             </div>
         </div>
     );
@@ -333,6 +337,7 @@ export function PurchaseDetailSheet({
     onOpenChange,
     storeId,
     orderId,
+    onEdit,
     onReceive,
     onAddPayment,
     onCreateReturn,
@@ -383,7 +388,19 @@ export function PurchaseDetailSheet({
 
                 {/* Action Buttons */}
                 {order && !showLoading && (
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-2 flex-wrap px-4">
+                        {canEditPO(order.status) && (
+                            <Button size="sm" variant="outline" onClick={onEdit} className="gap-1.5">
+                                <Pencil className="h-3.5 w-3.5" />
+                                Edit Order
+                            </Button>
+                        )}
+                        {canEditPO(order.status) && (
+                            <Button size="sm" variant="outline" onClick={onEdit} className="gap-1.5">
+                                <Plus className="h-3.5 w-3.5" />
+                                Add Item
+                            </Button>
+                        )}
                         {canReceiveItems(order.status) && (
                             <Button size="sm" variant="outline" onClick={onReceive} className="gap-1.5">
                                 <Package className="h-3.5 w-3.5" />
@@ -405,7 +422,7 @@ export function PurchaseDetailSheet({
                     </div>
                 )}
 
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 p-4">
                     <TabsList className="w-full grid grid-cols-4">
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger value="items">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
@@ -25,10 +25,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, Loader2, ScanLine } from "lucide-react";
 import { updateProductSchema } from "@/validations/product.validation";
 import { GST_RATES } from "@/types/product.types";
 import type { Product, UpdateProductRequest, Category, UnitOfMeasure } from "@/types/product.types";
+import { useProductStore } from "@/stores/product.store";
+import { ImageUploadField } from "./image-upload-field";
 
 // ============================================================================
 // TYPES
@@ -38,6 +40,7 @@ interface EditProductDialogProps {
     product: Product | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    storeId: string;
     onSubmit: (productId: string, data: UpdateProductRequest) => Promise<boolean>;
     categories: Category[];
     units: UnitOfMeasure[];
@@ -73,12 +76,21 @@ export function EditProductDialog({
     product,
     open,
     onOpenChange,
+    storeId,
     onSubmit,
     categories,
     units,
 }: EditProductDialogProps) {
     const [activeTab, setActiveTab] = useState("basic");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // Local state for image URL — more reliable than watch() for pre-filled values
+    const [primaryImageUrl, setPrimaryImageUrl] = useState<string>("");
+
+    // ── Barcode scanner state ──
+    const [barcodeScanReady, setBarcodeScanReady] = useState(false);
+    const barcodeInputRef = useRef<HTMLInputElement | null>(null);
+
+    const uploadProductImage = useProductStore((s) => s.uploadProductImage);
 
     const {
         register,
@@ -95,6 +107,7 @@ export function EditProductDialog({
     // Populate form when product changes
     useEffect(() => {
         if (product && open) {
+            const imageUrl = product.primary_image ?? "";
             reset({
                 product_code: product.product_code,
                 name: product.name,
@@ -116,8 +129,10 @@ export function EditProductDialog({
                 is_batch_tracked: product.is_batch_tracked,
                 is_taxable: product.is_taxable,
                 is_active: product.is_active,
-                primary_image: product.primary_image ?? "",
+                primary_image: imageUrl,
             });
+            // Explicitly set local image state so the preview renders immediately
+            setPrimaryImageUrl(imageUrl);
         }
     }, [product, open, reset]);
 
@@ -127,6 +142,31 @@ export function EditProductDialog({
     const watchActive = watch("is_active");
     const watchCategoryId = watch("category_id");
     const watchUnitId = watch("unit_id");
+
+    // ── Barcode scanner handlers ──
+    const handleBarcodeKeyDown = useCallback(
+        (e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                const val = (e.currentTarget.value ?? "").trim();
+                if (val) {
+                    setValue("barcode", val, { shouldValidate: true });
+                    barcodeInputRef.current?.blur();
+                }
+            }
+        },
+        [setValue]
+    );
+
+    // Merge react-hook-form's ref with our local ref
+    const { ref: rhfBarcodeRef, ...rhfBarcodeProps } = register("barcode");
+
+    // Upload handler — uses the known product.id for the storage path
+    const handleImageUpload = async (file: File): Promise<string | null> => {
+        if (!product) return null;
+        return uploadProductImage(storeId, product.id, file);
+    };
 
     // Derived display labels for dropdown triggers
     const selectedCategory = categories.find((c) => c.id === watchCategoryId);
@@ -156,7 +196,10 @@ export function EditProductDialog({
     };
 
     const handleClose = (isOpen: boolean) => {
-        if (!isOpen) setActiveTab("basic");
+        if (!isOpen) {
+            setActiveTab("basic");
+            setPrimaryImageUrl("");
+        }
         onOpenChange(isOpen);
     };
 
@@ -213,11 +256,42 @@ export function EditProductDialog({
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="edit_barcode">Barcode</Label>
-                                    <Input
-                                        id="edit_barcode"
-                                        placeholder="EAN-13 / UPC barcode"
-                                        {...register("barcode")}
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            id="edit_barcode"
+                                            {...rhfBarcodeProps}
+                                            ref={(el) => {
+                                                rhfBarcodeRef(el);
+                                                barcodeInputRef.current = el;
+                                            }}
+                                            placeholder="Click here, then scan…"
+                                            onKeyDown={handleBarcodeKeyDown}
+                                            onFocus={() => setBarcodeScanReady(true)}
+                                            onBlur={() => setBarcodeScanReady(false)}
+                                            className={barcodeScanReady
+                                                ? "pr-20 ring-2 ring-blue-500 border-blue-400 focus-visible:ring-blue-500"
+                                                : "pr-20"
+                                            }
+                                        />
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+                                            {barcodeScanReady ? (
+                                                <span className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">
+                                                    <ScanLine className="h-3 w-3" />
+                                                    Scan ready
+                                                </span>
+                                            ) : (
+                                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                                    <ScanLine className="h-3 w-3" />
+                                                    Scanner
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {barcodeScanReady && (
+                                        <p className="text-[11px] text-blue-600 dark:text-blue-400">
+                                            Scanner active — scan a barcode or type manually.
+                                        </p>
+                                    )}
                                     {errors.barcode && (
                                         <p className="text-xs text-destructive">{String(errors.barcode.message)}</p>
                                     )}
@@ -311,8 +385,16 @@ export function EditProductDialog({
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="edit_primary_image">Image URL</Label>
-                                <Input id="edit_primary_image" {...register("primary_image")} />
+                                <Label>Product Image</Label>
+                                <ImageUploadField
+                                    value={primaryImageUrl}
+                                    onChange={(url) => {
+                                        setPrimaryImageUrl(url);
+                                        setValue("primary_image", url);
+                                    }}
+                                    onUpload={handleImageUpload}
+                                    disabled={isSubmitting}
+                                />
                             </div>
 
                             <div className="flex items-center gap-3">

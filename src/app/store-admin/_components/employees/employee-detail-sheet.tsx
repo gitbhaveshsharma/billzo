@@ -114,8 +114,14 @@ export function EmployeeDetailSheet({
     if (!user) return null;
 
     const status = getUserStatusBadge(user);
-    const initials = getUserInitials(user.full_name);
-    const avatarColor = getAvatarColor(user.full_name);
+    // full_name comes from auth profile; fall back to employee first+last name
+    const displayName =
+        user.full_name ||
+        (user.employee
+            ? `${user.employee.first_name} ${user.employee.last_name}`.trim()
+            : null);
+    const initials = getUserInitials(displayName);
+    const avatarColor = getAvatarColor(displayName);
     const roleBadgeColor = getRoleBadgeColor(user.role_name);
     const employee = user.employee;
     const tenure = employee ? calculateTenure(employee.joining_date) : 0;
@@ -136,7 +142,7 @@ export function EmployeeDetailSheet({
                         </Avatar>
                         <div className="min-w-0 flex-1">
                             <SheetTitle className="text-lg truncate">
-                                {user.full_name || "Unnamed Employee"}
+                                {displayName || "Unnamed Employee"}
                             </SheetTitle>
                             <SheetDescription className="truncate">{user.email}</SheetDescription>
                             <div className="flex items-center gap-2 mt-1.5">

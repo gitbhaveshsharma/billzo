@@ -162,8 +162,11 @@ export const createProductSchema = z
         is_batch_tracked: z.boolean().default(false),
         is_taxable: z.boolean().default(true),
 
-        // Image
-        primary_image: z.string().url("Invalid image URL").transform(emptyToUndefined).optional(),
+        // Image — preprocess first so empty string becomes undefined before URL validation
+        primary_image: z.preprocess(
+            (val) => (val === "" || val === null ? undefined : val),
+            z.string().url("Invalid image URL").optional()
+        ),
     })
     .refine(
         (data) => data.selling_price <= data.mrp,
@@ -209,7 +212,11 @@ export const updateProductSchema = z
         is_active: z.boolean().optional(),
         is_taxable: z.boolean().optional(),
 
-        primary_image: z.string().url().transform(emptyToUndefined).optional(),
+        // Image — preprocess first so empty string becomes undefined before URL validation
+        primary_image: z.preprocess(
+            (val) => (val === "" || val === null ? undefined : val),
+            z.string().url().optional()
+        ),
     })
     .refine(
         (data) => {

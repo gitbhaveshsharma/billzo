@@ -167,6 +167,10 @@ interface ProductState {
     clearBatchesCache: (key?: string) => void;
     clearTransactionsCache: (key?: string) => void;
 
+    // Actions - Storage
+    uploadProductImage: (storeId: string, productId: string, file: File) => Promise<string | null>;
+    deleteProductImage: (publicUrl: string) => Promise<boolean>;
+
     // Actions - Reset
     reset: () => void;
 }
@@ -378,13 +382,18 @@ export const useProductStore = create<ProductState>()(
                     }
 
                     if (result.data) {
+                        // Three-layer merge: existing fields → server response → update
+                        // payload.  The update payload always wins so any read-replica
+                        // staleness in the GET can never overwrite what we just wrote.
                         set((state) => ({
                             products: state.products.map((p) =>
-                                p.id === productId ? result.data! : p
+                                p.id === productId
+                                    ? { ...p, ...result.data!, ...data }
+                                    : p
                             ),
                             currentProduct:
                                 state.currentProduct?.id === productId
-                                    ? { ...state.currentProduct, ...result.data! }
+                                    ? { ...state.currentProduct, ...result.data!, ...data }
                                     : state.currentProduct,
                             error: null,
                             isSaving: false,
@@ -1785,6 +1794,21 @@ export const useProductStore = create<ProductState>()(
                     }
                     return { transactionsCache: newCache };
                 });
+            },
+
+            // ================================================================
+            // STORAGE ACTIONS
+            // ================================================================
+
+            uploadProductImage: async (storeId: string, productId: string, file: File) => {
+                const result = await productService.uploadProductImage(storeId, productId, file);
+                if (result.error) return null;
+                return result.data;
+            },
+
+            deleteProductImage: async (publicUrl: string) => {
+                const result = await productService.deleteProductImage(publicUrl);
+                return !result.error;
             },
 
             // ================================================================

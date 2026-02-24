@@ -47,9 +47,12 @@ export default function PurchasePage() {
         isLoading,
         isSaving,
         selectedOrderIds,
+        currentOrder,
         fetchOrders,
         fetchDashboardStats,
+        fetchOrderById,
         createOrder,
+        updateOrder,
         confirmOrder,
         cancelOrder,
         deleteOrder,
@@ -70,6 +73,7 @@ export default function PurchasePage() {
     // ========================================================================
 
     const [createDialogOpen, setCreateDialogOpen] = useState(false);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [detailSheetOpen, setDetailSheetOpen] = useState(false);
     const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
     const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -122,8 +126,8 @@ export default function PurchasePage() {
                     setDetailSheetOpen(true);
                     break;
                 case "edit":
-                    // For now, open detail sheet for editing
-                    setDetailSheetOpen(true);
+                    fetchOrderById(storeId!, order.id);
+                    setEditDialogOpen(true);
                     break;
                 case "confirm":
                     handleConfirmOrder(order);
@@ -168,6 +172,19 @@ export default function PurchasePage() {
     // ========================================================================
     // CRUD HANDLERS
     // ========================================================================
+
+    const handleUpdateOrder = async (data: CreatePurchaseOrderRequest): Promise<boolean> => {
+        if (!storeId || !selectedOrder) return false;
+        const toastId = toast.loading("Updating purchase order...");
+        const success = await updateOrder(storeId, selectedOrder.id, data);
+        if (success) {
+            toast.success("Order updated", { id: toastId });
+            fetchDashboardStats(storeId);
+            return true;
+        }
+        toast.error("Failed to update order", { id: toastId });
+        return false;
+    };
 
     const handleCreateOrder = async (data: CreatePurchaseOrderRequest): Promise<boolean> => {
         if (!storeId) return false;
@@ -353,12 +370,26 @@ export default function PurchasePage() {
                 isSaving={isSaving}
             />
 
+            {/* Edit PO */}
+            <CreatePODialog
+                open={editDialogOpen}
+                onOpenChange={setEditDialogOpen}
+                storeId={storeId!}
+                editOrder={currentOrder?.id === selectedOrder?.id ? currentOrder : null}
+                onSubmit={handleUpdateOrder}
+                isSaving={isSaving}
+            />
+
             {/* PO Detail Sheet */}
             <PurchaseDetailSheet
                 open={detailSheetOpen}
                 onOpenChange={setDetailSheetOpen}
                 storeId={storeId!}
                 orderId={selectedOrder?.id ?? null}
+                onEdit={() => {
+                    setDetailSheetOpen(false);
+                    setEditDialogOpen(true);
+                }}
                 onReceive={() => {
                     setDetailSheetOpen(false);
                     setReceiveDialogOpen(true);

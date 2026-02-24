@@ -26,6 +26,7 @@ import {
     formatCurrency,
     calculateExpectedClosingCash,
 } from "@/utils/shifts.utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // ============================================================================
 // TYPES
@@ -108,7 +109,7 @@ export function CloseShiftDialog({
                 onOpenChange(isOpen);
             }}
         >
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Lock className="h-5 w-5 text-red-600" />
@@ -118,7 +119,7 @@ export function CloseShiftDialog({
                         Count the cash in your drawer and enter the actual amount below.
                     </DialogDescription>
                 </DialogHeader>
-
+<ScrollArea className="flex-1 min-h-0 overflow-x-hidden">
                 <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4 p-4">
                     {/* Cash Breakdown (read-only) */}
                     <div className="space-y-2 rounded-lg border bg-muted/50 p-3">
@@ -215,7 +216,6 @@ export function CloseShiftDialog({
                             {...register("closing_notes")}
                         />
                     </div>
-
                     <DialogFooter>
                         <Button
                             type="button"
@@ -234,6 +234,7 @@ export function CloseShiftDialog({
                         </Button>
                     </DialogFooter>
                 </form>
+</ScrollArea>
             </DialogContent>
         </Dialog>
     );

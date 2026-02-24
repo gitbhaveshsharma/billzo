@@ -300,7 +300,7 @@ export function BatchManager({ productId, storeId }: BatchManagerProps) {
 
             {/* Add/Edit Dialog */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>{isEdit ? "Edit Batch" : "Add Batch"}</DialogTitle>
                         <DialogDescription>
@@ -310,7 +310,7 @@ export function BatchManager({ productId, storeId }: BatchManagerProps) {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 py-2">
+                    <div className="space-y-4 p-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="batch_number">

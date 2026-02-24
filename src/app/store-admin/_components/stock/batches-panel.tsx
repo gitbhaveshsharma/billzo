@@ -4,10 +4,17 @@ import { useState, useCallback } from "react";
 import {
     CalendarClock,
     Filter,
+    Info,
     Package,
     Plus,
     AlertTriangle,
 } from "lucide-react";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,6 +47,29 @@ import type {
     EnrichedProductBatch,
     BatchFilters,
 } from "@/types/inventory.types";
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/** Column header with a small info tooltip */
+function TipHead({ children, tip }: { children: React.ReactNode; tip: string }) {
+    return (
+        <TooltipProvider delayDuration={200}>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <span className="flex items-center gap-1 cursor-default select-none">
+                        {children}
+                        <Info className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[220px] text-xs">
+                    {tip}
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    );
+}
 
 // ============================================================================
 // TYPES
@@ -162,15 +192,43 @@ export function BatchesPanel({
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Batch #</TableHead>
+                            <TableHead>
+                                <TipHead tip="Unique lot or batch identifier assigned by the manufacturer or auto-generated from the Purchase Order.">
+                                    Batch #
+                                </TipHead>
+                            </TableHead>
                             <TableHead>Product</TableHead>
                             <TableHead>Supplier</TableHead>
-                            <TableHead className="text-right">Initial Qty</TableHead>
-                            <TableHead className="text-right">Current Qty</TableHead>
-                            <TableHead className="text-right">Cost</TableHead>
-                            <TableHead>Mfg Date</TableHead>
-                            <TableHead>Expiry</TableHead>
-                            <TableHead>Expiry Status</TableHead>
+                            <TableHead className="text-right">
+                                <TipHead tip="Total quantity received when this batch was first purchased or received.">
+                                    Initial Qty
+                                </TipHead>
+                            </TableHead>
+                            <TableHead className="text-right">
+                                <TipHead tip="Remaining units in this batch after sales and adjustments. When this reaches zero the batch is automatically deactivated.">
+                                    Current Qty
+                                </TipHead>
+                            </TableHead>
+                            <TableHead className="text-right">
+                                <TipHead tip="Purchase price per unit when this batch was procured. Used for FIFO / weighted average cost calculations.">
+                                    Cost
+                                </TipHead>
+                            </TableHead>
+                            <TableHead>
+                                <TipHead tip="Date the product was manufactured. Used to calculate shelf life.">
+                                    Mfg Date
+                                </TipHead>
+                            </TableHead>
+                            <TableHead>
+                                <TipHead tip="Date after which this batch should not be sold. FEFO (First Expiry, First Out) ensures nearest-expiry batches are sold first at the POS.">
+                                    Expiry
+                                </TipHead>
+                            </TableHead>
+                            <TableHead>
+                                <TipHead tip="How soon this batch expires. Valid = more than 90 days left. Warning = 30–90 days. Critical = under 30 days. Expired = past expiry date.">
+                                    Expiry Status
+                                </TipHead>
+                            </TableHead>
                             <TableHead>Status</TableHead>
                         </TableRow>
                     </TableHeader>

@@ -9,8 +9,15 @@ import {
     DollarSign,
     CalendarClock,
     AlertTriangle,
+    Info,
     X,
 } from "lucide-react";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -138,22 +145,26 @@ export function InventoryDetailSheet({
                             <div className="grid grid-cols-2 gap-3">
                                 <DetailField
                                     label="On Hand"
+                                    tooltip="Total physical units currently in your store or warehouse. Includes both available stock and reserved stock."
                                     value={formatQuantity(item.quantity_on_hand)}
                                     mono
                                 />
                                 <DetailField
                                     label="Reserved"
+                                    tooltip="Units committed to pending sales orders or transfers but not yet dispatched. You cannot sell these until the order is cancelled or fulfilled."
                                     value={formatQuantity(item.quantity_committed)}
                                     mono
                                 />
                                 <DetailField
                                     label="Available"
+                                    tooltip="On Hand minus Reserved. This is the quantity you can freely sell or allocate right now."
                                     value={formatQuantity(item.quantity_available)}
                                     mono
                                     highlight
                                 />
                                 <DetailField
                                     label="Status"
+                                    tooltip="Stock health based on your reorder point. Normal = plenty of stock. Low = at or near reorder point. Out of Stock = zero units."
                                     value={
                                         <Badge
                                             variant="outline"
@@ -176,6 +187,7 @@ export function InventoryDetailSheet({
                             <div className="grid grid-cols-2 gap-3">
                                 <DetailField
                                     label="Average Cost"
+                                    tooltip="Weighted average purchase price across all batches received. Automatically recalculated each time new stock is purchased."
                                     value={
                                         item.average_cost != null
                                             ? formatCurrency(item.average_cost)
@@ -185,6 +197,7 @@ export function InventoryDetailSheet({
                                 />
                                 <DetailField
                                     label="Total Value"
+                                    tooltip="Average Cost × On Hand quantity. This is the book value of your current stock for this product."
                                     value={
                                         item.total_value != null
                                             ? formatCurrency(item.total_value)
@@ -206,20 +219,24 @@ export function InventoryDetailSheet({
                             <div className="grid grid-cols-2 gap-3">
                                 <DetailField
                                     label="Warehouse"
+                                    tooltip="Physical building or storage facility where this stock is held."
                                     value={item.warehouse ?? "-"}
                                 />
                                 <DetailField
                                     label="Location"
+                                    tooltip="Exact shelf, bin, or rack within the warehouse — e.g. A-3-B means Aisle A, Row 3, Bin B."
                                     value={item.location ?? "-"}
                                     icon={<MapPin className="h-3 w-3" />}
                                 />
                                 <DetailField
                                     label="Reorder Point"
+                                    tooltip="When On Hand drops to or below this number, the system raises a Low Stock alert and suggests creating a purchase order."
                                     value={formatQuantity(item.reorder_point)}
                                     mono
                                 />
                                 <DetailField
                                     label="Maximum Stock"
+                                    tooltip="Upper inventory limit. If On Hand exceeds this, an overstock alert is raised. Helps prevent over-purchasing and frees up cash."
                                     value={
                                         item.maximum_stock != null
                                             ? formatQuantity(item.maximum_stock)
@@ -242,21 +259,25 @@ export function InventoryDetailSheet({
                                     <div className="grid grid-cols-2 gap-3">
                                         <DetailField
                                             label="Barcode"
+                                            tooltip="Scannable barcode used at the POS counter to look up this product instantly."
                                             value={item.product.barcode ?? "-"}
                                             mono
                                         />
                                         <DetailField
                                             label="HSN Code"
+                                            tooltip="Harmonised System of Nomenclature code. Required for GST invoicing and tax filing in India."
                                             value={item.product.hsn_code ?? "-"}
                                             mono
                                         />
                                         <DetailField
                                             label="MRP"
+                                            tooltip="Maximum Retail Price — the highest price at which this product can legally be sold to an end customer."
                                             value={formatCurrency(item.product.mrp)}
                                             mono
                                         />
                                         <DetailField
                                             label="Selling Price"
+                                            tooltip="The price charged to customers at this store. Must be ≤ MRP."
                                             value={formatCurrency(item.product.selling_price)}
                                             mono
                                         />
@@ -266,6 +287,7 @@ export function InventoryDetailSheet({
                                         />
                                         <DetailField
                                             label="Batch Tracked"
+                                            tooltip="When enabled, stock is managed per batch/lot (with manufacturing & expiry dates). Required for medicines, food items, and any product with expiry dates."
                                             value={item.product.is_batch_tracked ? "Yes" : "No"}
                                         />
                                     </div>
@@ -414,22 +436,38 @@ interface DetailFieldProps {
     mono?: boolean;
     highlight?: boolean;
     icon?: React.ReactNode;
+    tooltip?: string;
 }
 
-function DetailField({ label, value, mono, highlight, icon }: DetailFieldProps) {
+function DetailField({ label, value, mono, highlight, icon, tooltip }: DetailFieldProps) {
     return (
         <div className="space-y-1">
             <p className="text-xs text-muted-foreground flex items-center gap-1">
                 {icon}
                 {label}
+                {tooltip && (
+                    <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="cursor-default">
+                                    <Info className="h-3 w-3 text-muted-foreground/50 hover:text-muted-foreground transition-colors" />
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[220px] text-xs">
+                                {tooltip}
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
             </p>
-            <p
+            {/* Use div instead of p to allow block-level children like Badge */}
+            <div
                 className={`text-sm ${mono ? "font-mono" : ""} ${
                     highlight ? "font-semibold text-primary" : ""
                 }`}
             >
                 {value}
-            </p>
+            </div>
         </div>
     );
 }

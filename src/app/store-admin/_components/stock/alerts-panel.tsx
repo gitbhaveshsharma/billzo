@@ -5,9 +5,16 @@ import {
     AlertTriangle,
     CheckCircle2,
     Filter,
+    Info,
     ShieldAlert,
     Package,
 } from "lucide-react";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -53,6 +60,29 @@ import {
     type AlertType,
     type AlertSeverity,
 } from "@/types/inventory.types";
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/** Column header with an inline info tooltip */
+function TipHead({ children, tip }: { children: React.ReactNode; tip: string }) {
+    return (
+        <TooltipProvider delayDuration={200}>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <span className="flex items-center gap-1 cursor-default select-none">
+                        {children}
+                        <Info className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+                    </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[220px] text-xs">
+                    {tip}
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    );
+}
 
 // ============================================================================
 // TYPES
@@ -239,11 +269,31 @@ export function AlertsPanel({
                                 />
                             </TableHead>
                             <TableHead>Product</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Severity</TableHead>
-                            <TableHead className="text-right">Current Qty</TableHead>
-                            <TableHead className="text-right">Threshold</TableHead>
-                            <TableHead>Status</TableHead>
+                            <TableHead>
+                                <TipHead tip="The kind of stock problem detected: Low Stock, Out of Stock, or Expiry warning.">
+                                    Type
+                                </TipHead>
+                            </TableHead>
+                            <TableHead>
+                                <TipHead tip="How urgent this alert is. Critical requires immediate action; Medium can be scheduled.">
+                                    Severity
+                                </TipHead>
+                            </TableHead>
+                            <TableHead className="text-right">
+                                <TipHead tip="Stock quantity recorded at the moment this alert was triggered. This is a snapshot — check the Inventory tab for the live current quantity.">
+                                    Qty at Alert
+                                </TipHead>
+                            </TableHead>
+                            <TableHead className="text-right">
+                                <TipHead tip="The quantity level that caused this alert to fire (e.g. the product's Reorder Point). When On Hand falls at or below this, an alert is raised.">
+                                    Threshold
+                                </TipHead>
+                            </TableHead>
+                            <TableHead>
+                                <TipHead tip="Open = alert is active and needs attention. Resolved = someone has acknowledged and closed this alert.">
+                                    Status
+                                </TipHead>
+                            </TableHead>
                             <TableHead>Created</TableHead>
                             <TableHead className="w-24">Action</TableHead>
                         </TableRow>
@@ -307,7 +357,18 @@ export function AlertsPanel({
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right font-mono">
-                                        {alert.current_quantity ?? "-"}
+                                        <TooltipProvider delayDuration={200}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <span className="cursor-default border-b border-dashed border-muted-foreground/40">
+                                                        {alert.current_quantity ?? "-"}
+                                                    </span>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="top" className="max-w-[220px] text-xs">
+                                                    Snapshot taken when this alert was triggered. Open the Inventory tab to see the live quantity.
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
                                     </TableCell>
                                     <TableCell className="text-right font-mono">
                                         {alert.threshold_quantity ?? "-"}

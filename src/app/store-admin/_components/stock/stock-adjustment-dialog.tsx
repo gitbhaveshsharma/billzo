@@ -102,7 +102,7 @@ export function StockAdjustmentDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Stock Adjustment</DialogTitle>
                     <DialogDescription>
@@ -116,7 +116,7 @@ export function StockAdjustmentDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4">
+                <div className="space-y-4 p-4">
                     {/* Adjustment Type */}
                     <div className="space-y-2">
                         <Label>Adjustment Type *</Label>

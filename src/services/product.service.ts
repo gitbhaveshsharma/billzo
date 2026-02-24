@@ -54,6 +54,65 @@ const getClient = () => createClient();
 
 export const productService = {
     // ========================================================================
+    // STORAGE — PRODUCT IMAGES
+    // ========================================================================
+
+    /**
+     * Upload a product image to the `product-images` bucket.
+     * Path: {storeId}/{productId}/{timestamp}-{filename}
+     * Returns the public CDN URL on success.
+     */
+    uploadProductImage: async (
+        storeId: string,
+        productId: string,
+        file: File
+    ): Promise<ServiceResponse<string>> => {
+        try {
+            const ext = file.name.split(".").pop() ?? "jpg";
+            const path = `${storeId}/${productId}/${Date.now()}.${ext}`;
+
+            const { error: uploadError } = await getClient()
+                .storage
+                .from("product-images")
+                .upload(path, file, { upsert: true, contentType: file.type });
+
+            if (uploadError) return { data: null, error: uploadError.message };
+
+            const { data } = getClient()
+                .storage
+                .from("product-images")
+                .getPublicUrl(path);
+
+            return { data: data.publicUrl, error: null };
+        } catch {
+            return { data: null, error: "Failed to upload image" };
+        }
+    },
+
+    /**
+     * Delete a product image from storage by its public URL.
+     */
+    deleteProductImage: async (publicUrl: string): Promise<ServiceResponse<null>> => {
+        try {
+            // Extract the path after "/product-images/"
+            const marker = "/product-images/";
+            const idx = publicUrl.indexOf(marker);
+            if (idx === -1) return { data: null, error: "Invalid image URL" };
+            const path = publicUrl.slice(idx + marker.length);
+
+            const { error } = await getClient()
+                .storage
+                .from("product-images")
+                .remove([path]);
+
+            if (error) return { data: null, error: error.message };
+            return { data: null, error: null };
+        } catch {
+            return { data: null, error: "Failed to delete image" };
+        }
+    },
+
+    // ========================================================================
     // PRODUCT CRUD
     // ========================================================================
 
@@ -231,19 +290,46 @@ export const productService = {
         data: UpdateProductRequest
     ): Promise<ServiceResponse<Product>> => {
         try {
-            const { data: product, error } = await getClient()
+            const updatedAt = new Date().toISOString();
+
+            // Use Prefer: return=representation so the updated row is returned from
+            // the same write connection — no read-replica staleness.
+            // If RLS silently blocks the UPDATE (USING clause fails), Supabase returns
+            // 204 with no row, causing `updated` to be null with no error object.
+            // We detect that case and surface a real error instead of silently
+            // falling back to a GET of the stale row.
+            const { data: updated, error: updateError } = await getClient()
                 .from("products")
                 .update({
                     ...data,
-                    updated_at: new Date().toISOString(),
+                    updated_at: updatedAt,
                 } as never)
                 .eq("id", productId)
                 .eq("store_id", storeId)
-                .select()
-                .single();
+                .select("*")
+                .maybeSingle();
 
-            if (error) return { data: null, error: error.message };
-            return { data: product as unknown as Product, error: null };
+            if (updateError) return { data: null, error: updateError.message };
+
+            if (!updated) {
+                // 204 with no row returned → RLS USING clause silently blocked the
+                // UPDATE (0 rows affected).  The user can read the row but lacks
+                // write permission.  Surface this as a real error.
+                return {
+                    data: null,
+                    error: "Update failed: your role does not have permission to modify this product. Run the latest migration (12_fix_role_permissions_and_has_permission.sql) to grant store_admin write access.",
+                };
+            }
+
+            // Merge server-returned row with the local payload so that any
+            // fields the UPDATE set are guaranteed to reflect the new value.
+            const merged = {
+                ...(updated as unknown as Product),
+                ...data,
+                updated_at: updatedAt,
+            } as Product;
+
+            return { data: merged, error: null };
         } catch {
             return { data: null, error: "Failed to update product" };
         }

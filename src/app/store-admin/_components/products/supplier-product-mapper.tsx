@@ -330,7 +330,7 @@ export function SupplierProductMapper({
 
             {/* Add/Edit Dialog */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>
                             {isEdit ? "Edit Supplier Mapping" : "Add Supplier Mapping"}
@@ -342,7 +342,7 @@ export function SupplierProductMapper({
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 py-2">
+                    <div className="space-y-4 p-4">
                         <div className="space-y-2">
                             <Label>
                                 Supplier <span className="text-destructive">*</span>
