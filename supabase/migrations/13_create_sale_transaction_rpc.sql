@@ -1,23 +1,34 @@
 -- ============================================================================
--- Migration: create_sale_transaction RPC
--- Single DB roundtrip for POS sale commit
--- Replaces: create sale + insert items + add payments + complete_sale
+-- FIX: create_sale_transaction RPC
+-- 
+-- Root cause: "cannot extract elements from a scalar"
+--
+-- payload->'tags' when tags is JSON null returns a jsonb scalar null value.
+-- In PostgreSQL, jsonb null IS NOT NULL evaluates to TRUE (it's a valid jsonb
+-- value, not SQL NULL). So the old check:
+--   CASE WHEN payload->'tags' IS NOT NULL THEN ARRAY(SELECT jsonb_array_elements_text(...))
+-- ...tried to extract elements from a scalar null → error.
+--
+-- Fix: replace all IS NOT NULL checks on jsonb array fields with:
+--   jsonb_typeof(payload->'field') = 'array'
+-- This correctly distinguishes real arrays from null/scalar values.
+--
+-- Also fixed: change_returned → change_amount field name mismatch in payments.
 -- ============================================================================
 
--- Drop if exists to make migration re-runnable
 DROP FUNCTION IF EXISTS create_sale_transaction(jsonb);
 
 CREATE OR REPLACE FUNCTION create_sale_transaction(payload jsonb)
 RETURNS jsonb AS $$
 DECLARE
-    v_sale_id       UUID;
-    v_user_id       UUID;
-    v_store_id      UUID;
+    v_sale_id        UUID;
+    v_user_id        UUID;
+    v_store_id       UUID;
     v_invoice_number TEXT;
-    v_total_paid    DECIMAL(12,2) := 0;
-    v_sale_status   sale_status;
-    v_item          jsonb;
-    v_payment       jsonb;
+    v_total_paid     DECIMAL(12,2) := 0;
+    v_sale_status    sale_status;
+    v_item           jsonb;
+    v_payment        jsonb;
 BEGIN
     -- ====================================================================
     -- 1. EXTRACT IDS
@@ -31,6 +42,16 @@ BEGIN
 
     IF v_store_id IS NULL THEN
         RETURN jsonb_build_object('success', false, 'error', 'store_id is required');
+    END IF;
+
+    -- Guard: items must be a JSON array
+    IF jsonb_typeof(payload->'items') <> 'array' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'items must be an array');
+    END IF;
+
+    -- Guard: payments must be a JSON array
+    IF jsonb_typeof(payload->'payments') <> 'array' THEN
+        RETURN jsonb_build_object('success', false, 'error', 'payments must be an array');
     END IF;
 
     -- ====================================================================
@@ -80,7 +101,8 @@ BEGIN
         END,
         payload->>'notes',
         payload->>'internal_notes',
-        CASE WHEN payload->'tags' IS NOT NULL
+        -- FIX: use jsonb_typeof to safely check for array before extracting
+        CASE WHEN jsonb_typeof(payload->'tags') = 'array'
              THEN ARRAY(SELECT jsonb_array_elements_text(payload->'tags'))
              ELSE NULL
         END,
@@ -96,7 +118,7 @@ BEGIN
     RETURNING id INTO v_sale_id;
 
     -- ====================================================================
-    -- 3. INSERT SALE ITEMS (bulk from JSON array)
+    -- 3. INSERT SALE ITEMS
     -- ====================================================================
     FOR v_item IN SELECT jsonb_array_elements(payload->'items')
     LOOP
@@ -114,7 +136,9 @@ BEGIN
             cess_percentage, cess_amount,
             tax_amount, total_amount,
             total_cost, profit_amount, profit_percentage,
-            serial_numbers, sort_order
+            -- FIX: use jsonb_typeof to safely check serial_numbers array
+            serial_numbers,
+            sort_order
         ) VALUES (
             v_sale_id,
             v_store_id,
@@ -156,7 +180,8 @@ BEGIN
                  THEN (v_item->>'profit_amount')::DECIMAL ELSE NULL END,
             CASE WHEN v_item->>'profit_percentage' IS NOT NULL
                  THEN (v_item->>'profit_percentage')::DECIMAL ELSE NULL END,
-            CASE WHEN v_item->'serial_numbers' IS NOT NULL
+            -- FIX: jsonb_typeof guard on serial_numbers
+            CASE WHEN jsonb_typeof(v_item->'serial_numbers') = 'array'
                  THEN ARRAY(SELECT jsonb_array_elements_text(v_item->'serial_numbers'))
                  ELSE NULL END,
             COALESCE((v_item->>'sort_order')::INT, 0)
@@ -164,7 +189,7 @@ BEGIN
     END LOOP;
 
     -- ====================================================================
-    -- 4. INSERT PAYMENTS (bulk from JSON array)
+    -- 4. INSERT PAYMENTS
     -- ====================================================================
     FOR v_payment IN SELECT jsonb_array_elements(payload->'payments')
     LOOP
@@ -181,8 +206,15 @@ BEGIN
             (v_payment->>'amount')::DECIMAL,
             CASE WHEN v_payment->>'cash_tendered' IS NOT NULL
                  THEN (v_payment->>'cash_tendered')::DECIMAL ELSE NULL END,
-            CASE WHEN v_payment->>'change_amount' IS NOT NULL
-                 THEN (v_payment->>'change_amount')::DECIMAL ELSE NULL END,
+            -- FIX: frontend sends 'change_returned', SQL column is 'change_amount'
+            -- Accept both field names so either works
+            CASE
+                WHEN v_payment->>'change_amount' IS NOT NULL
+                     THEN (v_payment->>'change_amount')::DECIMAL
+                WHEN v_payment->>'change_returned' IS NOT NULL
+                     THEN (v_payment->>'change_returned')::DECIMAL
+                ELSE NULL
+            END,
             v_payment->>'reference_number',
             v_payment->>'notes',
             'SUCCESS'::payment_record_status,
@@ -198,13 +230,16 @@ BEGIN
     v_invoice_number := generate_invoice_number(v_store_id, 'INVOICE');
 
     -- ====================================================================
-    -- 6. FINALIZE — Update sale status (triggers inventory deduction)
+    -- 6. FINALIZE SALE STATUS
     -- ====================================================================
     v_sale_status := CASE
-        WHEN v_total_paid >= COALESCE((payload->>'total_amount')::DECIMAL, 0) THEN 'COMPLETED'
-        WHEN v_total_paid > 0 THEN 'PARTIAL_PAID'
-        WHEN COALESCE((payload->>'is_credit_sale')::BOOLEAN, false) THEN 'CREDIT'
-        ELSE 'PARTIAL_PAID'
+        WHEN v_total_paid >= COALESCE((payload->>'total_amount')::DECIMAL, 0)
+             THEN 'COMPLETED'::sale_status
+        WHEN v_total_paid > 0
+             THEN 'PARTIAL_PAID'::sale_status
+        WHEN COALESCE((payload->>'is_credit_sale')::BOOLEAN, false)
+             THEN 'CREDIT'::sale_status
+        ELSE 'PARTIAL_PAID'::sale_status
     END;
 
     UPDATE sales SET
@@ -223,7 +258,7 @@ BEGIN
     WHERE id = v_sale_id;
 
     -- ====================================================================
-    -- 7. RETURN RESULT
+    -- 7. RETURN
     -- ====================================================================
     RETURN jsonb_build_object(
         'success',        true,
@@ -234,7 +269,6 @@ BEGIN
     );
 
 EXCEPTION WHEN OTHERS THEN
-    -- Any error → entire transaction rolls back automatically
     RETURN jsonb_build_object(
         'success', false,
         'error',   SQLERRM
@@ -242,5 +276,4 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- Grant execute to authenticated users
 GRANT EXECUTE ON FUNCTION create_sale_transaction(jsonb) TO authenticated;
