@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type {} from "@/types/web-hardware.d";
+import type { } from "@/types/web-hardware.d";
 
 // ============================================================================
 // TYPES
@@ -41,6 +41,81 @@ export interface PrinterConfig {
   useWebUsb: boolean;
 }
 
+// ============================================================================
+// RECEIPT LAYOUT CONFIG
+// ============================================================================
+
+/** Visual style / layout template for the receipt */
+export type ReceiptLayout =
+  | "thermal-compact"   // 58mm/80mm — minimal, fast
+  | "thermal-detailed"  // 80mm — full breakdown, GST
+  | "invoice-a5"        // A5 — half-page invoice
+  | "invoice-a4";       // A4 — full-page professional invoice
+
+/** Paper size for printing */
+export type ReceiptPaperSize = 58 | 80 | "A5" | "A4";
+
+/** Font size scale for receipt text */
+export type ReceiptFontSize = "small" | "medium" | "large";
+
+export interface ReceiptLayoutConfig {
+  // ── Template ──────────────────────────────────────────────────────────
+  layout: ReceiptLayout;
+  paperSize: ReceiptPaperSize;
+  fontSize: ReceiptFontSize;
+  printCopies: 1 | 2 | 3;
+  autoPrint: boolean;
+
+  // ── Header section ────────────────────────────────────────────────────
+  showLogo: boolean;
+  showStoreName: boolean;
+  showStoreAddress: boolean;
+  showStorePhone: boolean;
+  showStoreGstin: boolean;
+  headerNote: string;          // custom text below store info
+
+  // ── Body / line-items ─────────────────────────────────────────────────
+  showHsn: boolean;            // HSN/SAC code per item
+  showItemDiscount: boolean;   // per-line discount amount
+  showQty: boolean;            // quantity column
+  showRate: boolean;           // unit rate column
+  showGstBreakdown: boolean;   // CGST / SGST / IGST rows
+  showCustomerInfo: boolean;   // customer name & phone
+
+  // ── Footer section ────────────────────────────────────────────────────
+  footerText: string;          // e.g. "Visit again!"
+  showThankYou: boolean;
+  showBarcode: boolean;        // invoice number barcode
+  showQrCode: boolean;         // UPI / payment QR
+}
+
+export const DEFAULT_RECEIPT_LAYOUT_CONFIG: ReceiptLayoutConfig = {
+  layout: "thermal-detailed",
+  paperSize: 80,
+  fontSize: "small",
+  printCopies: 1,
+  autoPrint: false,
+
+  showLogo: false,
+  showStoreName: true,
+  showStoreAddress: true,
+  showStorePhone: true,
+  showStoreGstin: true,
+  headerNote: "",
+
+  showHsn: false,
+  showItemDiscount: true,
+  showQty: true,
+  showRate: true,
+  showGstBreakdown: true,
+  showCustomerInfo: true,
+
+  footerText: "Thank you for your purchase!",
+  showThankYou: true,
+  showBarcode: false,
+  showQrCode: false,
+};
+
 export interface ScanLogEntry {
   barcode: string;
   timestamp: Date;
@@ -56,6 +131,7 @@ export interface HardwareState {
   scanLog: ScanLogEntry[];
   scannerConfig: ScannerConfig;
   printerConfig: PrinterConfig;
+  receiptLayoutConfig: ReceiptLayoutConfig;
 }
 
 const DEFAULT_SCANNER_CONFIG: ScannerConfig = {
@@ -81,6 +157,7 @@ export function useHardware() {
   const [scanLog, setScanLog] = useState<ScanLogEntry[]>([]);
   const [scannerConfig, setScannerConfig] = useState<ScannerConfig>(DEFAULT_SCANNER_CONFIG);
   const [printerConfig, setPrinterConfig] = useState<PrinterConfig>(DEFAULT_PRINTER_CONFIG);
+  const [receiptLayoutConfig, setReceiptLayoutConfig] = useState<ReceiptLayoutConfig>(DEFAULT_RECEIPT_LAYOUT_CONFIG);
   const [isDetecting, setIsDetecting] = useState(false);
 
   // For keyboard-wedge barcode scanner detection
@@ -207,7 +284,7 @@ export function useHardware() {
       console.log("[HW-Scanner] 🔇 Keyboard-wedge listener STOPPED");
       document.removeEventListener("keydown", handleKeypress, true);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // No deps! Listener is stable — reads config from scannerConfigRef
 
   // ========================================================================
@@ -564,6 +641,7 @@ export function useHardware() {
     scanLog,
     scannerConfig,
     printerConfig,
+    receiptLayoutConfig,
     isDetecting,
 
     // Scanner actions
@@ -585,5 +663,6 @@ export function useHardware() {
     // Config
     setScannerConfig,
     setPrinterConfig,
+    setReceiptLayoutConfig,
   };
 }

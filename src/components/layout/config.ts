@@ -237,13 +237,13 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
         href: "/store-admin/purchase",
         roles: ["store_admin", "super_admin"],
       },
-       {
+      {
         id: "admin-inventory-sales",
         label: "Sales",
         href: "/store-admin/sales",
         roles: ["store_admin", "super_admin"],
       },
-     {
+      {
         id: "admin-inventory-shifts",
         label: "Shifts",
         href: "/store-admin/shifts",
@@ -324,6 +324,72 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
         id: "admin-settings-hardware",
         label: "Hardware",
         href: "/store-admin/settings/hardware",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-tax",
+        label: "Tax & GST",
+        href: "/store-admin/settings/tax",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-invoice",
+        label: "Invoice",
+        href: "/store-admin/settings/invoice",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-business-hours",
+        label: "Business Hours",
+        href: "/store-admin/settings/business-hours",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-currency",
+        label: "Currency",
+        href: "/store-admin/settings/currency",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-payment-gateway",
+        label: "Payment Gateway",
+        href: "/store-admin/settings/payment-gateway",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-discount",
+        label: "Discounts",
+        href: "/store-admin/settings/discount",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-inventory",
+        label: "Inventory",
+        href: "/store-admin/settings/inventory",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-sales",
+        label: "Sales",
+        href: "/store-admin/settings/sales",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-pos",
+        label: "POS Terminal",
+        href: "/store-admin/settings/pos",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-notifications",
+        label: "Notifications",
+        href: "/store-admin/settings/notifications",
+        roles: ["store_admin", "super_admin"],
+      },
+      {
+        id: "admin-settings-backup",
+        label: "Backup",
+        href: "/store-admin/settings/backup",
         roles: ["store_admin", "super_admin"],
       },
     ],
