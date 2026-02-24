@@ -1,4 +1,5 @@
 import type { Database, StoreType, GstCalculationMethod } from "./database.types";
+import type { ReceiptLayoutConfig } from "@/hooks/use-hardware";
 
 // ============================================================================
 // STORE TABLE TYPES
@@ -153,6 +154,8 @@ export interface PrinterSettings {
   print_copies: number;
   auto_print: boolean;
   cut_paper: boolean;
+  /** Full receipt layout/print config — stored as JSONB sub-field */
+  receipt_layout_config: ReceiptLayoutConfig | null;
 }
 
 // -- Business Hours ----------------------------------------------------------

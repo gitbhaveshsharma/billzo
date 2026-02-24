@@ -13,9 +13,10 @@ interface StoreState {
   isLoading: boolean;
   error: string | null;
 
-  // -- Receipt config (persisted) --
-  /** Persisted receipt layout / print settings for this store */
+  // -- Receipt config (persisted locally + synced to DB) --
+  /** Receipt layout / print settings. Persisted locally and in store_settings.printer_settings */
   receiptConfig: ReceiptLayoutConfig;
+  isSavingReceiptConfig: boolean;
 
   // -- Store settings --
   storeSettings: StoreSettings | null;
@@ -27,7 +28,10 @@ interface StoreState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   updateStatus: (status: string) => void;
+  /** Patch receiptConfig locally (live preview). Call saveReceiptConfig to persist to DB. */
   updateReceiptConfig: (patch: Partial<ReceiptLayoutConfig>) => void;
+  /** Save the current receiptConfig to the DB via store_settings.printer_settings */
+  saveReceiptConfig: (storeId: string) => Promise<{ success: boolean; error?: string }>;
 
   // -- Settings actions --
   fetchSettings: (storeId: string) => Promise<void>;
@@ -49,6 +53,7 @@ export const useStoreStore = create<StoreState>()(
       isLoading: false,
       error: null,
       receiptConfig: DEFAULT_RECEIPT_LAYOUT_CONFIG,
+      isSavingReceiptConfig: false,
       storeSettings: null,
       isSettingsLoading: false,
       settingsError: null,
@@ -70,6 +75,30 @@ export const useStoreStore = create<StoreState>()(
           receiptConfig: { ...state.receiptConfig, ...patch },
         })),
 
+      saveReceiptConfig: async (storeId: string) => {
+        set({ isSavingReceiptConfig: true });
+        const config = get().receiptConfig;
+        const result = await get().updateSettings(storeId, {
+          printer_settings: {
+            receipt_layout_config: config,
+            // Keep the top-level fields in sync with ReceiptLayoutConfig for
+            // callers that read printer_settings directly (ESC/POS drivers, etc.)
+            paper_width: typeof config.paperSize === "number"
+              ? (config.paperSize as 58 | 80)
+              : 80,
+            print_copies: config.printCopies,
+            auto_print: config.autoPrint,
+            show_barcode: config.showBarcode,
+            show_qr_code: config.showQrCode,
+            show_logo: config.showLogo,
+            header: config.headerNote,
+            footer: config.footerText,
+          },
+        });
+        set({ isSavingReceiptConfig: false });
+        return result;
+      },
+
       // -- Settings actions --
       fetchSettings: async (storeId: string) => {
         set({ isSettingsLoading: true, settingsError: null });
@@ -78,7 +107,15 @@ export const useStoreStore = create<StoreState>()(
           set({ settingsError: error, isSettingsLoading: false });
           return;
         }
-        set({ storeSettings: data, isSettingsLoading: false });
+        // Sync receiptConfig from DB if available
+        const dbReceiptConfig = data?.printer_settings?.receipt_layout_config;
+        set({
+          storeSettings: data,
+          isSettingsLoading: false,
+          ...(dbReceiptConfig
+            ? { receiptConfig: { ...DEFAULT_RECEIPT_LAYOUT_CONFIG, ...dbReceiptConfig } }
+            : {}),
+        });
       },
 
       updateSettings: async (storeId: string, updates: StoreSettingsUpdate) => {
@@ -109,7 +146,15 @@ export const useStoreStore = create<StoreState>()(
         return { success: true };
       },
 
-      setStoreSettings: (settings) => set({ storeSettings: settings }),
+      setStoreSettings: (settings) => {
+        const dbReceiptConfig = settings?.printer_settings?.receipt_layout_config;
+        set({
+          storeSettings: settings,
+          ...(dbReceiptConfig
+            ? { receiptConfig: { ...DEFAULT_RECEIPT_LAYOUT_CONFIG, ...dbReceiptConfig } }
+            : {}),
+        });
+      },
 
       // -- Reset --
       reset: () =>
@@ -117,6 +162,8 @@ export const useStoreStore = create<StoreState>()(
           store: null,
           isLoading: false,
           error: null,
+          receiptConfig: DEFAULT_RECEIPT_LAYOUT_CONFIG,
+          isSavingReceiptConfig: false,
           storeSettings: null,
           isSettingsLoading: false,
           settingsError: null,
@@ -126,6 +173,7 @@ export const useStoreStore = create<StoreState>()(
       name: "store-storage",
       partialize: (state) => ({
         store: state.store,
+        // Keep receiptConfig locally as an offline fallback; the DB is the source of truth
         receiptConfig: state.receiptConfig,
       }),
     }
@@ -157,8 +205,17 @@ function flattenSettingsUpdate(
     };
   if (updates.invoice_settings)
     result.invoice_settings = { ...current.invoice_settings, ...updates.invoice_settings };
-  if (updates.printer_settings)
-    result.printer_settings = { ...current.printer_settings, ...updates.printer_settings };
+  if (updates.printer_settings) {
+    result.printer_settings = {
+      ...current.printer_settings,
+      ...updates.printer_settings,
+      // Deep-merge receipt_layout_config if both sides have it
+      receipt_layout_config:
+        updates.printer_settings.receipt_layout_config !== undefined
+          ? updates.printer_settings.receipt_layout_config
+          : current.printer_settings.receipt_layout_config,
+    };
+  }
   if (updates.business_hours)
     result.business_hours = { ...current.business_hours, ...updates.business_hours };
   if (updates.holidays !== undefined) result.holidays = updates.holidays;

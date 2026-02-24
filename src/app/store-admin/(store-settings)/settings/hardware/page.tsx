@@ -43,12 +43,14 @@ import { useHardware, type ConnectionStatus, type HardwareDevice } from "@/hooks
 import { cn } from "@/lib/utils";
 import { ReceiptLayoutEditor } from "@/components/shared/receipt-layout-editor";
 import { useStoreStore } from "@/stores/store.store";
+import { useStoreAdmin } from "../../../_context/store-admin-context";
 
 // ============================================================================
 // HARDWARE SETTINGS PAGE
 // ============================================================================
 
 export default function HardwareSettingsPage() {
+  const { storeId, store } = useStoreAdmin();
   const {
     scanners,
     printers,
@@ -57,16 +59,13 @@ export default function HardwareSettingsPage() {
     lastScannedBarcode,
     scanLog,
     scannerConfig,
-    printerConfig,
     isDetecting,
     connectSerialScanner,
-    disconnectSerialScanner,
     connectUsbPrinter,
     detectAllDevices,
     testScanner,
     testPrinter,
     setScannerConfig,
-    setPrinterConfig,
   } = useHardware();
 
   const [isScannerTesting, setIsScannerTesting] = useState(false);
@@ -74,8 +73,22 @@ export default function HardwareSettingsPage() {
   const [scannerTestResult, setScannerTestResult] = useState<boolean | null>(null);
   const [printerTestResult, setPrinterTestResult] = useState<boolean | null>(null);
 
-  // Receipt layout config (persisted in store)
-  const { receiptConfig, updateReceiptConfig } = useStoreStore();
+  // Receipt layout config — persisted in store_settings (DB-backed)
+  const {
+    receiptConfig,
+    updateReceiptConfig,
+    saveReceiptConfig,
+    isSavingReceiptConfig,
+    fetchSettings,
+    storeSettings,
+  } = useStoreStore();
+
+  // Ensure settings are loaded (needed for the save action)
+  useEffect(() => {
+    if (storeId && !storeSettings) {
+      fetchSettings(storeId);
+    }
+  }, [storeId, storeSettings, fetchSettings]);
 
   // Auto-detect on mount
   useEffect(() => {
@@ -130,6 +143,19 @@ export default function HardwareSettingsPage() {
       toast.error("Failed to connect. Ensure browser supports Web USB API.");
     }
   }, [connectUsbPrinter]);
+
+  const handleSaveReceiptConfig = useCallback(async () => {
+    if (!storeId) {
+      toast.error("No store loaded — cannot save settings.");
+      return;
+    }
+    const result = await saveReceiptConfig(storeId);
+    if (result.success) {
+      toast.success("Receipt layout saved!");
+    } else {
+      toast.error(result.error ?? "Failed to save receipt layout.");
+    }
+  }, [storeId, saveReceiptConfig]);
 
   // ========================================================================
   // STATUS HELPERS
@@ -594,12 +620,11 @@ export default function HardwareSettingsPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Paper Width</Label>
                 <Select
-                  value={String(printerConfig.paperWidth)}
+                  value={String(receiptConfig.paperSize)}
                   onValueChange={(val) =>
-                    setPrinterConfig((prev) => ({
-                      ...prev,
-                      paperWidth: parseInt(val) as 58 | 80,
-                    }))
+                    updateReceiptConfig({
+                      paperSize: (isNaN(Number(val)) ? val : Number(val)) as typeof receiptConfig.paperSize,
+                    })
                   }
                 >
                   <SelectTrigger className="h-9">
@@ -608,12 +633,17 @@ export default function HardwareSettingsPage() {
                   <SelectContent>
                     <SelectItem value="58">58mm (2 inch)</SelectItem>
                     <SelectItem value="80">80mm (3 inch)</SelectItem>
+                    <SelectItem value="A5">A5 (148×210mm)</SelectItem>
+                    <SelectItem value="A4">A4 (210×297mm)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border">
                 <Label className="text-xs text-muted-foreground">Auto-print on sale</Label>
-                <Switch defaultChecked={false} />
+                <Switch
+                  checked={receiptConfig.autoPrint}
+                  onCheckedChange={(v) => updateReceiptConfig({ autoPrint: v })}
+                />
               </div>
             </div>
           </div>
@@ -673,6 +703,18 @@ export default function HardwareSettingsPage() {
           <ReceiptLayoutEditor
             config={receiptConfig}
             onChange={updateReceiptConfig}
+            onSave={handleSaveReceiptConfig}
+            isSaving={isSavingReceiptConfig}
+            storeName={store?.name}
+            storeAddress={
+              store
+                ? [store.address_line1, store.city, store.state]
+                    .filter(Boolean)
+                    .join(", ")
+                : undefined
+            }
+            storePhone={store?.phone ?? undefined}
+            storeGstin={store?.gstin ?? undefined}
           />
         </CardContent>
       </Card>

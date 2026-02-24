@@ -1110,47 +1110,66 @@ export const inventoryService = {
         limit = 100
     ): Promise<ServiceResponse<EnrichedStockAlert[]>> => {
         try {
+            // ── Step 1: Fetch alerts (no inventory join — stock_alerts has no FK to inventory) ──
             let query = getClient()
                 .from("stock_alerts")
                 .select(
-                    `
-                    *,
-                    products:product_id (id, name, product_code),
-                    product_batches:batch_id (id, batch_number, expiry_date)
-                `
+                    `*, products:product_id (id, name, product_code), product_batches:batch_id (id, batch_number, expiry_date)`
                 )
                 .eq("store_id", storeId);
 
             if (filters) {
-                if (filters.alert_type) {
-                    query = query.eq("alert_type", filters.alert_type);
-                }
-                if (filters.severity) {
-                    query = query.eq("severity", filters.severity);
-                }
-                if (filters.is_resolved !== undefined) {
-                    query = query.eq("is_resolved", filters.is_resolved);
-                }
-                if (filters.product_id) {
-                    query = query.eq("product_id", filters.product_id);
-                }
+                if (filters.alert_type) query = query.eq("alert_type", filters.alert_type);
+                if (filters.severity) query = query.eq("severity", filters.severity);
+                if (filters.is_resolved !== undefined) query = query.eq("is_resolved", filters.is_resolved);
+                if (filters.product_id) query = query.eq("product_id", filters.product_id);
             }
 
-            query = query
+            const { data, error } = await query
                 .order("created_at", { ascending: false })
                 .limit(limit);
 
-            const { data, error } = await query;
-
             if (error) return { data: null, error: error.message };
 
-            const alerts = ((data ?? []) as unknown[]).map((row) => {
+            const rawAlerts = ((data ?? []) as unknown[]).map((row) => {
                 const r = row as Record<string, unknown>;
                 const alert = { ...r } as unknown as EnrichedStockAlert;
                 alert.product = r.products as EnrichedStockAlert["product"];
                 alert.batch = r.product_batches as EnrichedStockAlert["batch"];
                 delete (alert as unknown as Record<string, unknown>).products;
                 delete (alert as unknown as Record<string, unknown>).product_batches;
+                return alert;
+            });
+
+            // ── Step 2: Fetch live inventory quantities for each product in the result ──
+            // inventory.product_id refs products.id (no direct FK from stock_alerts → inventory)
+            const productIds = [...new Set(
+                rawAlerts.map((a) => a.product_id).filter((id): id is string => !!id)
+            )];
+
+            const liveStockMap = new Map<string, { quantity_on_hand: number; reorder_point: number }>();
+
+            if (productIds.length > 0) {
+                const { data: invData } = await getClient()
+                    .from("inventory")
+                    .select("product_id, quantity_on_hand, reorder_point")
+                    .eq("store_id", storeId)
+                    .in("product_id", productIds)
+                    .is("variant_id", null); // base product row (no variant)
+
+                for (const row of (invData ?? []) as Array<{ product_id: string; quantity_on_hand: number; reorder_point: number }>) {
+                    liveStockMap.set(row.product_id, {
+                        quantity_on_hand: row.quantity_on_hand,
+                        reorder_point: row.reorder_point,
+                    });
+                }
+            }
+
+            // ── Step 3: Merge live data into alerts ──
+            const alerts = rawAlerts.map((alert) => {
+                const live = alert.product_id ? liveStockMap.get(alert.product_id) : undefined;
+                alert.live_quantity = live?.quantity_on_hand ?? null;
+                alert.live_reorder_point = live?.reorder_point ?? null;
                 return alert;
             });
 
