@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/tooltip";
 import {
     Search,
-    Plus,
     Filter,
     Download,
     ChevronDown,
@@ -148,11 +147,6 @@ export function ProductToolbar({
 
                 {/* Action buttons */}
                 <div className="flex items-center gap-2">
-                    <Button onClick={onAddProduct} size="sm">
-                        <Plus className="mr-1 h-4 w-4" />
-                        <span className="hidden sm:inline">Add Product</span>
-                        <span className="sm:hidden">Add</span>
-                    </Button>
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button variant="outline" size="sm" onClick={handleExportCSV}>

@@ -209,7 +209,10 @@ export const productService = {
 
             let query = getClient()
                 .from("products")
-                .select("*", { count: "exact" })
+                .select(
+                    "*, inventory(quantity_on_hand, reorder_point, quantity_available, quantity_committed, variant_id)",
+                    { count: "exact" }
+                )
                 .eq("store_id", storeId);
 
             // Apply filters

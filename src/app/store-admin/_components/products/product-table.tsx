@@ -206,8 +206,11 @@ function ProductRow({
         .join("")
         .toUpperCase();
 
-    // Use the enriched product's inventory if available
-    const inventory = (product as unknown as { inventory?: { quantity_on_hand: number; reorder_point: number; maximum_stock?: number } }).inventory ?? null;
+    // Use the enriched product's inventory if available (Supabase embedded select returns an array)
+    const inventoryRaw = (product as unknown as { inventory?: { quantity_on_hand: number; reorder_point: number; quantity_available?: number; quantity_committed?: number; variant_id?: string | null }[] | null }).inventory;
+    const inventory = Array.isArray(inventoryRaw)
+        ? (inventoryRaw.find((i) => i.variant_id == null) ?? inventoryRaw[0] ?? null)
+        : (inventoryRaw ?? null);
     const stockLabel = getStockStatusLabel(inventory as Parameters<typeof getStockStatusLabel>[0]);
     const stockColor = getStockStatusColor(inventory as Parameters<typeof getStockStatusColor>[0]);
 
