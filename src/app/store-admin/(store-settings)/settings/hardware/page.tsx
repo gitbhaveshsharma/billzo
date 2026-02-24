@@ -41,6 +41,8 @@ import {
 import toast from "react-hot-toast";
 import { useHardware, type ConnectionStatus, type HardwareDevice } from "@/hooks/use-hardware";
 import { cn } from "@/lib/utils";
+import { ReceiptLayoutEditor } from "@/components/shared/receipt-layout-editor";
+import { useStoreStore } from "@/stores/store.store";
 
 // ============================================================================
 // HARDWARE SETTINGS PAGE
@@ -71,6 +73,9 @@ export default function HardwareSettingsPage() {
   const [isPrinterTesting, setIsPrinterTesting] = useState(false);
   const [scannerTestResult, setScannerTestResult] = useState<boolean | null>(null);
   const [printerTestResult, setPrinterTestResult] = useState<boolean | null>(null);
+
+  // Receipt layout config (persisted in store)
+  const { receiptConfig, updateReceiptConfig } = useStoreStore();
 
   // Auto-detect on mount
   useEffect(() => {
@@ -163,7 +168,7 @@ export default function HardwareSettingsPage() {
   // ========================================================================
 
   return (
-    <div className="container max-w-4xl mx-auto py-6 px-4 space-y-6" data-hardware-settings>
+    <div className="container max-w-5xl mx-auto py-6 px-4 space-y-6" data-hardware-settings>
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -647,6 +652,28 @@ export default function HardwareSettingsPage() {
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ================================================================ */}
+      {/* RECEIPT LAYOUT SETTINGS */}
+      {/* ================================================================ */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Printer className="h-5 w-5 text-primary" />
+            Receipt Layout & Print Settings
+          </CardTitle>
+          <CardDescription>
+            Choose a receipt template, paper size, and control exactly what appears on printed receipts.
+            Changes are saved instantly and applied to all new receipts.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ReceiptLayoutEditor
+            config={receiptConfig}
+            onChange={updateReceiptConfig}
+          />
         </CardContent>
       </Card>
 
