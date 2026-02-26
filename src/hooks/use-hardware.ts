@@ -4,6 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { } from "@/types/web-hardware.d";
 import { buildTestReceiptData, printReceiptHtml, type PrintReceiptData } from "@/utils/receipt-print";
 import { encodeReceiptEscPos, sendToUsbPrinter } from "@/utils/escpos-encoder";
+import {
+  isPrintBridgeAvailable,
+  isPrintBridgeRunning,
+  getPrintBridgeHealth,
+  printViaBridge,
+  printTestViaBridge,
+  listBridgePrinters,
+  type PrintBridgeHealthResponse,
+  type BridgePrinterInfo,
+} from "@/lib/print-bridge";
 
 // ============================================================================
 // TYPES
@@ -161,6 +171,11 @@ export function useHardware() {
   const [printerConfig, setPrinterConfig] = useState<PrinterConfig>(DEFAULT_PRINTER_CONFIG);
   const [receiptLayoutConfig, setReceiptLayoutConfig] = useState<ReceiptLayoutConfig>(DEFAULT_RECEIPT_LAYOUT_CONFIG);
   const [isDetecting, setIsDetecting] = useState(false);
+
+  // ── Print Bridge state ────────────────────────────────────────────────
+  const [bridgeStatus, setBridgeStatus] = useState<"unknown" | "running" | "connected" | "offline">("unknown");
+  const [bridgeHealth, setBridgeHealth] = useState<PrintBridgeHealthResponse | null>(null);
+  const [bridgePrinters, setBridgePrinters] = useState<BridgePrinterInfo[]>([]);
 
   // For keyboard-wedge barcode scanner detection
   const keystrokeBuffer = useRef<string>("");
@@ -390,14 +405,75 @@ export function useHardware() {
   }, []);
 
   // ========================================================================
-  // PRINTER — Web USB / window.print
+  // PRINTER — Print Bridge / Web USB / window.print
   // ========================================================================
+
+  /**
+   * Check Print Bridge status and populate bridgePrinters.
+   * Called from detectPrinters/detectAllDevices.
+   */
+  const checkBridgeStatus = useCallback(async () => {
+    console.log("[HW-Bridge] 🔍 Checking Print Bridge at localhost:3001...");
+    const health = await getPrintBridgeHealth();
+    setBridgeHealth(health);
+
+    if (!health) {
+      setBridgeStatus("offline");
+      setBridgePrinters([]);
+      console.log("[HW-Bridge] ⚠️ Print Bridge not reachable");
+      return false;
+    }
+
+    if (health.printer?.connected) {
+      setBridgeStatus("connected");
+      console.log("[HW-Bridge] ✅ Print Bridge connected, printer ready");
+    } else {
+      setBridgeStatus("running");
+      console.log("[HW-Bridge] ⚠️ Print Bridge running but printer not connected");
+    }
+
+    // Fetch available printers from bridge
+    try {
+      const printerList = await listBridgePrinters();
+      setBridgePrinters(printerList.printers);
+      console.log("[HW-Bridge] 📋 Bridge printers:", printerList.printers.map((p) => p.name));
+    } catch {
+      setBridgePrinters([]);
+    }
+
+    return health.printer?.connected ?? false;
+  }, []);
 
   const detectPrinters = useCallback(async (): Promise<HardwareDevice[]> => {
     console.log("[HW-Printer] 🔍 Detecting printers...");
     const detected: HardwareDevice[] = [];
 
-    // Check Web USB for thermal printers
+    // 1. Check Print Bridge (localhost:3001) — highest priority
+    const bridgeConnected = await checkBridgeStatus();
+    if (bridgeConnected) {
+      detected.push({
+        id: "print-bridge",
+        name: "Print Bridge (Thermal Printer)",
+        type: "printer",
+        status: "connected",
+        manufacturer: "POS Print Bridge",
+        lastSeen: new Date(),
+      });
+    } else {
+      const running = await isPrintBridgeRunning();
+      if (running) {
+        detected.push({
+          id: "print-bridge",
+          name: "Print Bridge (Printer Offline)",
+          type: "printer",
+          status: "error",
+          manufacturer: "POS Print Bridge",
+          lastSeen: new Date(),
+        });
+      }
+    }
+
+    // 2. Check Web USB for thermal printers
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nav = navigator as any;
     if (nav.usb) {
@@ -424,7 +500,7 @@ export function useHardware() {
       }
     }
 
-    // Always add browser print as fallback
+    // 3. Always add browser print as fallback
     detected.push({
       id: "browser-print",
       name: "System Printer (Browser)",
@@ -437,7 +513,7 @@ export function useHardware() {
     console.log("[HW-Printer] 📋 Detected printers:", detected.map((d) => d.name));
     setPrinters(detected);
     return detected;
-  }, []);
+  }, [checkBridgeStatus]);
 
   const connectUsbPrinter = useCallback(async (): Promise<HardwareDevice | null> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -516,6 +592,7 @@ export function useHardware() {
 
   // Compute USB printer availability (used by testPrinter & printReceipt)
   const hasUsbPrinter = printers.some((p) => p.id.startsWith("usb-") && p.status === "connected");
+  const hasBridgePrinter = bridgeStatus === "connected";
 
   const testPrinter = useCallback(async (): Promise<boolean> => {
     console.log("[HW-Printer] 🧪 Printer test started...");
@@ -526,7 +603,24 @@ export function useHardware() {
     try {
       const testData = buildTestReceiptData();
 
-      // Try ESC/POS direct printing if USB printer is connected
+      // 1. Try Print Bridge first (localhost:3001)
+      if (hasBridgePrinter) {
+        try {
+          console.log("[HW-Printer] 🧪 Testing via Print Bridge...");
+          console.log("[HW-Printer] 📋 Test receipt data:", JSON.stringify(testData, null, 2));
+          console.log("[HW-Printer] ⚙️ Receipt layout config:", JSON.stringify(receiptLayoutConfig, null, 2));
+          await printViaBridge(testData, receiptLayoutConfig);
+          console.log("[HW-Printer] 🧪✅ Bridge test receipt printed.");
+          setPrinters((prev) =>
+            prev.map((p) => ({ ...p, status: "connected" as ConnectionStatus, lastSeen: new Date() }))
+          );
+          return true;
+        } catch (err) {
+          console.warn("[HW-Printer] ⚠️ Bridge test failed, trying next method:", err);
+        }
+      }
+
+      // 2. Try ESC/POS direct printing if USB printer is connected
       if (usbPrinterRef.current && hasUsbPrinter) {
         try {
           console.log("[HW-Printer] 🧪 Testing via ESC/POS (USB)...");
@@ -542,7 +636,7 @@ export function useHardware() {
         }
       }
 
-      // Fallback: HTML popup
+      // 3. Fallback: HTML popup
       const success = printReceiptHtml(testData, receiptLayoutConfig);
 
       if (!success) {
@@ -561,7 +655,7 @@ export function useHardware() {
       );
       return false;
     }
-  }, [receiptLayoutConfig, hasUsbPrinter]);
+  }, [receiptLayoutConfig, hasUsbPrinter, hasBridgePrinter]);
 
   // ========================================================================
   // AUTO-DETECT ON MOUNT
@@ -614,7 +708,7 @@ export function useHardware() {
   }, []);
 
   // ========================================================================
-  // PRINT RECEIPT — ESC/POS (USB) or HTML popup (system printer)
+  // PRINT RECEIPT — Bridge → ESC/POS (USB) → HTML popup (system printer)
   // ========================================================================
 
   const printReceipt = useCallback(async (
@@ -623,7 +717,19 @@ export function useHardware() {
   ): Promise<boolean> => {
     const cfg = config ?? receiptLayoutConfig;
 
-    // Try ESC/POS direct printing if USB printer is connected
+    // 1. Try Print Bridge first (localhost:3001 — USB/TCP thermal printer)
+    if (hasBridgePrinter) {
+      try {
+        console.log("[HW-Printer] 📤 Printing via Print Bridge...");
+        await printViaBridge(data, cfg);
+        console.log("[HW-Printer] ✅ Print Bridge print complete.");
+        return true;
+      } catch (err) {
+        console.warn("[HW-Printer] ⚠️ Print Bridge failed, trying next method:", err);
+      }
+    }
+
+    // 2. Try ESC/POS direct printing if USB printer is connected (Web USB)
     if (usbPrinterRef.current && hasUsbPrinter) {
       try {
         console.log("[HW-Printer] 📤 Printing via ESC/POS (USB)...");
@@ -636,10 +742,10 @@ export function useHardware() {
       }
     }
 
-    // Fallback: HTML popup with window.print()
+    // 3. Fallback: HTML popup with window.print()
     console.log("[HW-Printer] 📄 Printing via HTML popup (system printer)...");
     return printReceiptHtml(data, cfg);
-  }, [receiptLayoutConfig, hasUsbPrinter]);
+  }, [receiptLayoutConfig, hasUsbPrinter, hasBridgePrinter]);
 
   return {
     // State
@@ -654,6 +760,12 @@ export function useHardware() {
     receiptLayoutConfig,
     isDetecting,
 
+    // Print Bridge state
+    bridgeStatus,
+    bridgeHealth,
+    bridgePrinters,
+    hasBridgePrinter,
+
     // Scanner actions
     connectSerialScanner,
     disconnectSerialScanner,
@@ -664,6 +776,7 @@ export function useHardware() {
     detectPrinters,
     printReceipt,
     hasUsbPrinter,
+    checkBridgeStatus,
 
     // Detection
     detectAllDevices,

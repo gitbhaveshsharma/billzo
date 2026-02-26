@@ -17,6 +17,7 @@ import {
   Loader2,
   Keyboard,
   Cable,
+  Globe,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,11 @@ export default function HardwareSettingsPage() {
     testScanner,
     testPrinter,
     setScannerConfig,
+    bridgeStatus,
+    bridgeHealth,
+    bridgePrinters,
+    hasBridgePrinter,
+    checkBridgeStatus,
   } = useHardware();
 
   const [isScannerTesting, setIsScannerTesting] = useState(false);
@@ -222,7 +228,7 @@ export default function HardwareSettingsPage() {
       </div>
 
       {/* Hardware Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Scanner Status Card */}
         <Card className={cn(
           "transition-colors",
@@ -295,6 +301,64 @@ export default function HardwareSettingsPage() {
                 <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400">
                   <WifiOff className="h-3 w-3 mr-1" />
                   No Device
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Print Bridge Status Card */}
+        <Card className={cn(
+          "transition-colors",
+          hasBridgePrinter
+            ? "border-green-200 dark:border-green-800"
+            : bridgeStatus === "running"
+              ? "border-yellow-200 dark:border-yellow-800"
+              : "border-gray-200 dark:border-gray-800"
+        )}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "h-10 w-10 rounded-lg flex items-center justify-center",
+                hasBridgePrinter
+                  ? "bg-green-100 dark:bg-green-900/30"
+                  : bridgeStatus === "running"
+                    ? "bg-yellow-100 dark:bg-yellow-900/30"
+                    : "bg-gray-100 dark:bg-gray-900/30"
+              )}>
+                <Globe className={cn(
+                  "h-5 w-5",
+                  hasBridgePrinter
+                    ? "text-green-600"
+                    : bridgeStatus === "running"
+                      ? "text-yellow-600"
+                      : "text-gray-400"
+                )} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Print Bridge</p>
+                <p className="text-xs text-muted-foreground">
+                  {hasBridgePrinter
+                    ? "Connected — prints via bridge"
+                    : bridgeStatus === "running"
+                      ? "Running — printer offline"
+                      : "Not detected (localhost:3001)"}
+                </p>
+              </div>
+              {hasBridgePrinter ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Active
+                </Badge>
+              ) : bridgeStatus === "running" ? (
+                <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  No Printer
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400">
+                  <WifiOff className="h-3 w-3 mr-1" />
+                  Offline
                 </Badge>
               )}
             </div>

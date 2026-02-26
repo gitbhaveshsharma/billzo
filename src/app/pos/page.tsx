@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { usePosData } from "@/hooks/use-pos-data";
+import { useHardware } from "@/hooks/use-hardware";
 import { useSalesStore } from "@/stores/sales.store";
 import { usePosCatalogStore } from "@/stores/pos-catalog.store";
 import { useShiftsStore } from "@/stores/shifts.store";
@@ -105,6 +106,9 @@ export default function POSPage() {
     } = useSalesStore();
 
     const { activeShift, isLoading: shiftsLoading, fetchActiveShift } = useShiftsStore();
+
+    // Hardware hook — provides printReceipt with Bridge → USB → HTML fallback
+    const { printReceipt } = useHardware();
 
     // Dialog state
     const [paymentOpen, setPaymentOpen] = useState(false);
@@ -586,6 +590,7 @@ export default function POSPage() {
                             storeName={appUser?.storeName ?? "Store"}
                             storeAddress=""
                             compact
+                            printFn={printReceipt}
                         />
                     )}
                 </DialogContent>
