@@ -26,6 +26,9 @@ import {
     HardwareStatusIndicator,
     PosRefreshButton,
 } from "../store-admin/_components/sales";
+import { AddCustomerDialog } from "../store-admin/_components/customer";
+import { customerService } from "@/services/customers.service";
+import type { CreateCustomerRequest } from "@/types/customers.types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
@@ -108,6 +111,7 @@ export default function POSPage() {
     const [holdDrawerOpen, setHoldDrawerOpen] = useState(false);
     const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
     const [lastCompletedSale, setLastCompletedSale] = useState<EnrichedSale | null>(null);
+    const [addCustomerOpen, setAddCustomerOpen] = useState(false);
 
     // ========================================================================
     // INITIAL DATA LOAD — Shift & hold bills only (catalog loaded by usePosData)
@@ -186,6 +190,30 @@ export default function POSPage() {
             setCartInterstate(isInterstate);
         },
         [setCartInterstate]
+    );
+
+    const handleCreateCustomer = useCallback(
+        async (data: CreateCustomerRequest): Promise<boolean> => {
+            if (!storeId) return false;
+            const result = await customerService.create(storeId, data);
+            if (result.error || !result.data) {
+                toast.error(result.error ?? "Failed to create customer");
+                return false;
+            }
+            // Auto-select the newly created customer
+            setCartCustomer(
+                result.data.id,
+                result.data.name,
+                result.data.phone,
+                result.data.gstin ?? null
+            );
+            if (result.data.gstin) {
+                setCartGstType("B2B");
+            }
+            toast.success(`Customer "${result.data.name}" created and selected`);
+            return true;
+        },
+        [storeId, setCartCustomer, setCartGstType]
     );
 
     // ========================================================================
@@ -483,6 +511,7 @@ export default function POSPage() {
                             onSetCustomer={handleCustomerChange}
                             onSetGstType={handleGstTypeChange}
                             onSetInterstate={handleInterstateChange}
+                            onAddNew={() => setAddCustomerOpen(true)}
                         />
                     </div>
 
@@ -525,6 +554,13 @@ export default function POSPage() {
                 isProcessing={isSaving}
                 showCreditOption={!!cartCustomerId}
                 customerName={cartCustomerName}
+            />
+
+            {/* Add Customer Dialog */}
+            <AddCustomerDialog
+                open={addCustomerOpen}
+                onOpenChange={setAddCustomerOpen}
+                onSubmit={handleCreateCustomer}
             />
 
             {/* Hold Bills Drawer */}

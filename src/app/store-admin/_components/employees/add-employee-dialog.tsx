@@ -31,7 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, UserPlus, Briefcase } from "lucide-react";
+import { Loader2, UserPlus, Briefcase, ChevronDown, ChevronUp } from "lucide-react";
 import { addStoreUserSchema } from "@/validations/store-users.validation";
 import type { AddStoreUserRequest, AvailableRolesResponse } from "@/types/store-users.types";
 import { z } from "zod";
@@ -42,6 +42,7 @@ import { z } from "zod";
 
 const formSchema = addStoreUserSchema.extend({
     create_employee: z.boolean().default(false),
+    // ── Basic employee fields ──────────────────────────────────────────────
     first_name: z.string().min(2, "First name is required").optional(),
     last_name: z.string().min(2, "Last name is required").optional(),
     employee_code: z
@@ -49,13 +50,35 @@ const formSchema = addStoreUserSchema.extend({
         .min(3, "At least 3 characters")
         .regex(/^[A-Z0-9_-]+$/, "Uppercase letters, numbers, hyphens, underscores only")
         .optional(),
-    phone: z
-        .string()
-        .regex(/^[6-9]\d{9}$/, "Invalid Indian phone number")
-        .optional(),
+    phone: z.string().regex(/^[6-9]\d{9}$/, "Invalid Indian phone number").optional().or(z.literal("")),
     employee_type: z.enum(["full_time", "part_time", "contractor", "intern", "trainee"]).optional(),
     joining_date: z.string().optional(),
     pay_frequency: z.enum(["monthly", "weekly", "daily", "hourly"]).optional(),
+    salary: z.coerce.number().min(0).optional(),
+    // ── Advanced employee fields ───────────────────────────────────────────
+    middle_name: z.string().optional().or(z.literal("")),
+    date_of_birth: z.string().optional().or(z.literal("")),
+    gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
+    blood_group: z.enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]).optional(),
+    marital_status: z.enum(["single", "married", "divorced", "widowed", "separated"]).optional(),
+    nationality: z.string().optional().or(z.literal("")),
+    alternate_phone: z.string().regex(/^[6-9]\d{9}$/, "Invalid phone").optional().or(z.literal("")),
+    // Address
+    present_address: z.string().optional().or(z.literal("")),
+    city: z.string().optional().or(z.literal("")),
+    state: z.string().optional().or(z.literal("")),
+    pincode: z.string().regex(/^\d{6}$/, "6-digit pincode").optional().or(z.literal("")),
+    // Emergency contact
+    emergency_contact_name: z.string().optional().or(z.literal("")),
+    emergency_contact_phone: z.string().regex(/^[6-9]\d{9}$/, "Invalid phone").optional().or(z.literal("")),
+    emergency_contact_relation: z.string().optional().or(z.literal("")),
+    // Banking
+    bank_name: z.string().optional().or(z.literal("")),
+    bank_account_number: z.string().optional().or(z.literal("")),
+    ifsc_code: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Invalid IFSC").optional().or(z.literal("")),
+    // Government IDs
+    aadhar_number: z.string().regex(/^\d{12}$/, "12-digit Aadhar").optional().or(z.literal("")),
+    pan_number: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]$/, "Invalid PAN").optional().or(z.literal("")),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -83,6 +106,7 @@ export function AddEmployeeDialog({
 }: AddEmployeeDialogProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [createEmployee, setCreateEmployee] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
 
     const {
         register,
@@ -104,6 +128,7 @@ export function AddEmployeeDialog({
             employee_type: "full_time",
             pay_frequency: "monthly",
             joining_date: new Date().toISOString().slice(0, 10),
+            nationality: "Indian",
         },
     });
 
@@ -124,10 +149,30 @@ export function AddEmployeeDialog({
                 request.employee_data = {
                     employee_code: values.employee_code,
                     first_name: values.first_name,
+                    middle_name: values.middle_name || undefined,
                     last_name: values.last_name,
                     employee_type: values.employee_type || "full_time",
                     joining_date: values.joining_date || new Date().toISOString().slice(0, 10),
                     pay_frequency: values.pay_frequency || "monthly",
+                    salary: values.salary,
+                    // Advanced
+                    date_of_birth: values.date_of_birth || undefined,
+                    gender: values.gender,
+                    blood_group: values.blood_group,
+                    marital_status: values.marital_status,
+                    alternate_phone: values.alternate_phone || undefined,
+                    emergency_contact_name: values.emergency_contact_name || undefined,
+                    emergency_contact_phone: values.emergency_contact_phone || undefined,
+                    emergency_contact_relation: values.emergency_contact_relation || undefined,
+                    current_address_line1: values.present_address || undefined,
+                    current_city: values.city || undefined,
+                    current_state: values.state || undefined,
+                    current_pincode: values.pincode || undefined,
+                    bank_name: values.bank_name || undefined,
+                    bank_account_number: values.bank_account_number || undefined,
+                    ifsc_code: values.ifsc_code || undefined,
+                    aadhar_number: values.aadhar_number || undefined,
+                    pan_number: values.pan_number || undefined,
                 };
             }
 
@@ -141,6 +186,7 @@ export function AddEmployeeDialog({
                 );
                 reset();
                 setCreateEmployee(false);
+                setShowAdvanced(false);
                 onOpenChange(false);
             } else {
                 toast.error("Failed to add employee", { id: toastId });
@@ -156,15 +202,15 @@ export function AddEmployeeDialog({
         if (!isSubmitting) {
             reset();
             setCreateEmployee(false);
+            setShowAdvanced(false);
             onOpenChange(false);
         }
     };
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            {/* Same structure as AddSupplierDialog: max-h-[95vh] flex flex-col */}
             <DialogContent className="max-w-3xl max-h-[95vh] flex flex-col">
-                {/* Header — flex-shrink-0 so it never gets squeezed */}
+                {/* Fixed Header */}
                 <DialogHeader className="flex-shrink-0">
                     <DialogTitle className="flex items-center gap-2 text-lg">
                         <UserPlus className="h-5 w-5 text-primary" />
@@ -179,9 +225,8 @@ export function AddEmployeeDialog({
                     onSubmit={handleSubmit(handleFormSubmit)}
                     className="flex flex-col flex-1 min-h-0"
                 >
-                    {/* Tabs take remaining space, same as supplier dialog */}
-                    <Tabs defaultValue="basic" className="flex-1 min-h-0 flex flex-col p-1">
-                        {/* TabsList — flex-shrink-0, always visible */}
+                    <Tabs defaultValue="basic" className="flex-1 min-h-0 flex flex-col">
+                        {/* Fixed Tabs Header */}
                         <TabsList className="w-full grid grid-cols-2 flex-shrink-0">
                             <TabsTrigger value="basic" className="flex items-center gap-2">
                                 <UserPlus className="h-3.5 w-3.5" />
@@ -193,14 +238,11 @@ export function AddEmployeeDialog({
                             </TabsTrigger>
                         </TabsList>
 
-                        {/*
-                            Single ScrollArea wrapping ALL TabsContent — exactly like supplier dialog.
-                            flex-1 + min-h-0 makes it fill leftover space and scroll when needed.
-                        */}
-                        <ScrollArea className="flex-1 min-h-0 p-4">
+                        {/* Single ScrollArea wrapping ALL TabsContent — matches CreatePODialog pattern */}
+                        <ScrollArea className="flex-1 min-h-0 overflow-x-hidden">
 
                             {/* ── Basic Info Tab ── */}
-                            <TabsContent value="basic" className="space-y-5 mt-0 px-2">
+                            <TabsContent value="basic" className="space-y-5 p-4 mt-0">
                                 {/* Email */}
                                 <div className="space-y-1.5">
                                     <Label htmlFor="email">
@@ -284,7 +326,7 @@ export function AddEmployeeDialog({
                             </TabsContent>
 
                             {/* ── Employee Details Tab ── */}
-                            <TabsContent value="employee" className="space-y-5 mt-0 px-2">
+                            <TabsContent value="employee" className="space-y-5 p-4 mt-0">
                                 {/* Toggle */}
                                 <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-4">
                                     <div className="space-y-0.5">
@@ -298,6 +340,7 @@ export function AddEmployeeDialog({
                                         onCheckedChange={(checked) => {
                                             setCreateEmployee(checked);
                                             setValue("create_employee", checked);
+                                            if (!checked) setShowAdvanced(false);
                                         }}
                                     />
                                 </div>
@@ -397,15 +440,221 @@ export function AddEmployeeDialog({
                                             </div>
                                         </div>
 
-                                        {/* Joining Date */}
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="joining_date">Joining Date</Label>
-                                            <Input
-                                                id="joining_date"
-                                                type="date"
-                                                {...register("joining_date")}
-                                            />
+                                        {/* Joining Date + Salary */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="joining_date">Joining Date</Label>
+                                                <Input
+                                                    id="joining_date"
+                                                    type="date"
+                                                    {...register("joining_date")}
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="salary">Salary (₹)</Label>
+                                                <Input
+                                                    id="salary"
+                                                    type="number"
+                                                    min={0}
+                                                    placeholder="0"
+                                                    {...register("salary")}
+                                                />
+                                            </div>
                                         </div>
+
+                                        {/* ── Advanced Toggle ── */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAdvanced((v) => !v)}
+                                            className="flex items-center gap-2 w-full rounded-md border border-dashed border-muted-foreground/40 px-3 py-2 text-sm text-muted-foreground hover:border-primary/60 hover:text-primary transition-colors"
+                                        >
+                                            {showAdvanced ? (
+                                                <ChevronUp className="h-4 w-4 shrink-0" />
+                                            ) : (
+                                                <ChevronDown className="h-4 w-4 shrink-0" />
+                                            )}
+                                            {showAdvanced ? "Hide advanced details" : "Show advanced details"}
+                                        </button>
+
+                                        {/* ── Advanced Section ── */}
+                                        {showAdvanced && (
+                                            <div className="space-y-5 rounded-lg border bg-muted/20 p-4">
+
+                                                {/* Personal */}
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Personal</p>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="middle_name">Middle Name</Label>
+                                                        <Input id="middle_name" placeholder="Middle name" {...register("middle_name")} />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="date_of_birth">Date of Birth</Label>
+                                                        <Input id="date_of_birth" type="date" {...register("date_of_birth")} />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-4">
+                                                    <div className="space-y-1.5">
+                                                        <Label>Gender</Label>
+                                                        <Controller
+                                                            name="gender"
+                                                            control={control}
+                                                            render={({ field }) => (
+                                                                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                                                                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="male">Male</SelectItem>
+                                                                        <SelectItem value="female">Female</SelectItem>
+                                                                        <SelectItem value="other">Other</SelectItem>
+                                                                        <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            )}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label>Blood Group</Label>
+                                                        <Controller
+                                                            name="blood_group"
+                                                            control={control}
+                                                            render={({ field }) => (
+                                                                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                                                                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map((bg) => (
+                                                                            <SelectItem key={bg} value={bg}>{bg}</SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            )}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label>Marital Status</Label>
+                                                        <Controller
+                                                            name="marital_status"
+                                                            control={control}
+                                                            render={({ field }) => (
+                                                                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                                                                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="single">Single</SelectItem>
+                                                                        <SelectItem value="married">Married</SelectItem>
+                                                                        <SelectItem value="divorced">Divorced</SelectItem>
+                                                                        <SelectItem value="widowed">Widowed</SelectItem>
+                                                                        <SelectItem value="separated">Separated</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            )}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="nationality">Nationality</Label>
+                                                        <Input id="nationality" placeholder="e.g. Indian" {...register("nationality")} />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="alternate_phone">Alternate Phone</Label>
+                                                        <Input id="alternate_phone" placeholder="10-digit number" {...register("alternate_phone")} />
+                                                        {errors.alternate_phone && (
+                                                            <p className="text-xs text-destructive">{errors.alternate_phone.message}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <Separator />
+
+                                                {/* Address */}
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Address</p>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="present_address">Present Address</Label>
+                                                    <Input id="present_address" placeholder="Street / locality" {...register("present_address")} />
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-4">
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="city">City</Label>
+                                                        <Input id="city" placeholder="City" {...register("city")} />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="state">State</Label>
+                                                        <Input id="state" placeholder="State" {...register("state")} />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="pincode">Pincode</Label>
+                                                        <Input id="pincode" placeholder="6 digits" maxLength={6} {...register("pincode")} />
+                                                        {errors.pincode && (
+                                                            <p className="text-xs text-destructive">{errors.pincode.message}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <Separator />
+
+                                                {/* Emergency Contact */}
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Emergency Contact</p>
+                                                <div className="grid grid-cols-3 gap-4">
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="emergency_contact_name">Name</Label>
+                                                        <Input id="emergency_contact_name" placeholder="Full name" {...register("emergency_contact_name")} />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="emergency_contact_phone">Phone</Label>
+                                                        <Input id="emergency_contact_phone" placeholder="10-digit number" {...register("emergency_contact_phone")} />
+                                                        {errors.emergency_contact_phone && (
+                                                            <p className="text-xs text-destructive">{errors.emergency_contact_phone.message}</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="emergency_contact_relation">Relation</Label>
+                                                        <Input id="emergency_contact_relation" placeholder="e.g. Spouse" {...register("emergency_contact_relation")} />
+                                                    </div>
+                                                </div>
+
+                                                <Separator />
+
+                                                {/* Banking */}
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Banking</p>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="bank_name">Bank Name</Label>
+                                                        <Input id="bank_name" placeholder="e.g. SBI" {...register("bank_name")} />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="bank_account_number">Account Number</Label>
+                                                        <Input id="bank_account_number" placeholder="Account number" {...register("bank_account_number")} />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="ifsc_code">IFSC Code</Label>
+                                                    <Input id="ifsc_code" placeholder="e.g. SBIN0001234" className="uppercase" {...register("ifsc_code")} />
+                                                    {errors.ifsc_code && (
+                                                        <p className="text-xs text-destructive">{errors.ifsc_code.message}</p>
+                                                    )}
+                                                </div>
+
+                                                <Separator />
+
+                                                {/* Government IDs */}
+                                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Government IDs</p>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="aadhar_number">Aadhar Number</Label>
+                                                        <Input id="aadhar_number" placeholder="12-digit Aadhar" maxLength={12} {...register("aadhar_number")} />
+                                                        {errors.aadhar_number && (
+                                                            <p className="text-xs text-destructive">{errors.aadhar_number.message}</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="pan_number">PAN Number</Label>
+                                                        <Input id="pan_number" placeholder="e.g. ABCDE1234F" maxLength={10} className="uppercase" {...register("pan_number")} />
+                                                        {errors.pan_number && (
+                                                            <p className="text-xs text-destructive">{errors.pan_number.message}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </TabsContent>
@@ -413,8 +662,8 @@ export function AddEmployeeDialog({
                         </ScrollArea>
                     </Tabs>
 
-                    {/* Footer — flex-shrink-0, always anchored at bottom */}
-                    <DialogFooter className="flex-shrink-0 pt-4 gap-2">
+                    {/* Fixed Footer — inside form so submit works */}
+                    <DialogFooter className="flex-shrink-0 pt-4 gap-2 border-t mt-2">
                         <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
                             Cancel
                         </Button>
