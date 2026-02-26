@@ -511,7 +511,7 @@ export function PaymentDialog({
     return (
         <TooltipProvider delayDuration={300}>
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="max-w-xl max-h-[90vh]">
+                <DialogContent className="max-w-xl max-h-[95vh]">
                     <DialogHeader>
                         <DialogTitle>Collect Payment</DialogTitle>
                         <DialogDescription>
@@ -522,8 +522,8 @@ export function PaymentDialog({
                         </DialogDescription>
                     </DialogHeader>
 
-                    <ScrollArea className="max-h-[60vh] pr-2">
-                        <div className="space-y-4 p-4">
+                    <ScrollArea className="max-h-[95vh] overflow-y-auto">
+                        <div className="space-y-4 px-4 py-1">
 
                             {/* Amount summary bar */}
                             <div className="flex items-center justify-between bg-muted/50 p-3 rounded-md">
@@ -789,9 +789,6 @@ export function PaymentDialog({
                                     )}
                                 </div>
                             )}
-
-                            <Separator />
-
                             {/* Credit Sale toggle */}
                             {showCreditOption && (
                                 <div className="space-y-2">
@@ -856,8 +853,8 @@ export function PaymentDialog({
                                             {isCreditSale
                                                 ? "Confirm Credit Sale"
                                                 : entries.length > 0
-                                                ? `Charge ${formatCurrency(totalEntered)}`
-                                                : "Confirm Payment"}
+                                                    ? `Charge ${formatCurrency(totalEntered)}`
+                                                    : "Confirm Payment"}
                                         </>
                                     )}
                                 </Button>
@@ -866,8 +863,8 @@ export function PaymentDialog({
                                 {!isCreditSale && !isFullyPaid
                                     ? `Still ${formatCurrency(remaining)} remaining. Add more payment to proceed.`
                                     : isCreditSale
-                                    ? "Confirm sale with outstanding balance added to customer's credit account."
-                                    : "Finalise the sale and generate invoice."}
+                                        ? "Confirm sale with outstanding balance added to customer's credit account."
+                                        : "Finalise the sale and generate invoice."}
                             </TooltipContent>
                         </Tooltip>
                     </DialogFooter>
