@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { } from "@/types/web-hardware.d";
+import { buildTestReceiptData, printReceiptHtml, type PrintReceiptData } from "@/utils/receipt-print";
+import { encodeReceiptEscPos, sendToUsbPrinter } from "@/utils/escpos-encoder";
 
 // ============================================================================
 // TYPES
@@ -177,6 +179,10 @@ export function useHardware() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const serialPortRef = useRef<any>(null);
   const serialReaderRef = useRef<ReadableStreamDefaultReader<string> | null>(null);
+
+  // USB printer device ref (for ESC/POS direct printing)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const usbPrinterRef = useRef<any>(null);
 
   // ========================================================================
   // KEYBOARD-WEDGE SCANNER DETECTION
@@ -463,6 +469,7 @@ export function useHardware() {
         lastSeen: new Date(),
       };
 
+      usbPrinterRef.current = device;
       setPrinters((prev) => [...prev.filter((p) => p.id !== hw.id), hw]);
       return hw;
     } catch (err) {
@@ -507,6 +514,9 @@ export function useHardware() {
     });
   }, []);
 
+  // Compute USB printer availability (used by testPrinter & printReceipt)
+  const hasUsbPrinter = printers.some((p) => p.id.startsWith("usb-") && p.status === "connected");
+
   const testPrinter = useCallback(async (): Promise<boolean> => {
     console.log("[HW-Printer] 🧪 Printer test started...");
     setPrinters((prev) =>
@@ -514,58 +524,30 @@ export function useHardware() {
     );
 
     try {
-      // Create a test receipt
-      const testWindow = window.open("", "_blank", "width=300,height=400");
-      if (!testWindow) {
-        throw new Error("Popup blocked");
+      const testData = buildTestReceiptData();
+
+      // Try ESC/POS direct printing if USB printer is connected
+      if (usbPrinterRef.current && hasUsbPrinter) {
+        try {
+          console.log("[HW-Printer] 🧪 Testing via ESC/POS (USB)...");
+          const escposData = encodeReceiptEscPos(testData, receiptLayoutConfig);
+          await sendToUsbPrinter(usbPrinterRef.current, escposData);
+          console.log("[HW-Printer] 🧪✅ ESC/POS test page sent.");
+          setPrinters((prev) =>
+            prev.map((p) => ({ ...p, status: "connected" as ConnectionStatus, lastSeen: new Date() }))
+          );
+          return true;
+        } catch (err) {
+          console.warn("[HW-Printer] ⚠️ ESC/POS test failed, falling back to HTML popup:", err);
+        }
       }
 
-      testWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Printer Test</title>
-          <style>
-            body { font-family: monospace; font-size: 12px; padding: 10px; width: 260px; margin: 0 auto; }
-            .center { text-align: center; }
-            .line { border-top: 1px dashed #000; margin: 8px 0; }
-            h2 { margin: 0; font-size: 16px; }
-            .barcode { font-family: 'Libre Barcode 39', monospace; font-size: 40px; text-align: center; }
-          </style>
-        </head>
-        <body>
-          <div class="center">
-            <h2>🖨️ PRINTER TEST</h2>
-            <p>Hardware Settings Test Page</p>
-          </div>
-          <div class="line"></div>
-          <p><strong>Status:</strong> Connected ✅</p>
-          <p><strong>Paper Width:</strong> 80mm</p>
-          <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
-          <div class="line"></div>
-          <table style="width:100%">
-            <tr><td>Test Item 1</td><td style="text-align:right">₹100.00</td></tr>
-            <tr><td>Test Item 2</td><td style="text-align:right">₹250.50</td></tr>
-            <tr><td>Test Item 3</td><td style="text-align:right">₹75.00</td></tr>
-          </table>
-          <div class="line"></div>
-          <p style="text-align:right"><strong>Total: ₹425.50</strong></p>
-          <div class="line"></div>
-          <div class="center">
-            <p>✅ If you can read this, your printer is working correctly!</p>
-            <p style="font-size:10px; color: #666;">This is a test page from Store Hardware Settings</p>
-          </div>
-        </body>
-        </html>
-      `);
+      // Fallback: HTML popup
+      const success = printReceiptHtml(testData, receiptLayoutConfig);
 
-      testWindow.document.close();
-
-      // Trigger print
-      setTimeout(() => {
-        testWindow.print();
-        testWindow.close();
-      }, 500);
+      if (!success) {
+        throw new Error("Popup blocked");
+      }
 
       console.log("[HW-Printer] 🧪✅ Test page sent to printer.");
       setPrinters((prev) =>
@@ -579,7 +561,7 @@ export function useHardware() {
       );
       return false;
     }
-  }, []);
+  }, [receiptLayoutConfig, hasUsbPrinter]);
 
   // ========================================================================
   // AUTO-DETECT ON MOUNT
@@ -631,6 +613,34 @@ export function useHardware() {
     onBarcodeCallbackRef.current = callback;
   }, []);
 
+  // ========================================================================
+  // PRINT RECEIPT — ESC/POS (USB) or HTML popup (system printer)
+  // ========================================================================
+
+  const printReceipt = useCallback(async (
+    data: PrintReceiptData,
+    config?: ReceiptLayoutConfig,
+  ): Promise<boolean> => {
+    const cfg = config ?? receiptLayoutConfig;
+
+    // Try ESC/POS direct printing if USB printer is connected
+    if (usbPrinterRef.current && hasUsbPrinter) {
+      try {
+        console.log("[HW-Printer] 📤 Printing via ESC/POS (USB)...");
+        const escposData = encodeReceiptEscPos(data, cfg);
+        await sendToUsbPrinter(usbPrinterRef.current, escposData);
+        console.log("[HW-Printer] ✅ ESC/POS print complete.");
+        return true;
+      } catch (err) {
+        console.warn("[HW-Printer] ⚠️ ESC/POS failed, falling back to HTML popup:", err);
+      }
+    }
+
+    // Fallback: HTML popup with window.print()
+    console.log("[HW-Printer] 📄 Printing via HTML popup (system printer)...");
+    return printReceiptHtml(data, cfg);
+  }, [receiptLayoutConfig, hasUsbPrinter]);
+
   return {
     // State
     scanners,
@@ -652,6 +662,8 @@ export function useHardware() {
     // Printer actions
     connectUsbPrinter,
     detectPrinters,
+    printReceipt,
+    hasUsbPrinter,
 
     // Detection
     detectAllDevices,

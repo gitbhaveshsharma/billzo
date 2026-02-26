@@ -401,7 +401,6 @@ export default function POSOrdersPage() {
                             sale={receiptSale}
                             storeName={appUser?.storeName ?? "Store"}
                             storeAddress=""
-                            onPrint={() => window.print()}
                             compact
                         />
                     )}

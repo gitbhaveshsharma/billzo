@@ -585,7 +585,6 @@ export default function POSPage() {
                             sale={lastCompletedSale}
                             storeName={appUser?.storeName ?? "Store"}
                             storeAddress=""
-                            onPrint={() => window.print()}
                             compact
                         />
                     )}
