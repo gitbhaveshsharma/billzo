@@ -1,19 +1,26 @@
 -- ============================================================================
--- FIX: create_sale_transaction RPC
--- 
--- Root cause: "cannot extract elements from a scalar"
+-- FIX: create_sale_transaction — multiple column/type mismatches
 --
--- payload->'tags' when tags is JSON null returns a jsonb scalar null value.
--- In PostgreSQL, jsonb null IS NOT NULL evaluates to TRUE (it's a valid jsonb
--- value, not SQL NULL). So the old check:
---   CASE WHEN payload->'tags' IS NOT NULL THEN ARRAY(SELECT jsonb_array_elements_text(...))
--- ...tried to extract elements from a scalar null → error.
+-- Bug 1 (previous migration):
+--   invoice_number NOT NULL violated because the INSERT had no invoice_number.
+--   Fix: generate_invoice_number() is now called BEFORE the INSERT.
 --
--- Fix: replace all IS NOT NULL checks on jsonb array fields with:
---   jsonb_typeof(payload->'field') = 'array'
--- This correctly distinguishes real arrays from null/scalar values.
+-- Bug 2 (this migration):
+--   sale_payments INSERT used wrong column name `change_amount`.
+--   Actual column in sale_payments is `change_returned`.
 --
--- Also fixed: change_returned → change_amount field name mismatch in payments.
+-- Bug 3 (this migration):
+--   sale_payments INSERT used `processed_by` which does not exist.
+--   Actual column is `created_by`.
+--
+-- Bug 4 (this migration):
+--   sale_payments INSERT cast status as `'SUCCESS'::payment_record_status`.
+--   `payment_record_status` is not a custom type — status is plain TEXT.
+--   Fix: use bare string literal 'SUCCESS'.
+--
+-- Bug 5 (this migration):
+--   sale_payments INSERT used `reference_number` which does not exist.
+--   The correct column for generic transaction references is `transaction_id`.
 -- ============================================================================
 
 DROP FUNCTION IF EXISTS create_sale_transaction(jsonb);
@@ -31,7 +38,7 @@ DECLARE
     v_payment        jsonb;
 BEGIN
     -- ====================================================================
-    -- 1. EXTRACT IDS
+    -- 1. EXTRACT & VALIDATE
     -- ====================================================================
     v_user_id  := auth.uid();
     v_store_id := (payload->>'store_id')::UUID;
@@ -44,18 +51,26 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'store_id is required');
     END IF;
 
-    -- Guard: items must be a JSON array
     IF jsonb_typeof(payload->'items') <> 'array' THEN
         RETURN jsonb_build_object('success', false, 'error', 'items must be an array');
     END IF;
 
-    -- Guard: payments must be a JSON array
     IF jsonb_typeof(payload->'payments') <> 'array' THEN
         RETURN jsonb_build_object('success', false, 'error', 'payments must be an array');
     END IF;
 
     -- ====================================================================
-    -- 2. INSERT SALE HEADER (DRAFT)
+    -- 2. GENERATE INVOICE NUMBER FIRST
+    --    (must happen before INSERT because invoice_number is NOT NULL)
+    -- ====================================================================
+    v_invoice_number := generate_invoice_number(v_store_id, 'INVOICE');
+
+    IF v_invoice_number IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'error', 'Failed to generate invoice number');
+    END IF;
+
+    -- ====================================================================
+    -- 3. INSERT SALE HEADER (includes invoice_number from the start)
     -- ====================================================================
     INSERT INTO sales (
         store_id, cashier_id, shift_id,
@@ -68,6 +83,7 @@ BEGIN
         is_credit_sale, credit_due_date,
         notes, internal_notes, tags,
         reference_type, reference_id, reference_number,
+        invoice_number,
         status, created_by
     ) VALUES (
         v_store_id,
@@ -101,7 +117,6 @@ BEGIN
         END,
         payload->>'notes',
         payload->>'internal_notes',
-        -- FIX: use jsonb_typeof to safely check for array before extracting
         CASE WHEN jsonb_typeof(payload->'tags') = 'array'
              THEN ARRAY(SELECT jsonb_array_elements_text(payload->'tags'))
              ELSE NULL
@@ -112,13 +127,14 @@ BEGIN
              ELSE NULL
         END,
         payload->>'reference_number',
+        v_invoice_number,
         'DRAFT'::sale_status,
         v_user_id
     )
     RETURNING id INTO v_sale_id;
 
     -- ====================================================================
-    -- 3. INSERT SALE ITEMS
+    -- 4. INSERT SALE ITEMS
     -- ====================================================================
     FOR v_item IN SELECT jsonb_array_elements(payload->'items')
     LOOP
@@ -136,7 +152,6 @@ BEGIN
             cess_percentage, cess_amount,
             tax_amount, total_amount,
             total_cost, profit_amount, profit_percentage,
-            -- FIX: use jsonb_typeof to safely check serial_numbers array
             serial_numbers,
             sort_order
         ) VALUES (
@@ -180,7 +195,6 @@ BEGIN
                  THEN (v_item->>'profit_amount')::DECIMAL ELSE NULL END,
             CASE WHEN v_item->>'profit_percentage' IS NOT NULL
                  THEN (v_item->>'profit_percentage')::DECIMAL ELSE NULL END,
-            -- FIX: jsonb_typeof guard on serial_numbers
             CASE WHEN jsonb_typeof(v_item->'serial_numbers') = 'array'
                  THEN ARRAY(SELECT jsonb_array_elements_text(v_item->'serial_numbers'))
                  ELSE NULL END,
@@ -189,16 +203,16 @@ BEGIN
     END LOOP;
 
     -- ====================================================================
-    -- 4. INSERT PAYMENTS
+    -- 5. INSERT PAYMENTS
     -- ====================================================================
     FOR v_payment IN SELECT jsonb_array_elements(payload->'payments')
     LOOP
         INSERT INTO sale_payments (
             sale_id, store_id,
             payment_method, amount,
-            cash_tendered, change_amount,
-            reference_number, notes,
-            status, processed_by
+            cash_tendered, change_returned,
+            transaction_id, notes,
+            status, created_by
         ) VALUES (
             v_sale_id,
             v_store_id,
@@ -206,18 +220,21 @@ BEGIN
             (v_payment->>'amount')::DECIMAL,
             CASE WHEN v_payment->>'cash_tendered' IS NOT NULL
                  THEN (v_payment->>'cash_tendered')::DECIMAL ELSE NULL END,
-            -- FIX: frontend sends 'change_returned', SQL column is 'change_amount'
-            -- Accept both field names so either works
             CASE
-                WHEN v_payment->>'change_amount' IS NOT NULL
-                     THEN (v_payment->>'change_amount')::DECIMAL
                 WHEN v_payment->>'change_returned' IS NOT NULL
                      THEN (v_payment->>'change_returned')::DECIMAL
+                WHEN v_payment->>'change_amount' IS NOT NULL
+                     THEN (v_payment->>'change_amount')::DECIMAL
                 ELSE NULL
             END,
-            v_payment->>'reference_number',
+            COALESCE(
+                v_payment->>'transaction_id',
+                v_payment->>'reference_number',
+                v_payment->>'upi_ref_number',
+                v_payment->>'authorization_code'
+            ),
             v_payment->>'notes',
-            'SUCCESS'::payment_record_status,
+            'SUCCESS',
             v_user_id
         );
 
@@ -225,12 +242,7 @@ BEGIN
     END LOOP;
 
     -- ====================================================================
-    -- 5. GENERATE INVOICE NUMBER
-    -- ====================================================================
-    v_invoice_number := generate_invoice_number(v_store_id, 'INVOICE');
-
-    -- ====================================================================
-    -- 6. FINALIZE SALE STATUS
+    -- 6. FINALIZE SALE STATUS & AMOUNTS
     -- ====================================================================
     v_sale_status := CASE
         WHEN v_total_paid >= COALESCE((payload->>'total_amount')::DECIMAL, 0)
@@ -243,18 +255,17 @@ BEGIN
     END;
 
     UPDATE sales SET
-        invoice_number = v_invoice_number,
-        paid_amount    = v_total_paid,
-        due_amount     = GREATEST(0,
+        paid_amount   = v_total_paid,
+        due_amount    = GREATEST(0,
             COALESCE((payload->>'total_amount')::DECIMAL, 0) - v_total_paid
         ),
-        change_amount  = GREATEST(0,
+        change_amount = GREATEST(0,
             v_total_paid - COALESCE((payload->>'total_amount')::DECIMAL, 0)
         ),
-        status         = v_sale_status,
-        sale_date      = CURRENT_DATE,
-        sale_time      = NOW(),
-        updated_at     = NOW()
+        status        = v_sale_status,
+        sale_date     = CURRENT_DATE,
+        sale_time     = NOW(),
+        updated_at    = NOW()
     WHERE id = v_sale_id;
 
     -- ====================================================================

@@ -17,6 +17,7 @@ import {
   Loader2,
   Keyboard,
   Cable,
+  Globe,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,12 +44,14 @@ import { useHardware, type ConnectionStatus, type HardwareDevice } from "@/hooks
 import { cn } from "@/lib/utils";
 import { ReceiptLayoutEditor } from "@/components/shared/receipt-layout-editor";
 import { useStoreStore } from "@/stores/store.store";
+import { useStoreAdmin } from "../../../_context/store-admin-context";
 
 // ============================================================================
 // HARDWARE SETTINGS PAGE
 // ============================================================================
 
 export default function HardwareSettingsPage() {
+  const { storeId, store } = useStoreAdmin();
   const {
     scanners,
     printers,
@@ -57,16 +60,18 @@ export default function HardwareSettingsPage() {
     lastScannedBarcode,
     scanLog,
     scannerConfig,
-    printerConfig,
     isDetecting,
     connectSerialScanner,
-    disconnectSerialScanner,
     connectUsbPrinter,
     detectAllDevices,
     testScanner,
     testPrinter,
     setScannerConfig,
-    setPrinterConfig,
+    bridgeStatus,
+    bridgeHealth,
+    bridgePrinters,
+    hasBridgePrinter,
+    checkBridgeStatus,
   } = useHardware();
 
   const [isScannerTesting, setIsScannerTesting] = useState(false);
@@ -74,8 +79,22 @@ export default function HardwareSettingsPage() {
   const [scannerTestResult, setScannerTestResult] = useState<boolean | null>(null);
   const [printerTestResult, setPrinterTestResult] = useState<boolean | null>(null);
 
-  // Receipt layout config (persisted in store)
-  const { receiptConfig, updateReceiptConfig } = useStoreStore();
+  // Receipt layout config — persisted in store_settings (DB-backed)
+  const {
+    receiptConfig,
+    updateReceiptConfig,
+    saveReceiptConfig,
+    isSavingReceiptConfig,
+    fetchSettings,
+    storeSettings,
+  } = useStoreStore();
+
+  // Ensure settings are loaded (needed for the save action)
+  useEffect(() => {
+    if (storeId && !storeSettings) {
+      fetchSettings(storeId);
+    }
+  }, [storeId, storeSettings, fetchSettings]);
 
   // Auto-detect on mount
   useEffect(() => {
@@ -130,6 +149,19 @@ export default function HardwareSettingsPage() {
       toast.error("Failed to connect. Ensure browser supports Web USB API.");
     }
   }, [connectUsbPrinter]);
+
+  const handleSaveReceiptConfig = useCallback(async () => {
+    if (!storeId) {
+      toast.error("No store loaded — cannot save settings.");
+      return;
+    }
+    const result = await saveReceiptConfig(storeId);
+    if (result.success) {
+      toast.success("Receipt layout saved!");
+    } else {
+      toast.error(result.error ?? "Failed to save receipt layout.");
+    }
+  }, [storeId, saveReceiptConfig]);
 
   // ========================================================================
   // STATUS HELPERS
@@ -196,7 +228,7 @@ export default function HardwareSettingsPage() {
       </div>
 
       {/* Hardware Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Scanner Status Card */}
         <Card className={cn(
           "transition-colors",
@@ -269,6 +301,64 @@ export default function HardwareSettingsPage() {
                 <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400">
                   <WifiOff className="h-3 w-3 mr-1" />
                   No Device
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Print Bridge Status Card */}
+        <Card className={cn(
+          "transition-colors",
+          hasBridgePrinter
+            ? "border-green-200 dark:border-green-800"
+            : bridgeStatus === "running"
+              ? "border-yellow-200 dark:border-yellow-800"
+              : "border-gray-200 dark:border-gray-800"
+        )}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "h-10 w-10 rounded-lg flex items-center justify-center",
+                hasBridgePrinter
+                  ? "bg-green-100 dark:bg-green-900/30"
+                  : bridgeStatus === "running"
+                    ? "bg-yellow-100 dark:bg-yellow-900/30"
+                    : "bg-gray-100 dark:bg-gray-900/30"
+              )}>
+                <Globe className={cn(
+                  "h-5 w-5",
+                  hasBridgePrinter
+                    ? "text-green-600"
+                    : bridgeStatus === "running"
+                      ? "text-yellow-600"
+                      : "text-gray-400"
+                )} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Print Bridge</p>
+                <p className="text-xs text-muted-foreground">
+                  {hasBridgePrinter
+                    ? "Connected — prints via bridge"
+                    : bridgeStatus === "running"
+                      ? "Running — printer offline"
+                      : "Not detected (localhost:3001)"}
+                </p>
+              </div>
+              {hasBridgePrinter ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Active
+                </Badge>
+              ) : bridgeStatus === "running" ? (
+                <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  No Printer
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400">
+                  <WifiOff className="h-3 w-3 mr-1" />
+                  Offline
                 </Badge>
               )}
             </div>
@@ -594,12 +684,11 @@ export default function HardwareSettingsPage() {
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Paper Width</Label>
                 <Select
-                  value={String(printerConfig.paperWidth)}
+                  value={String(receiptConfig.paperSize)}
                   onValueChange={(val) =>
-                    setPrinterConfig((prev) => ({
-                      ...prev,
-                      paperWidth: parseInt(val) as 58 | 80,
-                    }))
+                    updateReceiptConfig({
+                      paperSize: (isNaN(Number(val)) ? val : Number(val)) as typeof receiptConfig.paperSize,
+                    })
                   }
                 >
                   <SelectTrigger className="h-9">
@@ -608,12 +697,17 @@ export default function HardwareSettingsPage() {
                   <SelectContent>
                     <SelectItem value="58">58mm (2 inch)</SelectItem>
                     <SelectItem value="80">80mm (3 inch)</SelectItem>
+                    <SelectItem value="A5">A5 (148×210mm)</SelectItem>
+                    <SelectItem value="A4">A4 (210×297mm)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border">
                 <Label className="text-xs text-muted-foreground">Auto-print on sale</Label>
-                <Switch defaultChecked={false} />
+                <Switch
+                  checked={receiptConfig.autoPrint}
+                  onCheckedChange={(v) => updateReceiptConfig({ autoPrint: v })}
+                />
               </div>
             </div>
           </div>
@@ -673,6 +767,18 @@ export default function HardwareSettingsPage() {
           <ReceiptLayoutEditor
             config={receiptConfig}
             onChange={updateReceiptConfig}
+            onSave={handleSaveReceiptConfig}
+            isSaving={isSavingReceiptConfig}
+            storeName={store?.name}
+            storeAddress={
+              store
+                ? [store.address_line1, store.city, store.state]
+                    .filter(Boolean)
+                    .join(", ")
+                : undefined
+            }
+            storePhone={store?.phone ?? undefined}
+            storeGstin={store?.gstin ?? undefined}
           />
         </CardContent>
       </Card>

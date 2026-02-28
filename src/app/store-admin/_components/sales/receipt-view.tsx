@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useCallback } from "react";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -12,6 +12,8 @@ import {
 } from "@/utils/sales.utils";
 import type { ReceiptLayoutConfig } from "@/hooks/use-hardware";
 import { DEFAULT_RECEIPT_LAYOUT_CONFIG } from "@/hooks/use-hardware";
+import { useStoreStore } from "@/stores/store.store";
+import { printReceiptHtml, type PrintReceiptData } from "@/utils/receipt-print";
 
 // ============================================================================
 // TYPES
@@ -28,6 +30,12 @@ interface ReceiptViewProps {
     compact?: boolean;
     /** Full layout config — takes precedence over `compact` when provided */
     layoutConfig?: ReceiptLayoutConfig;
+    /**
+     * Optional print function override — e.g. the hook's `printReceipt`
+     * which tries ESC/POS (USB) first, then falls back to HTML popup.
+     * When not provided, uses `printReceiptHtml` directly.
+     */
+    printFn?: (data: PrintReceiptData, config: ReceiptLayoutConfig) => Promise<boolean> | boolean;
 }
 
 // ============================================================================
@@ -45,12 +53,14 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
             onPrint,
             compact = false,
             layoutConfig,
+            printFn,
         },
         ref
     ) {
-        const cfg: ReceiptLayoutConfig = layoutConfig ?? {
+        // Use saved store config > explicit prop > legacy compact flag > defaults
+        const storeReceiptConfig = useStoreStore((s) => s.receiptConfig);
+        const cfg: ReceiptLayoutConfig = layoutConfig ?? storeReceiptConfig ?? {
             ...DEFAULT_RECEIPT_LAYOUT_CONFIG,
-            // respect the legacy `compact` flag
             layout: compact ? "thermal-compact" : "thermal-detailed",
             fontSize: compact ? "small" : "medium",
         };
@@ -85,22 +95,50 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
             }
         })();
 
+        // Print using the styled receipt HTML generator (matches preview layout)
+        const handlePrint = useCallback(() => {
+            const printData: PrintReceiptData = {
+                store: receipt.store,
+                invoice: receipt.invoice,
+                cashier: sale.cashier_name ?? null,
+                customer: receipt.customer,
+                items: receipt.items.map((i) => ({
+                    name: i.name,
+                    hsn: i.hsn,
+                    qty: i.qty,
+                    unit: i.unit,
+                    price: i.price,
+                    discount: i.discount,
+                    total: i.total,
+                })),
+                totals: receipt.totals,
+                payments: receipt.payments,
+                footer: receipt.footer,
+            };
+
+            // Use custom print function (ESC/POS + fallback) if provided
+            if (printFn) {
+                Promise.resolve(printFn(printData, cfg));
+            } else {
+                printReceiptHtml(printData, cfg);
+            }
+            onPrint?.();
+        }, [receipt, sale.cashier_name, cfg, onPrint, printFn]);
+
         return (
             <div className="space-y-3">
                 {/* Action Buttons (not printed) */}
-                {onPrint && (
-                    <div className="flex gap-2 print:hidden">
-                        <Button variant="outline" size="sm" className="gap-1" onClick={onPrint}>
-                            <Printer className="h-3.5 w-3.5" />
-                            Print
-                        </Button>
-                        {cfg.printCopies > 1 && (
-                            <span className="text-xs text-muted-foreground self-center">
-                                {cfg.printCopies} copies
-                            </span>
-                        )}
-                    </div>
-                )}
+                <div className="flex gap-2 print:hidden">
+                    <Button variant="outline" size="sm" className="gap-1" onClick={handlePrint}>
+                        <Printer className="h-3.5 w-3.5" />
+                        Print
+                    </Button>
+                    {cfg.printCopies > 1 && (
+                        <span className="text-xs text-muted-foreground self-center">
+                            {cfg.printCopies} copies
+                        </span>
+                    )}
+                </div>
 
                 {/* Receipt Content */}
                 <div

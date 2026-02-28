@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useCallback } from "react";
 import {
@@ -8,6 +8,7 @@ import {
     Info,
     ShieldAlert,
     Package,
+    TrendingUp,
 } from "lucide-react";
 import {
     Tooltip,
@@ -18,7 +19,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -84,6 +84,17 @@ function TipHead({ children, tip }: { children: React.ReactNode; tip: string }) 
     );
 }
 
+/**
+ * Returns true when the alert was triggered historically but the current live
+ * stock has since recovered above the threshold — meaning the alert is stale.
+ */
+function isStaleAlert(alert: EnrichedStockAlert): boolean {
+    if (alert.is_resolved) return false;
+    if (alert.live_quantity == null) return false;
+    const threshold = alert.live_reorder_point ?? alert.threshold_quantity ?? 0;
+    return alert.live_quantity > threshold;
+}
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -120,6 +131,7 @@ export function AlertsPanel({
     const [resolutionNotes, setResolutionNotes] = useState("");
 
     const unresolvedAlerts = alerts.filter((a) => !a.is_resolved);
+    const staleAlertCount = unresolvedAlerts.filter(isStaleAlert).length;
     const allSelected =
         unresolvedAlerts.length > 0 &&
         unresolvedAlerts.every((a) => selectedIds.includes(a.id));
@@ -137,6 +149,11 @@ export function AlertsPanel({
             prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
         );
     }, []);
+
+    const handleSelectAllStale = useCallback(() => {
+        const staleIds = unresolvedAlerts.filter(isStaleAlert).map((a) => a.id);
+        setSelectedIds(staleIds);
+    }, [unresolvedAlerts]);
 
     const handleOpenResolve = (alertId: string) => {
         setResolveTarget(alertId);
@@ -170,6 +187,33 @@ export function AlertsPanel({
 
     return (
         <div className="space-y-4">
+            {/* Stale alert callout */}
+            {staleAlertCount > 0 && (
+                <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 text-sm">
+                    <TrendingUp className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                        <p className="font-medium text-amber-800 dark:text-amber-300">
+                            {staleAlertCount} stale alert{staleAlertCount > 1 ? "s" : ""} detected
+                        </p>
+                        <p className="text-amber-700 dark:text-amber-400 text-xs mt-0.5">
+                            These alerts were triggered when stock was low, but the current live
+                            quantity is now above the reorder threshold. This happens when an alert
+                            is created at product creation (qty = 0) and stock is later added without
+                            resolving the alert. You can safely resolve them.
+                        </p>
+                    </div>
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 border-amber-300 text-amber-800 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-900/40"
+                        onClick={handleSelectAllStale}
+                        disabled={isSaving}
+                    >
+                        Select Stale
+                    </Button>
+                </div>
+            )}
+
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2">
@@ -280,17 +324,22 @@ export function AlertsPanel({
                                 </TipHead>
                             </TableHead>
                             <TableHead className="text-right">
-                                <TipHead tip="Stock quantity recorded at the moment this alert was triggered. This is a snapshot — check the Inventory tab for the live current quantity.">
-                                    Qty at Alert
+                                <TipHead tip="Stock quantity recorded the moment this alert was triggered by the database. This is a historical snapshot - it will NOT change even if stock is added later.">
+                                    Qty When Triggered
                                 </TipHead>
                             </TableHead>
                             <TableHead className="text-right">
-                                <TipHead tip="The quantity level that caused this alert to fire (e.g. the product's Reorder Point). When On Hand falls at or below this, an alert is raised.">
+                                <TipHead tip="Live current stock from the inventory table, fetched right now. If this is higher than the Threshold, the alert is stale and can be safely resolved.">
+                                    Current Qty
+                                </TipHead>
+                            </TableHead>
+                            <TableHead className="text-right">
+                                <TipHead tip="The product's Reorder Point - the minimum quantity before a Low Stock alert fires. A value of 0 means the alert fires only when stock hits exactly 0 (the default when no reorder point is set).">
                                     Threshold
                                 </TipHead>
                             </TableHead>
                             <TableHead>
-                                <TipHead tip="Open = alert is active and needs attention. Resolved = someone has acknowledged and closed this alert.">
+                                <TipHead tip="Open = alert is active and needs attention. Resolved = someone has acknowledged and closed this alert. Stale = stock has recovered above threshold but alert was never resolved.">
                                     Status
                                 </TipHead>
                             </TableHead>
@@ -303,7 +352,7 @@ export function AlertsPanel({
                             <AlertTableSkeleton />
                         ) : alerts.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={9}>
+                                <TableCell colSpan={10}>
                                     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                                         <ShieldAlert className="h-10 w-10 mb-2" />
                                         <p className="font-medium">No alerts found</p>
@@ -314,95 +363,164 @@ export function AlertsPanel({
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            alerts.map((alert) => (
-                                <TableRow key={alert.id}>
-                                    <TableCell>
-                                        {!alert.is_resolved && (
-                                            <Checkbox
-                                                checked={selectedIds.includes(alert.id)}
-                                                onCheckedChange={() => handleSelectOne(alert.id)}
-                                                aria-label={`Select alert ${alert.id}`}
-                                            />
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            <Package className="h-4 w-4 text-muted-foreground shrink-0" />
-                                            <div className="min-w-0">
-                                                <p className="font-medium truncate">
-                                                    {alert.product?.name ?? "Unknown Product"}
-                                                </p>
-                                                {alert.product?.product_code && (
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {alert.product.product_code}
+                            alerts.map((alert) => {
+                                const stale = isStaleAlert(alert);
+                                return (
+                                    <TableRow
+                                        key={alert.id}
+                                        className={stale ? "bg-amber-50/40 dark:bg-amber-950/10" : undefined}
+                                    >
+                                        <TableCell>
+                                            {!alert.is_resolved && (
+                                                <Checkbox
+                                                    checked={selectedIds.includes(alert.id)}
+                                                    onCheckedChange={() => handleSelectOne(alert.id)}
+                                                    aria-label={`Select alert ${alert.id}`}
+                                                />
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
+                                                <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                <div className="min-w-0">
+                                                    <p className="font-medium truncate">
+                                                        {alert.product?.name ?? "Unknown Product"}
                                                     </p>
-                                                )}
+                                                    {alert.product?.product_code && (
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {alert.product.product_code}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge
-                                            variant="outline"
-                                            className={getAlertTypeColor(alert.alert_type)}
-                                        >
-                                            {getAlertTypeLabel(alert.alert_type)}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge
-                                            variant="outline"
-                                            className={getAlertSeverityColor(alert.severity)}
-                                        >
-                                            {getAlertSeverityLabel(alert.severity)}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono">
-                                        <TooltipProvider delayDuration={200}>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <span className="cursor-default border-b border-dashed border-muted-foreground/40">
-                                                        {alert.current_quantity ?? "-"}
-                                                    </span>
-                                                </TooltipTrigger>
-                                                <TooltipContent side="top" className="max-w-[220px] text-xs">
-                                                    Snapshot taken when this alert was triggered. Open the Inventory tab to see the live quantity.
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono">
-                                        {alert.threshold_quantity ?? "-"}
-                                    </TableCell>
-                                    <TableCell>
-                                        {alert.is_resolved ? (
-                                            <Badge variant="outline" className="text-green-600 border-green-200">
-                                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                                Resolved
-                                            </Badge>
-                                        ) : (
-                                            <Badge variant="outline" className="text-orange-600 border-orange-200">
-                                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                                Open
-                                            </Badge>
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="text-sm text-muted-foreground">
-                                        {formatRelativeTime(alert.created_at)}
-                                    </TableCell>
-                                    <TableCell>
-                                        {!alert.is_resolved && (
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() => handleOpenResolve(alert.id)}
-                                                disabled={isSaving}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge
+                                                variant="outline"
+                                                className={getAlertTypeColor(alert.alert_type)}
                                             >
-                                                Resolve
-                                            </Button>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            ))
+                                                {getAlertTypeLabel(alert.alert_type)}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge
+                                                variant="outline"
+                                                className={getAlertSeverityColor(alert.severity)}
+                                            >
+                                                {getAlertSeverityLabel(alert.severity)}
+                                            </Badge>
+                                        </TableCell>
+                                        {/* Qty when the alert was triggered (historical snapshot) */}
+                                        <TableCell className="text-right font-mono">
+                                            <TooltipProvider delayDuration={200}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <span className="cursor-default border-b border-dashed border-muted-foreground/40">
+                                                            {alert.current_quantity ?? "—"}
+                                                        </span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top" className="max-w-[240px] text-xs">
+                                                        Snapshot taken when this alert was triggered by the
+                                                        database. Does not update when stock changes.
+                                                        See &quot;Current Qty&quot; for live stock.
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        </TableCell>
+                                        {/* Live quantity from inventory table */}
+                                        <TableCell className="text-right font-mono">
+                                            {alert.live_quantity != null ? (
+                                                <TooltipProvider delayDuration={200}>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <span
+                                                                className={
+                                                                    stale
+                                                                        ? "text-green-600 dark:text-green-400 font-semibold cursor-default"
+                                                                        : "cursor-default"
+                                                                }
+                                                            >
+                                                                {alert.live_quantity}
+                                                                {stale && (
+                                                                    <TrendingUp className="inline h-3 w-3 ml-1 text-green-500" />
+                                                                )}
+                                                            </span>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top" className="max-w-[240px] text-xs">
+                                                            {stale
+                                                                ? `Stock has recovered to ${alert.live_quantity} units - above the threshold of ${alert.live_reorder_point ?? alert.threshold_quantity ?? 0}. This alert is stale and can be resolved.`
+                                                                : `Current live stock: ${alert.live_quantity} units.`}
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            ) : (
+                                                <span className="text-muted-foreground">—</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-right font-mono">
+                                            <TooltipProvider delayDuration={200}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <span className="cursor-default border-b border-dashed border-muted-foreground/40">
+                                                            {alert.threshold_quantity ?? "—"}
+                                                        </span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top" className="max-w-[240px] text-xs">
+                                                        {(alert.threshold_quantity ?? 0) === 0
+                                                            ? "Threshold is 0 because this product has no Reorder Point set. The alert fired when stock hit 0 (product creation). Set a Reorder Point on the product to get more meaningful alerts."
+                                                            : `Alert fires when stock falls to or below ${alert.threshold_quantity} units (the product's Reorder Point).`}
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        </TableCell>
+                                        <TableCell>
+                                            {alert.is_resolved ? (
+                                                <Badge variant="outline" className="text-green-600 border-green-200">
+                                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                                    Resolved
+                                                </Badge>
+                                            ) : stale ? (
+                                                <TooltipProvider delayDuration={200}>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Badge variant="outline" className="text-amber-600 border-amber-300 cursor-default">
+                                                                <TrendingUp className="h-3 w-3 mr-1" />
+                                                                Stale
+                                                            </Badge>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top" className="max-w-[240px] text-xs">
+                                                            Alert was triggered when stock was low, but current
+                                                            stock ({alert.live_quantity}) is now above the
+                                                            reorder threshold ({alert.live_reorder_point ?? alert.threshold_quantity ?? 0}).
+                                                            Resolve this alert to clean up.
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            ) : (
+                                                <Badge variant="outline" className="text-orange-600 border-orange-200">
+                                                    <AlertTriangle className="h-3 w-3 mr-1" />
+                                                    Open
+                                                </Badge>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-sm text-muted-foreground">
+                                            {formatRelativeTime(alert.created_at)}
+                                        </TableCell>
+                                        <TableCell>
+                                            {!alert.is_resolved && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => handleOpenResolve(alert.id)}
+                                                    disabled={isSaving}
+                                                >
+                                                    Resolve
+                                                </Button>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })
                         )}
                     </TableBody>
                 </Table>
@@ -456,7 +574,7 @@ export function AlertsPanel({
 
             {/* Bulk Resolve Dialog */}
             <Dialog open={bulkResolveOpen} onOpenChange={setBulkResolveOpen}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-    xl">
                     <DialogHeader>
                         <DialogTitle>Bulk Resolve Alerts</DialogTitle>
                         <DialogDescription>
@@ -464,7 +582,7 @@ export function AlertsPanel({
                             {selectedIds.length > 1 ? "s" : ""}.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-3">
+                    <div className="space-y-3 p-3">
                         <Textarea
                             value={resolutionNotes}
                             onChange={(e) => setResolutionNotes(e.target.value)}
@@ -506,6 +624,7 @@ function AlertTableSkeleton() {
                     <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-12 ml-auto" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-16" /></TableCell>

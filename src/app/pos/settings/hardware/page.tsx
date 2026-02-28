@@ -17,6 +17,7 @@ import {
   Loader2,
   Keyboard,
   Cable,
+  Globe,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,11 @@ export default function HardwareSettingsPage() {
     testPrinter,
     setScannerConfig,
     setPrinterConfig,
+    bridgeStatus,
+    bridgeHealth,
+    bridgePrinters,
+    hasBridgePrinter,
+    checkBridgeStatus,
   } = useHardware();
 
   const [isScannerTesting, setIsScannerTesting] = useState(false);
@@ -196,7 +202,7 @@ export default function HardwareSettingsPage() {
       </div>
 
       {/* Hardware Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Scanner Status Card */}
         <Card className={cn(
           "transition-colors",
@@ -269,6 +275,64 @@ export default function HardwareSettingsPage() {
                 <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400">
                   <WifiOff className="h-3 w-3 mr-1" />
                   No Device
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Print Bridge Status Card */}
+        <Card className={cn(
+          "transition-colors",
+          hasBridgePrinter
+            ? "border-green-200 dark:border-green-800"
+            : bridgeStatus === "running"
+              ? "border-yellow-200 dark:border-yellow-800"
+              : "border-gray-200 dark:border-gray-800"
+        )}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "h-10 w-10 rounded-lg flex items-center justify-center",
+                hasBridgePrinter
+                  ? "bg-green-100 dark:bg-green-900/30"
+                  : bridgeStatus === "running"
+                    ? "bg-yellow-100 dark:bg-yellow-900/30"
+                    : "bg-gray-100 dark:bg-gray-900/30"
+              )}>
+                <Globe className={cn(
+                  "h-5 w-5",
+                  hasBridgePrinter
+                    ? "text-green-600"
+                    : bridgeStatus === "running"
+                      ? "text-yellow-600"
+                      : "text-gray-400"
+                )} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">Print Bridge</p>
+                <p className="text-xs text-muted-foreground">
+                  {hasBridgePrinter
+                    ? "Connected — prints via bridge"
+                    : bridgeStatus === "running"
+                      ? "Running — printer offline"
+                      : "Not detected (localhost:3001)"}
+                </p>
+              </div>
+              {hasBridgePrinter ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Active
+                </Badge>
+              ) : bridgeStatus === "running" ? (
+                <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  No Printer
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400">
+                  <WifiOff className="h-3 w-3 mr-1" />
+                  Offline
                 </Badge>
               )}
             </div>
@@ -651,6 +715,126 @@ export default function HardwareSettingsPage() {
                 {isPrinterTesting ? "Printing..." : "Print Test Page"}
               </Button>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ================================================================ */}
+      {/* PRINT BRIDGE SECTION */}
+      {/* ================================================================ */}
+      <Card className={cn(
+        "transition-colors",
+        hasBridgePrinter ? "border-green-200 dark:border-green-800" : ""
+      )}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Globe className="h-5 w-5" />
+            Print Bridge
+            {hasBridgePrinter && (
+              <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 text-[10px]">
+                Active
+              </Badge>
+            )}
+          </CardTitle>
+          <CardDescription>
+            The POS Print Bridge is a local service (pos-print-bridge.exe) running on this PC
+            that sends receipts directly to USB/network thermal printers. When active, it takes
+            priority over browser-based printing.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Bridge Status */}
+          <div className="flex items-center justify-between px-3 py-2.5 rounded-md border bg-card">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "h-8 w-8 rounded-md flex items-center justify-center",
+                hasBridgePrinter
+                  ? "bg-green-100 dark:bg-green-900/30"
+                  : bridgeStatus === "running"
+                    ? "bg-yellow-100 dark:bg-yellow-900/30"
+                    : "bg-gray-100 dark:bg-gray-900/30"
+              )}>
+                <Globe className={cn(
+                  "h-4 w-4",
+                  hasBridgePrinter
+                    ? "text-green-600"
+                    : bridgeStatus === "running"
+                      ? "text-yellow-600"
+                      : "text-gray-400"
+                )} />
+              </div>
+              <div>
+                <p className="text-sm font-medium">
+                  {hasBridgePrinter
+                    ? "Bridge Connected"
+                    : bridgeStatus === "running"
+                      ? "Bridge Running (Printer Offline)"
+                      : "Bridge Not Detected"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {bridgeHealth
+                    ? `v${bridgeHealth.version} · Uptime: ${Math.floor(bridgeHealth.uptime / 60)}m · ${bridgeHealth.stats.printJobs} job(s)`
+                    : "Start pos-print-bridge.exe on this PC to enable direct thermal printing"}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                checkBridgeStatus();
+                toast.success("Checking Print Bridge...");
+              }}
+              className="gap-2"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Check
+            </Button>
+          </div>
+
+          {/* Bridge Printers List */}
+          {bridgePrinters.length > 0 && (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Printers on this PC (via Bridge)</Label>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {bridgePrinters.map((bp) => (
+                    <div
+                      key={bp.name}
+                      className="flex items-center justify-between px-3 py-2 rounded-md border bg-card text-sm"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Printer className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{bp.name}</span>
+                        <span className="text-xs text-muted-foreground">{bp.driver}</span>
+                      </div>
+                      <span className={cn(
+                        "text-xs px-1.5 py-0.5 rounded-full",
+                        bp.status === "ready"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+                      )}>
+                        {bp.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Print priority info */}
+          <Separator />
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p className="font-medium text-foreground">Print Priority Order:</p>
+            <ol className="list-decimal pl-4 space-y-0.5">
+              <li className={cn(hasBridgePrinter && "text-green-600 dark:text-green-400 font-medium")}>
+                Print Bridge (USB/Network thermal printer via pos-print-bridge.exe)
+              </li>
+              <li>ESC/POS Direct (Web USB API — browser-based)</li>
+              <li>System Printer (HTML popup via browser print dialog)</li>
+            </ol>
           </div>
         </CardContent>
       </Card>

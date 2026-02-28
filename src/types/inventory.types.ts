@@ -305,6 +305,10 @@ export interface EnrichedStockAlert extends StockAlert {
         batch_number: string;
         expiry_date: string;
     } | null;
+    /** Live current quantity from the inventory table (fetched at query time — NOT the snapshot) */
+    live_quantity?: number | null;
+    /** Live reorder point from the inventory table */
+    live_reorder_point?: number | null;
 }
 
 export interface EnrichedProductBatch extends ProductBatch {

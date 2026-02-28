@@ -100,6 +100,7 @@ export const DEFAULT_PRINTER_SETTINGS: PrinterSettings = {
     print_copies: 1,
     auto_print: true,
     cut_paper: true,
+    receipt_layout_config: null,
 };
 
 export const DEFAULT_BUSINESS_HOURS: BusinessHours = {

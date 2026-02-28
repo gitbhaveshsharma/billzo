@@ -199,6 +199,8 @@ export function PosCustomerSearch({
             clearSearchResults();
             return;
         }
+        // Clear stale results before the new search so the skeleton shows cleanly
+        clearSearchResults();
         quickSearch(storeId, debouncedQuery);
     }, [storeId, debouncedQuery, quickSearch, clearSearchResults]);
 
