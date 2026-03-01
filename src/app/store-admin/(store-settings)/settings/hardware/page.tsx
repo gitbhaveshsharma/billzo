@@ -18,6 +18,9 @@ import {
   Keyboard,
   Cable,
   Globe,
+  Download,
+  FileJson,
+  AppWindow,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -743,6 +746,118 @@ export default function HardwareSettingsPage() {
                   <Printer className="h-4 w-4" />
                 )}
                 {isPrinterTesting ? "Printing..." : "Print Test Page"}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ================================================================ */}
+      {/* PRINT BRIDGE DOWNLOAD */}
+      {/* ================================================================ */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Globe className="h-5 w-5 text-blue-500" />
+            Print Bridge — Setup & Download
+          </CardTitle>
+          <CardDescription>
+            The Print Bridge is a small background app that runs on your POS computer and enables
+            direct ESC/POS printing to USB thermal printers without browser restrictions.
+            Download and run it once — it starts silently and listens on{" "}
+            <code className="text-xs bg-muted px-1 py-0.5 rounded">localhost:3001</code>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* How it works */}
+          <div className="rounded-lg bg-muted/50 border px-4 py-3 text-sm space-y-1">
+            <p className="font-medium">How it works</p>
+            <ol className="list-decimal pl-4 space-y-0.5 text-muted-foreground text-xs">
+              <li>Download both files below into the same folder on your POS computer.</li>
+              <li>Run <code className="bg-muted px-1 rounded">pos-print-bridge.exe</code> — Windows may show a SmartScreen warning; click <strong>More info → Run anyway</strong>.</li>
+              <li>The bridge starts silently in the background and is ready instantly.</li>
+              <li>Come back to this page and click <strong>Refresh</strong> — the Print Bridge card should turn green.</li>
+            </ol>
+          </div>
+
+          {/* Download buttons */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <a
+              href="https://jffaufecqeompougmqtx.supabase.co/storage/v1/object/public/pos-print-bridge/pos-print-bridge.exe"
+              download="pos-print-bridge.exe"
+              className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:bg-accent hover:border-primary/50 transition-colors group"
+            >
+              <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                <AppWindow className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">pos-print-bridge.exe</p>
+                <p className="text-xs text-muted-foreground">Windows bridge application</p>
+              </div>
+              <Download className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+            </a>
+
+            <a
+              href="https://jffaufecqeompougmqtx.supabase.co/storage/v1/object/public/pos-print-bridge/config.json"
+              download="config.json"
+              className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 hover:bg-accent hover:border-primary/50 transition-colors group"
+            >
+              <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                <FileJson className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">config.json</p>
+                <p className="text-xs text-muted-foreground">Bridge configuration file</p>
+              </div>
+              <Download className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+            </a>
+          </div>
+
+          {/* Current bridge status inline */}
+          <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Globe className={cn(
+                "h-5 w-5",
+                hasBridgePrinter ? "text-green-500" : bridgeStatus === "running" ? "text-yellow-500" : "text-muted-foreground"
+              )} />
+              <div>
+                <p className="text-sm font-medium">Bridge Status</p>
+                <p className="text-xs text-muted-foreground">
+                  {hasBridgePrinter
+                    ? "Connected and printer ready"
+                    : bridgeStatus === "running"
+                      ? "Bridge running — no printer detected"
+                      : "Not running on localhost:3001"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {hasBridgePrinter ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Active
+                </Badge>
+              ) : bridgeStatus === "running" ? (
+                <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  No Printer
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400">
+                  <WifiOff className="h-3 w-3 mr-1" />
+                  Offline
+                </Badge>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  checkBridgeStatus();
+                }}
+                className="gap-1.5 h-8"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Check
               </Button>
             </div>
           </div>
