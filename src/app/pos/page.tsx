@@ -362,10 +362,9 @@ export default function POSPage() {
                 { id: toastId }
             );
 
-            // ── Fetch completed sale for receipt display (background) ───────
+            // ── Fetch completed sale for receipt display ────────────────
             if (result.sale_id) {
-                await fetchSaleById(storeId, result.sale_id);
-                const enrichedSale = useSalesStore.getState().currentSale;
+                const enrichedSale = await fetchSaleById(storeId, result.sale_id);
                 if (enrichedSale) {
                     setLastCompletedSale(enrichedSale);
                     setReceiptDialogOpen(true);

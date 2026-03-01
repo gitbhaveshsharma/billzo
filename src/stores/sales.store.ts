@@ -103,7 +103,7 @@ interface SalesState {
     // ACTIONS — FETCHING
     // ================================================================
     fetchSales: (storeId: string, forceRefresh?: boolean) => Promise<void>;
-    fetchSaleById: (storeId: string, saleId: string) => Promise<void>;
+    fetchSaleById: (storeId: string, saleId: string) => Promise<EnrichedSale | null>;
     fetchTodaySales: (storeId: string) => Promise<void>;
     fetchHoldBills: (storeId: string) => Promise<void>;
     fetchCreditSales: (storeId: string) => Promise<void>;
@@ -351,17 +351,22 @@ export const useSalesStore = create<SalesState>()(
 
                     if (result.error) {
                         set({ error: result.error, isLoading: false });
-                        return;
+                        return null;
                     }
 
                     if (result.data) {
                         set({ currentSale: result.data, error: null, isLoading: false });
+                        return result.data;
                     }
+
+                    set({ isLoading: false });
+                    return null;
                 } catch (err) {
                     set({
                         error: err instanceof Error ? err.message : "Failed to fetch sale",
                         isLoading: false,
                     });
+                    return null;
                 }
             },
 

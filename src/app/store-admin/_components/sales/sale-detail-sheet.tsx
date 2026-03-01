@@ -337,7 +337,7 @@ export function SaleDetailSheet({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-[480px] sm:w-[540px] p-0">
+            <SheetContent className="w-[580px] sm:w-[640px] p-0">
                 <SheetHeader className="p-4 pb-0">
                     <SheetTitle className="flex items-center gap-2">
                         <Receipt className="h-4 w-4" />
