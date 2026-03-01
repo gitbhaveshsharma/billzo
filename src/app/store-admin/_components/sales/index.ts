@@ -24,4 +24,5 @@ export { NoShiftGuard } from "./no-shift-guard";
 export { ProductSalesReportTable } from "./product-sales-report-table";
 export { CreditSalesView } from "./credit-sales-view";
 export { PosRefreshButton } from "./pos-refresh-button";
+export { PostSaleActionsDialog } from "./post-sale-actions-dialog";
 export { HardwareStatusIndicator } from "../../../../components/shared/hardware-status-indicator";

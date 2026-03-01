@@ -20,7 +20,10 @@ import {
     loadItemsFromCache,
     persistToCache,
     clearPosCache,
+    loadReceiptConfigFromCache,
+    persistReceiptConfig,
 } from "@/lib/pos-cache";
+import { useStoreStore } from "@/stores/store.store";
 
 // ============================================================================
 // STATE
@@ -155,6 +158,15 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
                                 status: "ready",
                                 error: null,
                             });
+
+                            // Also hydrate receipt config from IndexedDB into store
+                            loadReceiptConfigFromCache().then((cached) => {
+                                if (cached) {
+                                    const storeStore = useStoreStore.getState();
+                                    storeStore.updateReceiptConfig(cached);
+                                }
+                            });
+
                             return;
                         }
                     }
@@ -189,6 +201,12 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
 
                     // Persist to IndexedDB in the background — don't block UI
                     persistToCache(items, storeId).catch(() => {});
+
+                    // Also cache the receipt config from store settings
+                    const receiptCfg = useStoreStore.getState().receiptConfig;
+                    if (receiptCfg) {
+                        persistReceiptConfig(receiptCfg).catch(() => {});
+                    }
                 } catch {
                     set({
                         status: "error",
@@ -234,6 +252,12 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
 
                     // Persist updated data
                     persistToCache(items, storeId).catch(() => {});
+
+                    // Also cache the receipt config from store settings
+                    const refreshReceiptCfg = useStoreStore.getState().receiptConfig;
+                    if (refreshReceiptCfg) {
+                        persistReceiptConfig(refreshReceiptCfg).catch(() => {});
+                    }
                 } catch {
                     set({
                         status: "error",

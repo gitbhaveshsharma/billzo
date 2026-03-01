@@ -6,12 +6,15 @@
 import { openDB, type IDBPDatabase } from "idb";
 import type { SellableItem, PosCacheMeta } from "@/types/pos.types";
 import { POS_CACHE_VERSION } from "@/types/pos.types";
+import type { ReceiptLayoutConfig } from "@/hooks/use-hardware";
 
 const DB_NAME = "pos-catalog";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const ITEMS_STORE = "items";
 const META_STORE = "meta";
+const CONFIG_STORE = "config";
 const META_KEY = "cache-meta";
+const RECEIPT_CONFIG_KEY = "receipt-layout";
 
 // ============================================================================
 // DATABASE SETUP
@@ -30,6 +33,10 @@ function getDb(): Promise<IDBPDatabase> {
                 // Meta store — single row for cache metadata
                 if (!db.objectStoreNames.contains(META_STORE)) {
                     db.createObjectStore(META_STORE);
+                }
+                // Config store — receipt layout, printer settings, etc.
+                if (!db.objectStoreNames.contains(CONFIG_STORE)) {
+                    db.createObjectStore(CONFIG_STORE);
                 }
             },
         });
@@ -116,11 +123,44 @@ export async function persistToCache(
 export async function clearPosCache(): Promise<void> {
     try {
         const db = await getDb();
-        const tx = db.transaction([ITEMS_STORE, META_STORE], "readwrite");
+        const tx = db.transaction([ITEMS_STORE, META_STORE, CONFIG_STORE], "readwrite");
         await tx.objectStore(ITEMS_STORE).clear();
         await tx.objectStore(META_STORE).clear();
+        await tx.objectStore(CONFIG_STORE).clear();
         await tx.done;
     } catch {
         console.warn("[POS Cache] Failed to clear cache");
+    }
+}
+
+// ============================================================================
+// RECEIPT CONFIG CACHE
+// ============================================================================
+
+/**
+ * Load receipt layout config from IndexedDB.
+ * Returns null if not cached.
+ */
+export async function loadReceiptConfigFromCache(): Promise<ReceiptLayoutConfig | null> {
+    try {
+        const db = await getDb();
+        const config = await db.get(CONFIG_STORE, RECEIPT_CONFIG_KEY);
+        return (config as ReceiptLayoutConfig) ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Persist receipt layout config to IndexedDB.
+ */
+export async function persistReceiptConfig(
+    config: ReceiptLayoutConfig
+): Promise<void> {
+    try {
+        const db = await getDb();
+        await db.put(CONFIG_STORE, config, RECEIPT_CONFIG_KEY);
+    } catch {
+        console.warn("[POS Cache] Failed to persist receipt config");
     }
 }

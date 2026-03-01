@@ -15,6 +15,7 @@ import { useHardware } from "@/hooks/use-hardware";
 import { useSalesStore } from "@/stores/sales.store";
 import { usePosCatalogStore } from "@/stores/pos-catalog.store";
 import { useShiftsStore } from "@/stores/shifts.store";
+import { useStoreStore } from "@/stores/store.store";
 import {
     NoShiftGuard,
     ProductSearchBar,
@@ -23,22 +24,16 @@ import {
     CustomerSection,
     PaymentDialog,
     HoldBillsDrawer,
-    ReceiptView,
     HardwareStatusIndicator,
     PosRefreshButton,
 } from "../store-admin/_components/sales";
+import { PostSaleActionsDialog } from "../store-admin/_components/sales/post-sale-actions-dialog";
 import { AddCustomerDialog } from "../store-admin/_components/customer";
 import { customerService } from "@/services/customers.service";
 import type { CreateCustomerRequest } from "@/types/customers.types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
 import type {
     CreateSalePaymentRequest,
     CreateSaleRequest,
@@ -109,6 +104,11 @@ export default function POSPage() {
 
     // Hardware hook — provides printReceipt with Bridge → USB → HTML fallback
     const { printReceipt } = useHardware();
+
+    // Store info for receipt
+    const store = useStoreStore((s) => s.store);
+    const receiptConfig = useStoreStore((s) => s.receiptConfig);
+    const markReceiptPrinted = useSalesStore((s) => s.markReceiptPrinted);
 
     // Dialog state
     const [paymentOpen, setPaymentOpen] = useState(false);
@@ -393,6 +393,36 @@ export default function POSPage() {
     );
 
     // ========================================================================
+    // POST-SALE RECEIPT ACTION — Track print/sms/email in database
+    // ========================================================================
+
+    const handleReceiptAction = useCallback(
+        (action: "print" | "sms" | "email" | "skip") => {
+            if (!storeId || !lastCompletedSale) return;
+
+            const saleId = lastCompletedSale.id;
+
+            // Fire-and-forget — don't block POS flow
+            switch (action) {
+                case "print":
+                    markReceiptPrinted(storeId, saleId, {
+                        receipt_printed: true,
+                        receipt_print_count: (lastCompletedSale.receipt_print_count ?? 0) + 1,
+                    });
+                    break;
+                case "sms":
+                    markReceiptPrinted(storeId, saleId, { sms_sent: true });
+                    break;
+                case "email":
+                    markReceiptPrinted(storeId, saleId, { email_sent: true });
+                    break;
+                // "skip" — no DB update needed
+            }
+        },
+        [storeId, lastCompletedSale, markReceiptPrinted]
+    );
+
+    // ========================================================================
     // POS KEYBOARD SHORTCUTS
     //   F2 = Hold current bill     F3 = Open held bills
     //   F8 = Charge (open payment) F4 = Clear cart
@@ -645,23 +675,19 @@ export default function POSPage() {
                 onRecallServer={handleRecallServer}
             />
 
-            {/* Receipt Dialog */}
-            <Dialog open={receiptDialogOpen} onOpenChange={setReceiptDialogOpen}>
-                <DialogContent className="max-w-md max-h-[90vh] overflow-auto">
-                    <DialogHeader>
-                        <DialogTitle>Receipt</DialogTitle>
-                    </DialogHeader>
-                    {lastCompletedSale && (
-                        <ReceiptView
-                            sale={lastCompletedSale}
-                            storeName={appUser?.storeName ?? "Store"}
-                            storeAddress=""
-                            compact
-                            printFn={printReceipt}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
+            {/* Post-Sale Receipt Actions Dialog */}
+            <PostSaleActionsDialog
+                open={receiptDialogOpen}
+                onOpenChange={setReceiptDialogOpen}
+                sale={lastCompletedSale}
+                storeName={appUser?.storeName ?? store?.name ?? "Store"}
+                storeAddress={store?.address_line1 ?? ""}
+                storeGstin={store?.gstin}
+                storePhone={store?.phone}
+                receiptConfig={receiptConfig}
+                printFn={printReceipt}
+                onActionComplete={handleReceiptAction}
+            />
         </NoShiftGuard>
     );
 }

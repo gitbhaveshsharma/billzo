@@ -767,9 +767,12 @@ export interface UpdateSaleRequest {
     tags?: string[] | null;
 }
 
-/** Mark receipt as printed */
+/** Mark receipt as printed / sent */
 export interface MarkReceiptPrintedRequest {
-    receipt_printed: boolean;
+    receipt_printed?: boolean;
+    receipt_print_count?: number;
+    email_sent?: boolean;
+    sms_sent?: boolean;
 }
 
 // ============================================================================

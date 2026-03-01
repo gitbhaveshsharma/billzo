@@ -563,7 +563,7 @@ export const salesService = {
     },
 
     /**
-     * Mark receipt as printed
+     * Mark receipt as printed / sent via SMS / sent via email
      */
     markReceiptPrinted: async (
         storeId: string,
@@ -571,15 +571,29 @@ export const salesService = {
         data: MarkReceiptPrintedRequest
     ): Promise<ServiceResponse<Sale>> => {
         try {
+            const updatePayload: Record<string, unknown> = {
+                updated_at: new Date().toISOString(),
+            };
+
+            if (data.receipt_printed !== undefined) {
+                updatePayload.receipt_printed = data.receipt_printed;
+                updatePayload.receipt_printed_at = data.receipt_printed
+                    ? new Date().toISOString()
+                    : null;
+            }
+            if (data.receipt_print_count !== undefined) {
+                updatePayload.receipt_print_count = data.receipt_print_count;
+            }
+            if (data.email_sent !== undefined) {
+                updatePayload.email_sent = data.email_sent;
+            }
+            if (data.sms_sent !== undefined) {
+                updatePayload.sms_sent = data.sms_sent;
+            }
+
             const { data: sale, error } = await getClient()
                 .from("sales")
-                .update({
-                    receipt_printed: data.receipt_printed,
-                    receipt_printed_at: data.receipt_printed
-                        ? new Date().toISOString()
-                        : null,
-                    updated_at: new Date().toISOString(),
-                } as never)
+                .update(updatePayload as never)
                 .eq("id", saleId)
                 .eq("store_id", storeId)
                 .select()
