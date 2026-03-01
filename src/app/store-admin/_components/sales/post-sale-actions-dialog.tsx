@@ -26,6 +26,7 @@ import type { EnrichedSale } from "@/types/sales.types";
 import type { ReceiptLayoutConfig } from "@/hooks/use-hardware";
 import { buildReceiptData } from "@/utils/sales.utils";
 import type { PrintReceiptData } from "@/utils/receipt-print";
+import { useCustomerStore } from "@/stores/customers.store";
 
 // ============================================================================
 // TYPES
@@ -82,6 +83,7 @@ export function PostSaleActionsDialog({
     const [actionState, setActionState] = useState<ActionState>("idle");
     const [lastError, setLastError] = useState<string | null>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
+    const customerCache = useCustomerStore((s) => s.customerCache);
 
     // Reset state when dialog opens
     useEffect(() => {
@@ -95,12 +97,21 @@ export function PostSaleActionsDialog({
     const buildPrintData = useCallback((): PrintReceiptData | null => {
         if (!sale) return null;
 
+        // Look up customer address from in-memory cache (no API call)
+        const cachedCustomer = sale.customer_id ? customerCache.get(sale.customer_id)?.data : null;
+        const customerAddress = cachedCustomer?.address_line1
+            ? [cachedCustomer.address_line1, cachedCustomer.address_line2, cachedCustomer.city, cachedCustomer.state, cachedCustomer.pincode]
+                  .filter(Boolean)
+                  .join(", ")
+            : null;
+
         const receipt = buildReceiptData(
             sale,
             storeName,
             storeAddress,
             storeGstin ?? null,
-            storePhone ?? null
+            storePhone ?? null,
+            customerAddress
         );
 
         return {
@@ -121,7 +132,7 @@ export function PostSaleActionsDialog({
             payments: receipt.payments,
             footer: receipt.footer,
         };
-    }, [sale, storeName, storeAddress, storeGstin, storePhone]);
+    }, [sale, storeName, storeAddress, storeGstin, storePhone, customerCache]);
 
     // ── Action handlers ─────────────────────────────────────────────────────
 

@@ -1288,11 +1288,12 @@ export const buildReceiptData = (
     storeName: string,
     storeAddress: string,
     storeGstin: string | null,
-    storePhone: string | null
+    storePhone: string | null,
+    customerAddress: string | null = null
 ): {
     store: { name: string; address: string; gstin: string | null; phone: string | null };
     invoice: { number: string; date: string; time: string };
-    customer: { name: string | null; phone: string | null; gstin: string | null };
+    customer: { name: string | null; phone: string | null; gstin: string | null; address: string | null };
     items: Array<{
         name: string;
         code: string;
@@ -1345,6 +1346,7 @@ export const buildReceiptData = (
         name: sale.customer_name,
         phone: sale.customer_phone,
         gstin: sale.customer_gstin,
+        address: customerAddress,
     },
     items: sale.items
         .filter((i) => !i.is_void)

@@ -8,6 +8,19 @@ import type { SellableItem, PosCacheMeta } from "@/types/pos.types";
 import { POS_CACHE_VERSION } from "@/types/pos.types";
 import type { ReceiptLayoutConfig } from "@/hooks/use-hardware";
 
+// ============================================================================
+// CACHED STORE INFO — receipt-relevant store + org fields
+// ============================================================================
+
+export interface CachedStoreInfo {
+    name: string;
+    address: string;
+    phone: string | null;
+    gstin: string | null;
+    /** Organization-level GSTIN (fallback when store has none) */
+    orgGstin: string | null;
+}
+
 const DB_NAME = "pos-catalog";
 const DB_VERSION = 2;
 const ITEMS_STORE = "items";
@@ -15,6 +28,7 @@ const META_STORE = "meta";
 const CONFIG_STORE = "config";
 const META_KEY = "cache-meta";
 const RECEIPT_CONFIG_KEY = "receipt-layout";
+const STORE_INFO_KEY = "store-info";
 
 // ============================================================================
 // DATABASE SETUP
@@ -162,5 +176,37 @@ export async function persistReceiptConfig(
         await db.put(CONFIG_STORE, config, RECEIPT_CONFIG_KEY);
     } catch {
         console.warn("[POS Cache] Failed to persist receipt config");
+    }
+}
+
+// ============================================================================
+// STORE INFO CACHE — receipt-relevant store + org data
+// ============================================================================
+
+/**
+ * Load cached store info from IndexedDB.
+ * Returns null if not cached.
+ */
+export async function loadStoreInfoFromCache(): Promise<CachedStoreInfo | null> {
+    try {
+        const db = await getDb();
+        const info = await db.get(CONFIG_STORE, STORE_INFO_KEY);
+        return (info as CachedStoreInfo) ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Persist store info to IndexedDB for offline receipt printing.
+ */
+export async function persistStoreInfo(
+    info: CachedStoreInfo
+): Promise<void> {
+    try {
+        const db = await getDb();
+        await db.put(CONFIG_STORE, info, STORE_INFO_KEY);
+    } catch {
+        console.warn("[POS Cache] Failed to persist store info");
     }
 }

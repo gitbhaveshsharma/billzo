@@ -46,6 +46,8 @@ export interface PrintReceiptData {
         name: string | null;
         phone: string | null;
         gstin: string | null;
+        /** Full address string (address_line1[, address_line2][, city, state, pincode]) */
+        address: string | null;
     };
     items: Array<{
         name: string;
@@ -155,7 +157,7 @@ export function buildTestReceiptData(
             time: now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }),
         },
         cashier: "Admin",
-        customer: { name: "Rahul Sharma", phone: "+91 99887 76655", gstin: null },
+        customer: { name: "Rahul Sharma", phone: "+91 99887 76655", gstin: null, address: "123 MG Road, Andheri West, Mumbai - 400058" },
         items: [
             { name: "Basmati Rice 5kg", hsn: "1006", qty: 2, unit: "Pcs", price: 299, discount: 20, total: 578 },
             { name: "Sunflower Oil 1L", hsn: "1512", qty: 1, unit: "Pcs", price: 180, discount: 0, total: 180 },
@@ -244,6 +246,9 @@ export function generateReceiptHtml(
         let custHtml = `<div style="color:#666;">Customer: ${esc(data.customer.name)}`;
         if (data.customer.phone) custHtml += ` (${esc(data.customer.phone)})`;
         custHtml += `</div>`;
+        if (data.customer.address) {
+            custHtml += `<div style="color:#666;">${esc(data.customer.address)}</div>`;
+        }
         if (data.customer.gstin) {
             custHtml += `<div style="color:#666;">GSTIN: ${esc(data.customer.gstin)}</div>`;
         }

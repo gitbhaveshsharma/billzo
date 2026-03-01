@@ -59,7 +59,7 @@ interface StoreAdminProviderProps {
 
 export function StoreAdminProvider({ children }: StoreAdminProviderProps) {
     const { appUser } = useAuth();
-    const { store } = useStoreStore();
+    const { store, fetchStore } = useStoreStore();
 
     const {
         users,
@@ -73,6 +73,13 @@ export function StoreAdminProvider({ children }: StoreAdminProviderProps) {
 
     const role = appUser?.role ?? null;
     const storeId = appUser?.storeId ?? store?.id ?? null;
+
+    // Fetch full store record if not yet loaded
+    useEffect(() => {
+        if (storeId) {
+            fetchStore(storeId);
+        }
+    }, [storeId, fetchStore]);
 
     const canManageEmployees = useMemo(
         () => !!role && EMPLOYEE_MANAGEMENT_ROLES.includes(role),

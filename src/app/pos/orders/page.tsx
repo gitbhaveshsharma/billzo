@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useSalesStore } from "@/stores/sales.store";
+import { usePosCatalogStore } from "@/stores/pos-catalog.store";
 import {
     SalesStats,
     SalesToolbar,
@@ -38,6 +39,7 @@ import type {
 export default function POSOrdersPage() {
     const { appUser, isLoading: authLoading } = useAuth();
     const storeId = appUser?.storeId ?? null;
+    const cachedStoreInfo = usePosCatalogStore((s) => s.storeInfo);
 
     const {
         sales,
@@ -399,8 +401,10 @@ export default function POSOrdersPage() {
                     {receiptSale && (
                         <ReceiptView
                             sale={receiptSale}
-                            storeName={appUser?.storeName ?? "Store"}
-                            storeAddress=""
+                            storeName={cachedStoreInfo?.name ?? appUser?.storeName ?? "Store"}
+                            storeAddress={cachedStoreInfo?.address ?? ""}
+                            storeGstin={cachedStoreInfo?.gstin}
+                            storePhone={cachedStoreInfo?.phone}
                             compact
                         />
                     )}

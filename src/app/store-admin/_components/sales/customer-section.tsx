@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { PosCustomerSearch } from "../customer/pos-customer-search";
 import type { Customer } from "@/types/customers.types";
 import type { GstType } from "@/types/sales.types";
+import { useCustomerStore } from "@/stores/customers.store";
 
 // ============================================================================
 // TYPES
@@ -60,7 +61,11 @@ export function CustomerSection({
           } as Customer)
         : null;
 
+    const { cacheCustomer } = useCustomerStore();
+
     const handleSelect = (customer: Customer) => {
+        // Cache full customer data (including address) so it's available for receipt printing
+        cacheCustomer(customer);
         onSetCustomer(
             customer.id,
             customer.name,

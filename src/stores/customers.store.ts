@@ -109,6 +109,7 @@ interface CustomerState {
     clearSearchResults: () => void;
 
     // Actions — Cache
+    cacheCustomer: (customer: Customer) => void;
     invalidateCache: () => void;
     invalidateLedgerCache: (customerId?: string) => void;
     invalidateCreditNotesCache: (customerId?: string) => void;
@@ -1141,6 +1142,12 @@ export const useCustomerStore = create<CustomerState>()(
             // ================================================================
             // CACHE MANAGEMENT
             // ================================================================
+
+            cacheCustomer: (customer: Customer) => {
+                const newCache = new Map(get().customerCache);
+                newCache.set(customer.id, { data: customer, fetchedAt: Date.now() });
+                set({ customerCache: newCache });
+            },
 
             invalidateCache: () => {
                 set({
