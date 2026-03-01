@@ -80,15 +80,26 @@ export type BridgeErrorReason =
  * Categorise a fetch error into a BridgeErrorReason.
  *
  * Browser fetch errors are intentionally opaque (security), so we use
- * heuristics on the error message + current page protocol to guess the
- * most likely cause.
+ * heuristics on the error message + error name + current page protocol
+ * to guess the most likely cause.
  */
 function categorizeFetchError(err: unknown): BridgeErrorReason {
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  const name = (err instanceof Error ? err.name : "").toLowerCase();
+
+  // AbortSignal.timeout() throws DOMException with name "TimeoutError"
+  if (name === "timeouterror" || name === "aborterror") {
+    return "timeout";
+  }
 
   // Explicit connection refusal — nothing listening on port / firewall
   if (msg.includes("err_connection_refused") || msg.includes("connection refused")) {
     return "connection-refused";
+  }
+
+  // Timeout keywords in message
+  if (msg.includes("timeout") || msg.includes("signal timed out") || msg.includes("aborted")) {
+    return "timeout";
   }
 
   // Network error + HTTPS page → likely Private Network Access (PNA) block
@@ -103,11 +114,6 @@ function categorizeFetchError(err: unknown): BridgeErrorReason {
   // Explicit CORS mention
   if (msg.includes("cors") || msg.includes("cross-origin") || msg.includes("access-control")) {
     return "cors";
-  }
-
-  // Timeout
-  if (msg.includes("timeout") || msg.includes("aborterror") || msg.includes("abort")) {
-    return "timeout";
   }
 
   // Mixed content (older browsers)
@@ -132,7 +138,7 @@ export function getBridgeErrorMessage(reason: BridgeErrorReason): string {
     case "cors":
       return "CORS error — the Print Bridge is not sending the required Access-Control headers.";
     case "timeout":
-      return "Connection timed out — the bridge may still be starting up. Try again in a few seconds.";
+      return "Connection timed out — the bridge is running but responding too slowly (printer may be offline). The bridge has been updated to fix this; download the latest pos-print-bridge.exe.";
     case "mixed-content":
       return "Mixed content blocked — your browser is blocking HTTP requests from this HTTPS page.";
     case "unknown":
