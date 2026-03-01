@@ -194,6 +194,7 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Employees",
     href: "/store-admin/employees",
     icon: Users,
+    shortcut: "Alt+E",
     roles: ["store_admin", "super_admin"],
     permissions: ["manage_employees"],
     children: [
@@ -202,6 +203,7 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "All Employees",
         href: "/store-admin/employees",
         roles: ["store_admin", "super_admin"],
+        shortcut: "Alt+Shift+E",
       },
       {
         id: "admin-employees-roles",
@@ -216,6 +218,7 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Inventory",
     href: "/store-admin/inventory",
     icon: Package,
+    shortcut: "Alt+I",
     roles: ["store_admin", "super_admin"],
     permissions: ["manage_inventory"],
     children: [
@@ -224,36 +227,42 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "Products",
         href: "/store-admin/products",
         roles: ["store_admin", "super_admin"],
+        shortcut: "Alt+G",
       },
       {
         id: "admin-inventory-stock",
         label: "Stock Levels",
         href: "/store-admin/stock",
         roles: ["store_admin", "super_admin"],
+        shortcut: "Alt+L",
       },
       {
         id: "admin-inventory-purchases",
         label: "Purchases",
         href: "/store-admin/purchase",
         roles: ["store_admin", "super_admin"],
+        shortcut: "Alt+U",
       },
       {
         id: "admin-inventory-sales",
         label: "Sales",
         href: "/store-admin/sales",
         roles: ["store_admin", "super_admin"],
+        shortcut: "Alt+S",
       },
       {
         id: "admin-inventory-shifts",
         label: "Shifts",
         href: "/store-admin/shifts",
         roles: ["store_admin", "super_admin"],
+        shortcut: "Alt+Shift+H",
       },
       {
         id: "admin-inventory-suppliers",
         label: "Suppliers",
         href: "/store-admin/suppliers",
         roles: ["store_admin", "super_admin"],
+        shortcut: "Alt+V",
       },
     ],
   },
@@ -262,6 +271,7 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Reports",
     href: "/store-admin/reports",
     icon: BarChart3,
+    shortcut: "Alt+T",
     roles: ["store_admin", "super_admin"],
     permissions: ["view_reports"],
     children: [
@@ -270,6 +280,7 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "Sales Report",
         href: "/store-admin/reports/sales",
         roles: ["store_admin", "super_admin"],
+        shortcut: "Alt+Shift+S",
       },
       {
         id: "admin-reports-revenue",
@@ -290,6 +301,7 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Customers",
     href: "/store-admin/customers",
     icon: UserCheck,
+    shortcut: "Alt+C",
     roles: ["store_admin", "super_admin"],
     permissions: ["manage_customers"],
   },
@@ -298,7 +310,7 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Store Settings",
     href: "/store-admin/settings",
     icon: Settings,
-    shortcut: "Alt+S",
+    shortcut: "Alt+,",
     roles: ["store_admin", "super_admin"],
     permissions: ["manage_store_settings"],
     children: [
@@ -419,6 +431,7 @@ const MANAGER_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Team",
     href: "/manager/team",
     icon: Users,
+    shortcut: "Alt+E",
     roles: ["manager", "store_admin", "super_admin"],
     permissions: ["manage_employees"],
     children: [
@@ -427,12 +440,14 @@ const MANAGER_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "Staff List",
         href: "/manager/team",
         roles: ["manager", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+E",
       },
       {
         id: "mgr-team-shifts",
         label: "Shifts",
         href: "/manager/team/shifts",
         roles: ["manager", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+H",
       },
       {
         id: "mgr-team-performance",
@@ -447,6 +462,7 @@ const MANAGER_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Inventory",
     href: "/manager/inventory",
     icon: Package,
+    shortcut: "Alt+I",
     roles: ["manager", "store_admin", "super_admin"],
     permissions: ["manage_inventory"],
   },
@@ -462,6 +478,7 @@ const MANAGER_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "Daily Ops",
         href: "/manager/operations/daily",
         roles: ["manager", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+D",
       },
       {
         id: "mgr-ops-quality",
@@ -476,6 +493,7 @@ const MANAGER_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Reports",
     href: "/manager/reports",
     icon: BarChart3,
+    shortcut: "Alt+T",
     roles: ["manager", "store_admin", "super_admin"],
     permissions: ["view_reports"],
   },
@@ -484,6 +502,7 @@ const MANAGER_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Customers",
     href: "/manager/customers",
     icon: UserCheck,
+    shortcut: "Alt+C",
     roles: ["manager", "store_admin", "super_admin"],
     permissions: ["manage_customers"],
   },
@@ -512,6 +531,7 @@ const POS_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Customers",
     href: "/pos/customers",
     icon: UserCheck,
+    shortcut: "Alt+C",
     roles: ["cashier", "manager", "store_admin", "super_admin"],
     permissions: ["manage_customers"],
   },
@@ -520,6 +540,7 @@ const POS_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Refunds",
     href: "/pos/refunds",
     icon: ArrowLeftRight,
+    shortcut: "Alt+F",
     roles: ["cashier", "manager", "store_admin", "super_admin"],
   },
   {
@@ -527,6 +548,7 @@ const POS_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Shifts",
     href: "/pos/shifts",
     icon: Clock,
+    shortcut: "Alt+S",
     roles: ["cashier", "manager", "store_admin", "super_admin"],
   },
   {
@@ -534,6 +556,7 @@ const POS_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Daily Report",
     href: "/pos/daily-report",
     icon: FileText,
+    shortcut: "Alt+T",
     roles: ["cashier", "manager", "store_admin", "super_admin"],
   },
   {
@@ -541,6 +564,7 @@ const POS_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Hardware",
     href: "/pos/settings/hardware",
     icon: Cpu,
+    shortcut: "Alt+H",
     roles: ["cashier", "manager", "store_admin", "super_admin"],
   },
 ];
@@ -560,6 +584,7 @@ const ACCOUNTANT_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Transactions",
     href: "/accountant/transactions",
     icon: CreditCard,
+    shortcut: "Alt+X",
     roles: ["accountant", "store_admin", "super_admin"],
     children: [
       {
@@ -567,12 +592,14 @@ const ACCOUNTANT_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "All Transactions",
         href: "/accountant/transactions",
         roles: ["accountant", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+X",
       },
       {
         id: "acc-txn-expenses",
         label: "Expenses",
         href: "/accountant/transactions/expenses",
         roles: ["accountant", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+E",
       },
       {
         id: "acc-txn-reconcile",
@@ -587,6 +614,7 @@ const ACCOUNTANT_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Financial Reports",
     href: "/accountant/reports",
     icon: BarChart3,
+    shortcut: "Alt+T",
     roles: ["accountant", "store_admin", "super_admin"],
     permissions: ["view_financials"],
     children: [
@@ -595,18 +623,21 @@ const ACCOUNTANT_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "Income Statement",
         href: "/accountant/reports/income",
         roles: ["accountant", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+I",
       },
       {
         id: "acc-reports-balance",
         label: "Balance Sheet",
         href: "/accountant/reports/balance",
         roles: ["accountant", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+B",
       },
       {
         id: "acc-reports-tax",
         label: "Tax Report",
         href: "/accountant/reports/tax",
         roles: ["accountant", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+T",
       },
     ],
   },
@@ -615,6 +646,7 @@ const ACCOUNTANT_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Invoices & Billing",
     href: "/accountant/invoices",
     icon: FileText,
+    shortcut: "Alt+I",
     roles: ["accountant", "store_admin", "super_admin"],
     children: [
       {
@@ -628,6 +660,7 @@ const ACCOUNTANT_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "Customer Accounts",
         href: "/accountant/invoices/customers",
         roles: ["accountant", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+C",
       },
       {
         id: "acc-inv-terms",
@@ -642,6 +675,7 @@ const ACCOUNTANT_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Payroll",
     href: "/accountant/payroll",
     icon: Wallet,
+    shortcut: "Alt+P",
     roles: ["accountant", "store_admin", "super_admin"],
   },
 ];
@@ -661,6 +695,7 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Products",
     href: "/inventory/products",
     icon: Boxes,
+    shortcut: "Alt+G",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
     permissions: ["manage_inventory"],
     children: [
@@ -669,6 +704,7 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "All Products",
         href: "/inventory/products",
         roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+G",
       },
       {
         id: "inv-products-categories",
@@ -683,6 +719,7 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Stock Management",
     href: "/inventory/stock",
     icon: Package,
+    shortcut: "Alt+I",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
     permissions: ["manage_inventory"],
     children: [
@@ -691,6 +728,7 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "Stock Levels",
         href: "/inventory/stock",
         roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+        shortcut: "Alt+L",
       },
       {
         id: "inv-stock-low",
@@ -698,6 +736,7 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
         href: "/inventory/stock/low",
         icon: AlertTriangle,
         roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+L",
       },
       {
         id: "inv-stock-transfer",
@@ -712,6 +751,7 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Purchase Orders",
     href: "/inventory/purchase-orders",
     icon: ClipboardList,
+    shortcut: "Alt+U",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
     children: [
       {
@@ -719,12 +759,14 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "New Order",
         href: "/inventory/purchase-orders/new",
         roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+        shortcut: "Alt+N",
       },
       {
         id: "inv-po-active",
         label: "Active Orders",
         href: "/inventory/purchase-orders",
         roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+        shortcut: "Alt+O",
       },
       {
         id: "inv-po-receiving",
@@ -739,6 +781,7 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Suppliers",
     href: "/inventory/suppliers",
     icon: Truck,
+    shortcut: "Alt+V",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
     permissions: ["manage_suppliers"],
   },
@@ -747,6 +790,7 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Inventory Reports",
     href: "/inventory/reports",
     icon: BarChart3,
+    shortcut: "Alt+T",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
     permissions: ["view_reports"],
     children: [
@@ -755,6 +799,7 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "Valuation",
         href: "/inventory/reports/valuation",
         roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+V",
       },
       {
         id: "inv-reports-shrinkage",
@@ -769,6 +814,7 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
     label: "Audits & Adjustments",
     href: "/inventory/audits",
     icon: PackageSearch,
+    shortcut: "Alt+A",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
     children: [
       {
@@ -776,6 +822,7 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
         label: "Physical Count",
         href: "/inventory/audits/count",
         roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+        shortcut: "Alt+Shift+A",
       },
       {
         id: "inv-audits-adjust",

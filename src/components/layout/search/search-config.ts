@@ -50,6 +50,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     keywords: ["admin", "platform", "system", "overview", "dashboard"],
     priority: "high",
     roles: ["super_admin"],
+    shortcut: "Alt+D",
   },
   {
     id: "nav-store-admin-dashboard",
@@ -61,6 +62,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     keywords: ["store", "admin", "management", "dashboard", "analytics"],
     priority: "high",
     roles: ["store_admin", "super_admin"],
+    shortcut: "Alt+D",
   },
   {
     id: "nav-manager-dashboard",
@@ -72,6 +74,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     keywords: ["manager", "operations", "team", "performance", "dashboard"],
     priority: "high",
     roles: ["manager", "store_admin", "super_admin"],
+    shortcut: "Alt+D",
   },
   {
     id: "nav-pos",
@@ -114,6 +117,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     keywords: ["accountant", "finance", "money", "dashboard"],
     priority: "high",
     roles: ["accountant", "store_admin", "super_admin"],
+    shortcut: "Alt+F",
   },
   {
     id: "nav-inventory-dashboard",
@@ -125,6 +129,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     keywords: ["inventory", "stock", "warehouse", "products", "dashboard"],
     priority: "high",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+    shortcut: "Alt+I",
   },
 
   // ── Sales & POS ─────────────────────────────────────────────────────────
@@ -138,6 +143,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     keywords: ["new", "sale", "transaction", "checkout", "bill", "invoice"],
     priority: "high",
     roles: ["cashier", "manager", "store_admin", "super_admin"],
+    shortcut: "Alt+S",
   },
   {
     id: "sales-orders",
@@ -149,6 +155,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     keywords: ["orders", "history", "transactions", "receipts"],
     priority: "medium",
     roles: ["cashier", "manager", "store_admin", "super_admin"],
+    shortcut: "Alt+O",
   },
   {
     id: "sales-refunds",
@@ -161,6 +168,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     priority: "medium",
     roles: ["manager", "store_admin", "super_admin"],
     permissions: ["process_refunds"],
+    shortcut: "Alt+R",
   },
   {
     id: "sales-daily-report",
@@ -186,6 +194,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     priority: "high",
     roles: ["store_admin", "super_admin", "manager"],
     permissions: ["manage_employees"],
+    shortcut: "Alt+E",
   },
   {
     id: "emp-roles-permissions",
@@ -224,6 +233,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     priority: "high",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
     permissions: ["manage_inventory"],
+    shortcut: "Alt+G",
   },
   {
     id: "inv-stock-levels",
@@ -248,6 +258,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     priority: "high",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
     permissions: ["view_inventory"],
+    shortcut: "Alt+L",
   },
   {
     id: "inv-purchase-orders",
@@ -272,6 +283,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     priority: "medium",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
     permissions: ["manage_suppliers"],
+    shortcut: "Alt+V",
   },
   {
     id: "inv-physical-count",
@@ -298,6 +310,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     priority: "high",
     roles: ["store_admin", "super_admin", "manager"],
     permissions: ["view_reports"],
+    shortcut: "Alt+T",
   },
   {
     id: "rep-revenue-analytics",
@@ -396,6 +409,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     priority: "high",
     roles: ["store_admin", "super_admin", "manager", "cashier"],
     permissions: ["manage_customers"],
+    shortcut: "Alt+C",
   },
 
   // ── Finance ──────────────────────────────────────────────────────────────
@@ -409,6 +423,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     keywords: ["transactions", "payments", "history", "ledger"],
     priority: "high",
     roles: ["accountant", "store_admin", "super_admin"],
+    shortcut: "Alt+X",
   },
   {
     id: "fin-expenses",
@@ -456,6 +471,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     priority: "high",
     roles: ["store_admin", "super_admin"],
     permissions: ["manage_store_settings"],
+    shortcut: "Alt+,",
   },
   {
     id: "set-store-security",
@@ -501,6 +517,7 @@ export const SEARCH_INDEX: SearchItem[] = [
     ],
     priority: "high",
     roles: ["store_admin", "super_admin", "cashier", "manager"],
+    shortcut: "Alt+H",
   },
   {
     id: "set-profile",

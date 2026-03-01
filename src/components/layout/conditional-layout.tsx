@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppHeader } from "./app-header";
 import { AppSidebar } from "./app-sidebar";
@@ -52,6 +53,10 @@ export function ConditionalLayout({ children, forceConfig }: ConditionalLayoutPr
     if (!config?.sidebar.enabled || !userRole) return [];
     return filterSidebarItems(config.sidebar.items, userRole, userPermissions);
   }, [config, userRole, userPermissions]);
+
+  // Global keyboard shortcuts (Alt+key navigation with toast feedback)
+  // Pass filtered sidebar items so shortcuts resolve to the correct role-specific route
+  useKeyboardShortcuts({ disabled: searchOpen, sidebarItems: filteredSidebarItems });
 
   // If no resolvable config, render children without layout chrome
   if (!config) {

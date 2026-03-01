@@ -183,9 +183,7 @@ export const salesService = {
                     sale_returns (
                         *,
                         sale_return_items (*)
-                    ),
-                    cashier:cashier_id (id, full_name),
-                    salesperson:salesperson_id (id, full_name)
+                    )
                 `
                 )
                 .eq("id", saleId)
@@ -196,6 +194,20 @@ export const salesService = {
             if (!sale) return { data: null, error: "Sale not found" };
 
             const raw = sale as Record<string, unknown>;
+
+            // Resolve cashier name separately — cashier_id → profiles.full_name
+            // (cannot join via PostgREST because cashier_id FK points to auth.users,
+            //  which is outside the public schema PostgREST exposes)
+            let cashierName: string | null = null;
+            const cashierId = raw.cashier_id as string | null;
+            if (cashierId) {
+                const { data: profile } = await getClient()
+                    .from("profiles")
+                    .select("full_name")
+                    .eq("id", cashierId)
+                    .maybeSingle();
+                cashierName = (profile as { full_name: string | null } | null)?.full_name ?? null;
+            }
 
             const enriched: EnrichedSale = {
                 ...(raw as unknown as Sale),
@@ -212,18 +224,8 @@ export const salesService = {
                         } as unknown as SaleReturn;
                     }
                 ),
-                cashier_name:
-                    (
-                        raw.cashier as {
-                            full_name: string | null;
-                        } | null
-                    )?.full_name ?? null,
-                salesperson_name:
-                    (
-                        raw.salesperson as {
-                            full_name: string | null;
-                        } | null
-                    )?.full_name ?? null,
+                cashier_name: cashierName,
+                salesperson_name: null,
             };
 
             return { data: enriched, error: null };
@@ -563,7 +565,7 @@ export const salesService = {
     },
 
     /**
-     * Mark receipt as printed
+     * Mark receipt as printed / sent via SMS / sent via email
      */
     markReceiptPrinted: async (
         storeId: string,
@@ -571,15 +573,29 @@ export const salesService = {
         data: MarkReceiptPrintedRequest
     ): Promise<ServiceResponse<Sale>> => {
         try {
+            const updatePayload: Record<string, unknown> = {
+                updated_at: new Date().toISOString(),
+            };
+
+            if (data.receipt_printed !== undefined) {
+                updatePayload.receipt_printed = data.receipt_printed;
+                updatePayload.receipt_printed_at = data.receipt_printed
+                    ? new Date().toISOString()
+                    : null;
+            }
+            if (data.receipt_print_count !== undefined) {
+                updatePayload.receipt_print_count = data.receipt_print_count;
+            }
+            if (data.email_sent !== undefined) {
+                updatePayload.email_sent = data.email_sent;
+            }
+            if (data.sms_sent !== undefined) {
+                updatePayload.sms_sent = data.sms_sent;
+            }
+
             const { data: sale, error } = await getClient()
                 .from("sales")
-                .update({
-                    receipt_printed: data.receipt_printed,
-                    receipt_printed_at: data.receipt_printed
-                        ? new Date().toISOString()
-                        : null,
-                    updated_at: new Date().toISOString(),
-                } as never)
+                .update(updatePayload as never)
                 .eq("id", saleId)
                 .eq("store_id", storeId)
                 .select()

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Clock, User, ShoppingCart, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -36,15 +37,22 @@ interface HoldBillsDrawerProps {
 
 function LocalHoldCard({
     bill,
+    index,
     onRecall,
     onRemove,
 }: {
     bill: HoldBill;
+    index: number;
     onRecall: (id: string) => void;
     onRemove: (id: string) => void;
 }) {
     return (
-        <div className="border rounded-md p-3 space-y-2">
+        <div className="border rounded-md p-3 space-y-2 relative">
+            {index <= 9 && (
+                <kbd className="absolute top-1.5 right-1.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50">
+                    {index}
+                </kbd>
+            )}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
@@ -107,13 +115,20 @@ function LocalHoldCard({
 
 function ServerHoldCard({
     sale,
+    index,
     onRecall,
 }: {
     sale: Sale;
+    index: number;
     onRecall: (saleId: string) => void;
 }) {
     return (
-        <div className="border rounded-md p-3 space-y-2">
+        <div className="border rounded-md p-3 space-y-2 relative">
+            {index <= 9 && (
+                <kbd className="absolute top-1.5 right-1.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50">
+                    {index}
+                </kbd>
+            )}
             <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-blue-600">
                     {sale.invoice_number || "Draft"}
@@ -162,6 +177,39 @@ export function HoldBillsDrawer({
 }: HoldBillsDrawerProps) {
     const totalHolds = localHoldBills.length + serverHoldBills.length;
 
+    // ========================================================================
+    // KEYBOARD SHORTCUTS — Number keys (1-9) to recall bills in order
+    // ========================================================================
+    useEffect(() => {
+        if (!open) return;
+
+        function handleKeyDown(e: KeyboardEvent) {
+            const target = e.target as HTMLElement | null;
+            const tag = target?.tagName.toLowerCase() ?? "";
+            if (tag === "input" || tag === "textarea" || tag === "select") return;
+            if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+
+            const idx = parseInt(e.key, 10);
+            if (idx >= 1 && idx <= 9) {
+                const oneBasedIdx = idx - 1;
+                // Local bills come first, then server bills
+                if (oneBasedIdx < localHoldBills.length) {
+                    e.preventDefault();
+                    onRecallLocal(localHoldBills[oneBasedIdx].id);
+                } else {
+                    const serverIdx = oneBasedIdx - localHoldBills.length;
+                    if (serverIdx < serverHoldBills.length) {
+                        e.preventDefault();
+                        onRecallServer(serverHoldBills[serverIdx].id);
+                    }
+                }
+            }
+        }
+
+        document.addEventListener("keydown", handleKeyDown);
+        return () => document.removeEventListener("keydown", handleKeyDown);
+    }, [open, localHoldBills, serverHoldBills, onRecallLocal, onRecallServer]);
+
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="right" className="w-[360px] sm:w-[400px]">
@@ -175,17 +223,18 @@ export function HoldBillsDrawer({
                 </SheetHeader>
 
                 <ScrollArea className="mt-4 h-[calc(100vh-120px)]">
-                    <div className="space-y-4 pr-2">
+                    <div className="space-y-4 pr-2 p-4">
                         {/* Local hold bills */}
                         {localHoldBills.length > 0 && (
                             <div className="space-y-2">
                                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                     Current Session
                                 </h3>
-                                {localHoldBills.map((bill) => (
+                                {localHoldBills.map((bill, idx) => (
                                     <LocalHoldCard
                                         key={bill.id}
                                         bill={bill}
+                                        index={idx + 1}
                                         onRecall={onRecallLocal}
                                         onRemove={onRemoveLocal}
                                     />
@@ -203,10 +252,11 @@ export function HoldBillsDrawer({
                                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                     Saved Hold Bills
                                 </h3>
-                                {serverHoldBills.map((sale) => (
+                                {serverHoldBills.map((sale, idx) => (
                                     <ServerHoldCard
                                         key={sale.id}
                                         sale={sale}
+                                        index={localHoldBills.length + idx + 1}
                                         onRecall={onRecallServer}
                                     />
                                 ))}

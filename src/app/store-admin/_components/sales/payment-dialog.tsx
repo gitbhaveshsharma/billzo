@@ -508,6 +508,43 @@ export function PaymentDialog({
 
     const secondaryMethods = PAYMENT_METHODS.filter((m) => !PRIMARY_METHODS.includes(m));
 
+    // ========================================================================
+    // KEYBOARD SHORTCUTS — Enter to confirm, 1-4 to select primary methods
+    // ========================================================================
+    useEffect(() => {
+        if (!open) return;
+
+        function handleKeyDown(e: KeyboardEvent) {
+            const target = e.target as HTMLElement | null;
+            const tag = target?.tagName.toLowerCase() ?? "";
+
+            // Enter → Confirm payment (unless focused on an input field)
+            if (e.key === "Enter" && tag !== "input" && tag !== "textarea" && tag !== "select") {
+                e.preventDefault();
+                // Only allow confirm when valid
+                const canConfirm = !isProcessing && (entries.length > 0 || isCreditSale) && (isCreditSale || isFullyPaid);
+                if (canConfirm) {
+                    handleConfirm();
+                }
+                return;
+            }
+
+            // Number keys 1-4 to quick-select primary payment methods (only when no entries yet)
+            if (entries.length === 0 && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                if (tag === "input" || tag === "textarea" || tag === "select") return;
+                const idx = parseInt(e.key, 10);
+                if (idx >= 1 && idx <= PRIMARY_METHODS.length) {
+                    e.preventDefault();
+                    addFullPayment(PRIMARY_METHODS[idx - 1]);
+                    return;
+                }
+            }
+        }
+
+        document.addEventListener("keydown", handleKeyDown);
+        return () => document.removeEventListener("keydown", handleKeyDown);
+    }, [open, entries.length, isCreditSale, isFullyPaid, isProcessing, handleConfirm, addFullPayment]);
+
     return (
         <TooltipProvider delayDuration={300}>
             <Dialog open={open} onOpenChange={onOpenChange}>
@@ -559,14 +596,17 @@ export function PaymentDialog({
                             {entries.length === 0 && (
                                 <>
                                     <div className="grid grid-cols-2 gap-2">
-                                        {PRIMARY_METHODS.map((method) => (
+                                        {PRIMARY_METHODS.map((method, idx) => (
                                             <Tooltip key={method}>
                                                 <TooltipTrigger asChild>
                                                     <Button
                                                         variant="outline"
-                                                        className="h-14 flex flex-col gap-1"
+                                                        className="h-14 flex flex-col gap-1 relative"
                                                         onClick={() => addFullPayment(method)}
                                                     >
+                                                        <kbd className="absolute top-1 left-1.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50">
+                                                            {idx + 1}
+                                                        </kbd>
                                                         {PAYMENT_METHOD_ICONS[method]}
                                                         <span className="text-xs">
                                                             {getPaymentMethodLabel(method)}
@@ -575,6 +615,7 @@ export function PaymentDialog({
                                                 </TooltipTrigger>
                                                 <TooltipContent side="bottom" className="max-w-[200px] text-xs">
                                                     {PAYMENT_METHOD_TOOLTIPS[method]}
+                                                    <br /><span className="text-muted-foreground">Press {idx + 1} to select</span>
                                                 </TooltipContent>
                                             </Tooltip>
                                         ))}
@@ -831,8 +872,10 @@ export function PaymentDialog({
                             variant="outline"
                             onClick={() => onOpenChange(false)}
                             disabled={isProcessing}
+                            className="gap-1"
                         >
                             Cancel
+                            <kbd className="ml-1 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50">Esc</kbd>
                         </Button>
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -855,6 +898,7 @@ export function PaymentDialog({
                                                 : entries.length > 0
                                                     ? `Charge ${formatCurrency(totalEntered)}`
                                                     : "Confirm Payment"}
+                                            <kbd className="ml-1 text-[10px] font-mono text-muted-foreground/80 border rounded px-1 bg-muted/30">↵</kbd>
                                         </>
                                     )}
                                 </Button>
