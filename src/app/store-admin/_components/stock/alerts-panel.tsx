@@ -539,14 +539,14 @@ export function AlertsPanel({
 
             {/* Single Resolve Dialog */}
             <Dialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Resolve Alert</DialogTitle>
                         <DialogDescription>
                             Add resolution notes for this alert.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-3">
+                    <div className="space-y-3 p-3">
                         <Textarea
                             value={resolutionNotes}
                             onChange={(e) => setResolutionNotes(e.target.value)}
