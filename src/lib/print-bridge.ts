@@ -25,9 +25,68 @@ import type { PrintReceiptData } from "@/utils/receipt-print";
 // CONFIG
 // ============================================================================
 
-const PRINT_BRIDGE_URL = "http://localhost:3001";
+/** Candidate base URLs — tried in order until one responds. */
+const BRIDGE_CANDIDATES = [
+  "http://localhost:3001",
+  "http://127.0.0.1:3001",
+];
+
 const HEALTH_TIMEOUT_MS = 2000;
 const PRINT_TIMEOUT_MS  = 15000;
+
+/**
+ * Cached base URL of the first candidate that successfully responded.
+ * Reset to null whenever the bridge appears to go offline so we re-probe.
+ */
+let _resolvedBase: string | null = null;
+
+/** Clear the cached URL (e.g. after the bridge restarts or goes offline). */
+export function resetBridgeUrlCache(): void {
+  _resolvedBase = null;
+}
+
+/**
+ * Fetch wrapper that probes localhost then 127.0.0.1, caching the winner.
+ *
+ * On production HTTPS pages (e.g. Vercel) browsers still allow requests to
+ * http://localhost because it is a "potentially trustworthy origin" per the
+ * Secure Contexts spec (Chrome 94+, Firefox 95+). However, on some Windows
+ * machines "localhost" resolves to ::1 (IPv6) while the bridge only binds to
+ * 127.0.0.1 (IPv4), causing a silent connection refusal. The fallback to
+ * 127.0.0.1 covers that case.
+ */
+async function bridgeFetch(
+  path: string,
+  init?: Omit<RequestInit, "signal"> & { timeoutMs?: number },
+): Promise<Response> {
+  const { timeoutMs = HEALTH_TIMEOUT_MS, ...rest } = init ?? {};
+
+  // Fast-path: use cached working URL.
+  if (_resolvedBase) {
+    return fetch(`${_resolvedBase}${path}`, {
+      ...rest,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  }
+
+  // Probe candidates in order and remember the first that responds.
+  let lastErr: unknown;
+  for (const base of BRIDGE_CANDIDATES) {
+    try {
+      const res = await fetch(`${base}${path}`, {
+        ...rest,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      _resolvedBase = base;
+      console.log(`[PrintBridge] ✅ Resolved bridge at ${base}`);
+      return res;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  throw lastErr ?? new Error("Print Bridge not reachable on localhost:3001 or 127.0.0.1:3001");
+}
 
 // ============================================================================
 // TYPES
@@ -88,9 +147,7 @@ export interface BridgePrinterListResponse {
  */
 export async function isPrintBridgeAvailable(): Promise<boolean> {
   try {
-    const res = await fetch(`${PRINT_BRIDGE_URL}/health`, {
-      signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
-    });
+    const res = await bridgeFetch("/health");
     if (!res.ok) return false;
 
     const data: PrintBridgeHealthResponse = await res.json();
@@ -106,9 +163,7 @@ export async function isPrintBridgeAvailable(): Promise<boolean> {
  */
 export async function isPrintBridgeRunning(): Promise<boolean> {
   try {
-    const res = await fetch(`${PRINT_BRIDGE_URL}/health`, {
-      signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
-    });
+    const res = await bridgeFetch("/health");
     if (!res.ok) return false;
 
     const data = await res.json();
@@ -124,12 +179,14 @@ export async function isPrintBridgeRunning(): Promise<boolean> {
  */
 export async function getPrintBridgeHealth(): Promise<PrintBridgeHealthResponse | null> {
   try {
-    const res = await fetch(`${PRINT_BRIDGE_URL}/health`, {
-      signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
-    });
-    if (!res.ok) return null;
+    const res = await bridgeFetch("/health");
+    if (!res.ok) {
+      resetBridgeUrlCache(); // force re-probe next time
+      return null;
+    }
     return await res.json();
   } catch {
+    resetBridgeUrlCache(); // bridge went offline — re-probe on next call
     return null;
   }
 }
@@ -188,11 +245,11 @@ export async function printViaBridge(
     };
   }
 
-  const res = await fetch(`${PRINT_BRIDGE_URL}/print`, {
+  const res = await bridgeFetch("/print", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(PRINT_TIMEOUT_MS),
+    timeoutMs: PRINT_TIMEOUT_MS,
   });
 
   const result: PrintBridgeResult = await res.json();
@@ -214,11 +271,11 @@ export async function printViaBridge(
 export async function printTestViaBridge(
   paperSize?: number | string,
 ): Promise<PrintBridgeResult> {
-  const res = await fetch(`${PRINT_BRIDGE_URL}/test-print`, {
+  const res = await bridgeFetch("/test-print", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ paperSize }),
-    signal: AbortSignal.timeout(PRINT_TIMEOUT_MS),
+    timeoutMs: PRINT_TIMEOUT_MS,
   });
 
   const result: PrintBridgeResult = await res.json();
@@ -240,9 +297,7 @@ export async function printTestViaBridge(
  */
 export async function listBridgePrinters(): Promise<BridgePrinterListResponse> {
   try {
-    const res = await fetch(`${PRINT_BRIDGE_URL}/printers`, {
-      signal: AbortSignal.timeout(5000),
-    });
+    const res = await bridgeFetch("/printers", { timeoutMs: 5000 });
     if (!res.ok) return { printers: [], message: "Bridge returned an error" };
     return await res.json();
   } catch {
@@ -259,9 +314,7 @@ export async function listBridgePrinters(): Promise<BridgePrinterListResponse> {
  */
 export async function getBridgeConfig(): Promise<Record<string, unknown> | null> {
   try {
-    const res = await fetch(`${PRINT_BRIDGE_URL}/config`, {
-      signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
-    });
+    const res = await bridgeFetch("/config");
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -300,11 +353,10 @@ export async function updateBridgeConfig(
     }>;
   },
 ): Promise<PrintBridgeResult> {
-  const res = await fetch(`${PRINT_BRIDGE_URL}/config`, {
+  const res = await bridgeFetch("/config", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
-    signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
   });
 
   return await res.json();
