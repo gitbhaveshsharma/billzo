@@ -102,8 +102,13 @@ export default function POSPage() {
 
     const { activeShift, isLoading: shiftsLoading, fetchActiveShift } = useShiftsStore();
 
-    // Hardware hook — provides printReceipt with Bridge → USB → HTML fallback
-    const { printReceipt } = useHardware();
+    // Hardware hook — provides printReceipt with Bridge → USB (no browser fallback)
+    const {
+        printReceipt,
+        hasBridgePrinter,
+        bridgeStatus,
+        detectAllDevices,
+    } = useHardware();
 
     // Store info for receipt
     const store = useStoreStore((s) => s.store);
@@ -685,6 +690,9 @@ export default function POSPage() {
                 storePhone={store?.phone}
                 receiptConfig={receiptConfig}
                 printFn={printReceipt}
+                hasBridgePrinter={hasBridgePrinter}
+                bridgeStatus={bridgeStatus}
+                onRetryBridge={detectAllDevices}
                 onActionComplete={handleReceiptAction}
             />
         </NoShiftGuard>
