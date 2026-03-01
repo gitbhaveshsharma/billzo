@@ -8,6 +8,10 @@ import {
     X,
     CheckCircle2,
     Loader2,
+    AlertTriangle,
+    RefreshCw,
+    Wifi,
+    WifiOff,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -42,13 +46,19 @@ export interface PostSaleActionsDialogProps {
     storePhone?: string | null;
     /** Receipt layout config from store settings */
     receiptConfig: ReceiptLayoutConfig;
-    /** Hardware print function (Bridge → USB → HTML fallback) */
+    /** Hardware print function (Bridge → USB only, no browser fallback) */
     printFn: (data: PrintReceiptData, config: ReceiptLayoutConfig) => Promise<boolean> | boolean;
+    /** Whether the Print Bridge is connected (native thermal printer) */
+    hasBridgePrinter?: boolean;
+    /** Current bridge connection status */
+    bridgeStatus?: "unknown" | "running" | "connected" | "offline";
+    /** Retry bridge detection */
+    onRetryBridge?: () => void;
     /** Callback after any receipt action completes */
     onActionComplete?: (action: "print" | "sms" | "email" | "skip") => void;
 }
 
-type ActionState = "idle" | "printing" | "done";
+type ActionState = "idle" | "printing" | "done" | "error";
 
 // ============================================================================
 // COMPONENT
@@ -64,15 +74,20 @@ export function PostSaleActionsDialog({
     storePhone,
     receiptConfig,
     printFn,
+    hasBridgePrinter = false,
+    bridgeStatus = "unknown",
+    onRetryBridge,
     onActionComplete,
 }: PostSaleActionsDialogProps) {
     const [actionState, setActionState] = useState<ActionState>("idle");
+    const [lastError, setLastError] = useState<string | null>(null);
     const dialogRef = useRef<HTMLDivElement>(null);
 
     // Reset state when dialog opens
     useEffect(() => {
         if (open) {
             setActionState("idle");
+            setLastError(null);
         }
     }, [open]);
 
@@ -115,6 +130,7 @@ export function PostSaleActionsDialog({
         if (!data) return;
 
         setActionState("printing");
+        setLastError(null);
         try {
             const success = await Promise.resolve(printFn(data, receiptConfig));
             if (success) {
@@ -123,14 +139,22 @@ export function PostSaleActionsDialog({
                 // Auto-close after brief success indicator
                 setTimeout(() => onOpenChange(false), 600);
             } else {
-                setActionState("idle");
-                toast.error("Print failed — try again or skip");
+                setActionState("error");
+                const errMsg = hasBridgePrinter
+                    ? "Print Bridge failed — check printer connection"
+                    : "No printer connected — start Print Bridge or connect a USB printer";
+                setLastError(errMsg);
+                toast.error(errMsg);
             }
         } catch {
-            setActionState("idle");
-            toast.error("Print failed — try again or skip");
+            setActionState("error");
+            const errMsg = hasBridgePrinter
+                ? "Print failed — check printer & bridge"
+                : "No printer available";
+            setLastError(errMsg);
+            toast.error(errMsg);
         }
-    }, [buildPrintData, printFn, receiptConfig, onActionComplete, onOpenChange]);
+    }, [buildPrintData, printFn, receiptConfig, onActionComplete, onOpenChange, hasBridgePrinter]);
 
     const handleSms = useCallback(() => {
         toast("SMS receipt — coming soon", { icon: "📱" });
@@ -152,7 +176,7 @@ export function PostSaleActionsDialog({
     // ── Keyboard shortcuts ──────────────────────────────────────────────────
 
     useEffect(() => {
-        if (!open || actionState !== "idle") return;
+        if (!open || actionState === "printing" || actionState === "done") return;
 
         function handleKeyDown(e: KeyboardEvent) {
             switch (e.key) {
@@ -182,11 +206,14 @@ export function PostSaleActionsDialog({
 
     if (!sale) return null;
 
+    const isBridgeOnline = bridgeStatus === "connected";
+    const showPrinterWarning = !hasBridgePrinter && bridgeStatus !== "unknown";
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 ref={dialogRef}
-                className="max-w-sm"
+                className="max-w-wd"
                 onPointerDownOutside={(e) => e.preventDefault()}
                 onEscapeKeyDown={(e) => e.preventDefault()}
             >
@@ -200,19 +227,73 @@ export function PostSaleActionsDialog({
                     </DialogDescription>
                 </DialogHeader>
 
+                {/* Printer Status Indicator */}
+                <div className="mx-4 mt-1">
+                    <div className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs ${
+                        isBridgeOnline
+                            ? "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400"
+                            : showPrinterWarning
+                              ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
+                              : "bg-muted text-muted-foreground"
+                    }`}>
+                        {isBridgeOnline ? (
+                            <>
+                                <Wifi className="h-3.5 w-3.5 shrink-0" />
+                                <span className="flex-1">Print Bridge connected — thermal printer ready</span>
+                            </>
+                        ) : showPrinterWarning ? (
+                            <>
+                                <WifiOff className="h-3.5 w-3.5 shrink-0" />
+                                <span className="flex-1">Print Bridge offline — start it to enable printing</span>
+                                {onRetryBridge && (
+                                    <button
+                                        onClick={onRetryBridge}
+                                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                                    >
+                                        <RefreshCw className="h-3 w-3" />
+                                        Retry
+                                    </button>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <Printer className="h-3.5 w-3.5 shrink-0" />
+                                <span className="flex-1">Checking printer...</span>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {/* Error message from last print attempt */}
+                {actionState === "error" && lastError && (
+                    <div className="mx-4 flex items-start gap-2 rounded-md bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs text-red-700 dark:text-red-400">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <p>{lastError}</p>
+                            <p className="mt-1 opacity-70">Press 1 to retry or 4 to skip</p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Action Buttons */}
-                <div className="grid grid-cols-1 gap-2 mt-2">
+                <div className="grid grid-cols-1 gap-2 mt-2 p-4">
                     {/* Print */}
                     <Button
                         variant="outline"
-                        className="h-12 justify-start gap-3 text-sm font-medium"
+                        className={`h-12 justify-start gap-3 text-sm font-medium ${
+                            actionState === "error"
+                                ? "border-red-200 dark:border-red-800"
+                                : ""
+                        }`}
                         onClick={handlePrint}
-                        disabled={actionState !== "idle"}
+                        disabled={actionState === "printing" || actionState === "done"}
                     >
                         {actionState === "printing" ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                         ) : actionState === "done" ? (
                             <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        ) : actionState === "error" ? (
+                            <AlertTriangle className="h-4 w-4 text-red-500" />
                         ) : (
                             <Printer className="h-4 w-4" />
                         )}
@@ -221,7 +302,9 @@ export function PostSaleActionsDialog({
                                 ? "Printing..."
                                 : actionState === "done"
                                   ? "Printed!"
-                                  : "Print Receipt"}
+                                  : actionState === "error"
+                                    ? "Retry Print"
+                                    : "Print Receipt"}
                         </span>
                         <kbd className="text-[10px] font-mono text-muted-foreground border rounded px-1.5 py-0.5 bg-muted/50">
                             1
@@ -233,7 +316,7 @@ export function PostSaleActionsDialog({
                         variant="outline"
                         className="h-12 justify-start gap-3 text-sm font-medium"
                         onClick={handleSms}
-                        disabled={actionState !== "idle"}
+                        disabled={actionState === "printing" || actionState === "done"}
                     >
                         <MessageSquare className="h-4 w-4" />
                         <span className="flex-1 text-left">Send via SMS</span>
@@ -247,7 +330,7 @@ export function PostSaleActionsDialog({
                         variant="outline"
                         className="h-12 justify-start gap-3 text-sm font-medium"
                         onClick={handleEmail}
-                        disabled={actionState !== "idle"}
+                        disabled={actionState === "printing" || actionState === "done"}
                     >
                         <Mail className="h-4 w-4" />
                         <span className="flex-1 text-left">Send via Email</span>
@@ -261,7 +344,7 @@ export function PostSaleActionsDialog({
                         variant="ghost"
                         className="h-10 justify-start gap-3 text-sm text-muted-foreground"
                         onClick={handleSkip}
-                        disabled={actionState !== "idle"}
+                        disabled={actionState === "printing" || actionState === "done"}
                     >
                         <X className="h-4 w-4" />
                         <span className="flex-1 text-left">No Thanks</span>

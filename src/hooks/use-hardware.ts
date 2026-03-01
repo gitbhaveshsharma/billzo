@@ -634,19 +634,25 @@ export function useHardware() {
       const testData = buildTestReceiptData();
 
       // 1. Try Print Bridge first (localhost:3001)
-      if (hasBridgePrinter) {
+      //    Also try when detection hasn't completed yet (unknown/running)
+      if (hasBridgePrinter || bridgeStatus === "unknown" || bridgeStatus === "running") {
         try {
           console.log("[HW-Printer] 🧪 Testing via Print Bridge...");
           console.log("[HW-Printer] 📋 Test receipt data:", JSON.stringify(testData, null, 2));
           console.log("[HW-Printer] ⚙️ Receipt layout config:", JSON.stringify(receiptLayoutConfig, null, 2));
           await printViaBridge(testData, receiptLayoutConfig);
           console.log("[HW-Printer] 🧪✅ Bridge test receipt printed.");
+          if (bridgeStatus !== "connected") setBridgeStatus("connected");
           setPrinters((prev) =>
             prev.map((p) => ({ ...p, status: "connected" as ConnectionStatus, lastSeen: new Date() }))
           );
           return true;
         } catch (err) {
-          console.warn("[HW-Printer] ⚠️ Bridge test failed, trying next method:", err);
+          console.warn("[HW-Printer] ⚠️ Bridge test failed:", err);
+          // If bridge was confirmed connected, don't fall to browser
+          if (hasBridgePrinter && !hasUsbPrinter) {
+            throw new Error("Print Bridge test failed");
+          }
         }
       }
 
@@ -662,11 +668,16 @@ export function useHardware() {
           );
           return true;
         } catch (err) {
-          console.warn("[HW-Printer] ⚠️ ESC/POS test failed, falling back to HTML popup:", err);
+          console.warn("[HW-Printer] ⚠️ ESC/POS test failed:", err);
+          throw new Error("USB ESC/POS test failed");
         }
       }
 
-      // 3. Fallback: HTML popup
+      // 3. Browser HTML popup — ONLY when no native printer exists at all
+      if (hasBridgePrinter) {
+        throw new Error("Native printer configured but unreachable");
+      }
+
       const success = printReceiptHtml(testData, receiptLayoutConfig);
 
       if (!success) {
@@ -685,7 +696,7 @@ export function useHardware() {
       );
       return false;
     }
-  }, [receiptLayoutConfig, hasUsbPrinter, hasBridgePrinter]);
+  }, [receiptLayoutConfig, hasUsbPrinter, hasBridgePrinter, bridgeStatus]);
 
   // ========================================================================
   // AUTO-DETECT ON MOUNT
@@ -726,6 +737,14 @@ export function useHardware() {
     return cleanup;
   }, [startKeystrokeListener]);
 
+  // Auto-detect Print Bridge on mount — ensures hasBridgePrinter is
+  // accurate for every consumer of useHardware() without needing to
+  // call detectAllDevices() explicitly.
+  useEffect(() => {
+    checkBridgeStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ========================================================================
   // PUBLIC API
   // ========================================================================
@@ -738,7 +757,15 @@ export function useHardware() {
   }, []);
 
   // ========================================================================
-  // PRINT RECEIPT — Bridge → ESC/POS (USB) → HTML popup (system printer)
+  // PRINT RECEIPT — Bridge → ESC/POS (USB) → HTML popup (last resort)
+  //
+  // When a native printer (Bridge or USB) is available, we NEVER fall back
+  // to the browser HTML popup. The popup opens an extra Chrome window and
+  // breaks the POS flow. Browser print is only used when NO native printer
+  // is configured at all (pure browser-only setup).
+  //
+  // If bridge detection hasn't run yet (status=unknown), we try the bridge
+  // inline so printing works even if the mount-detection is still pending.
   // ========================================================================
 
   const printReceipt = useCallback(async (
@@ -748,14 +775,26 @@ export function useHardware() {
     const cfg = config ?? receiptLayoutConfig;
 
     // 1. Try Print Bridge first (localhost:3001 — USB/TCP thermal printer)
-    if (hasBridgePrinter) {
+    //    Also try when bridgeStatus is "unknown" (detection may not have
+    //    completed yet) — this is a lazy/inline check.
+    if (hasBridgePrinter || bridgeStatus === "unknown" || bridgeStatus === "running") {
       try {
         console.log("[HW-Printer] 📤 Printing via Print Bridge...");
         await printViaBridge(data, cfg);
         console.log("[HW-Printer] ✅ Print Bridge print complete.");
+        // Update bridge status on success if it was unknown
+        if (bridgeStatus === "unknown" || bridgeStatus === "running") {
+          setBridgeStatus("connected");
+        }
         return true;
       } catch (err) {
-        console.warn("[HW-Printer] ⚠️ Print Bridge failed, trying next method:", err);
+        console.warn("[HW-Printer] ⚠️ Print Bridge failed:", err);
+        // If bridge was supposed to handle it, don't fall through to browser
+        if (hasBridgePrinter && !hasUsbPrinter) {
+          console.error("[HW-Printer] ❌ Bridge print failed and no USB fallback available.");
+          return false;
+        }
+        // If status was unknown and bridge failed, that's fine — try next method
       }
     }
 
@@ -768,14 +807,23 @@ export function useHardware() {
         console.log("[HW-Printer] ✅ ESC/POS print complete.");
         return true;
       } catch (err) {
-        console.warn("[HW-Printer] ⚠️ ESC/POS failed, falling back to HTML popup:", err);
+        console.warn("[HW-Printer] ⚠️ ESC/POS failed:", err);
+        // Native printer present — don't fall through to browser popup
+        console.error("[HW-Printer] ❌ USB ESC/POS print failed.");
+        return false;
       }
     }
 
-    // 3. Fallback: HTML popup with window.print()
-    console.log("[HW-Printer] 📄 Printing via HTML popup (system printer)...");
+    // 3. Browser HTML popup — ONLY when no native printer exists at all
+    if (hasBridgePrinter) {
+      // Bridge was detected but we already failed above
+      console.error("[HW-Printer] ❌ Native printer configured but unreachable.");
+      return false;
+    }
+
+    console.log("[HW-Printer] 📄 No native printer — using HTML popup (system printer)...");
     return printReceiptHtml(data, cfg);
-  }, [receiptLayoutConfig, hasUsbPrinter, hasBridgePrinter]);
+  }, [receiptLayoutConfig, hasUsbPrinter, hasBridgePrinter, bridgeStatus]);
 
   return {
     // State
