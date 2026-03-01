@@ -107,6 +107,9 @@ export function AppSidebar({ items, pageTitle, pageSubtitle }: AppSidebarProps) 
                           <Link href={item.href}>
                             <item.icon className="h-4 w-4" />
                             <span>{item.label}</span>
+                            {item.shortcut && (
+                              <ShortcutBadge shortcut={item.shortcut} />
+                            )}
                             {item.badge && (
                               <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-medium text-primary">
                                 {item.badge}
@@ -207,11 +210,14 @@ function CollapsibleNavItem({
           >
             <item.icon className="h-4 w-4" />
             <span>{item.label}</span>
+            {item.shortcut && (
+              <ShortcutBadge shortcut={item.shortcut} />
+            )}
             <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
           </SidebarMenuButton>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <SidebarMenuSub className="border-l border-border/50 ml-3 pl-2">
+          <SidebarMenuSub className="border-l border-border/50 ml-3 pl-2 py-1">
             {item.children?.map((child) => (
               <SidebarMenuSubItem key={child.id}>
                 <SidebarMenuSubButton
@@ -219,12 +225,15 @@ function CollapsibleNavItem({
                   isActive={isActiveFn(child.href)}
                   className={cn(
                     "transition-all duration-200",
-                    isActiveFn(child.href) && "bg-primary/10 font-medium"
+                    isActiveFn(child.href) && "bg-primary/10 font-medium  "
                   )}
                 >
-                  <Link href={child.href} className="flex items-center gap-2">
+                  <Link href={child.href} className="flex items-center gap-2 ">
                     {child.icon && <child.icon className="h-3.5 w-3.5" />}
                     <span>{child.label}</span>
+                    {child.shortcut && (
+                      <ShortcutBadge shortcut={child.shortcut} />
+                    )}
                   </Link>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
@@ -233,5 +242,18 @@ function CollapsibleNavItem({
         </CollapsibleContent>
       </SidebarMenuItem>
     </Collapsible>
+  );
+}
+
+// ============================================================================
+// ShortcutBadge — displays keyboard shortcut hint next to sidebar labels
+// ============================================================================
+
+
+function ShortcutBadge({ shortcut }: { shortcut: string }) {
+  return (
+    <kbd className="ml-auto hidden lg:inline-flex items-center gap-0.5 rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-mono font-medium text-primary group-data-[collapsible=icon]:hidden shadow-sm">
+      {shortcut}
+    </kbd>
   );
 }

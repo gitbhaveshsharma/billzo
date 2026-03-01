@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
@@ -393,6 +393,69 @@ export default function POSPage() {
     );
 
     // ========================================================================
+    // POS KEYBOARD SHORTCUTS
+    //   F2 = Hold current bill     F3 = Open held bills
+    //   F8 = Charge (open payment) F4 = Clear cart
+    //   F9 = Focus product search  Esc = Close dialogs/drawers
+    // ========================================================================
+
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        function handlePosKey(e: KeyboardEvent) {
+            const target = e.target as HTMLElement | null;
+            const tag = target?.tagName.toLowerCase() ?? "";
+            const isInput = tag === "input" || tag === "textarea" || tag === "select" || target?.isContentEditable;
+            // Allow function keys even when focused on input
+            const isFKey = e.key.startsWith("F") && e.key.length <= 3;
+
+            // Don't intercept when dialog open (let dialog handle it)
+            if (paymentOpen || addCustomerOpen || receiptDialogOpen) return;
+
+            if (!isFKey && isInput) return;
+
+            switch (e.key) {
+                case "F2":
+                    e.preventDefault();
+                    if (cart.length > 0) handleHold();
+                    break;
+                case "F3":
+                    e.preventDefault();
+                    setHoldDrawerOpen(true);
+                    break;
+                case "F4":
+                    e.preventDefault();
+                    if (cart.length > 0) {
+                        clearCart();
+                        toast.success("Cart cleared");
+                    }
+                    break;
+                case "F8":
+                    e.preventDefault();
+                    handleCharge();
+                    break;
+                case "F9":
+                    e.preventDefault();
+                    // Focus the product search bar
+                    const searchEl = document.querySelector<HTMLInputElement>(
+                        '[data-pos-search="true"], input[placeholder*="Search"], input[placeholder*="Scan"]'
+                    );
+                    if (searchEl) searchEl.focus();
+                    break;
+                case "Escape":
+                    if (holdDrawerOpen) {
+                        e.preventDefault();
+                        setHoldDrawerOpen(false);
+                    }
+                    break;
+            }
+        }
+
+        document.addEventListener("keydown", handlePosKey);
+        return () => document.removeEventListener("keydown", handlePosKey);
+    }, [cart.length, handleHold, handleCharge, clearCart, paymentOpen, addCustomerOpen, receiptDialogOpen, holdDrawerOpen]);
+
+    // ========================================================================
     // LOADING
     // ========================================================================
 
@@ -452,6 +515,7 @@ export default function POSPage() {
                         >
                             <Pause className="h-3.5 w-3.5" />
                             Hold
+                            <kbd className="ml-0.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50 hidden sm:inline">F2</kbd>
                         </Button>
                         <Button
                             variant="outline"
@@ -461,6 +525,7 @@ export default function POSPage() {
                         >
                             <Receipt className="h-3.5 w-3.5" />
                             Bills
+                            <kbd className="ml-0.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50 hidden sm:inline">F3</kbd>
                             {totalHoldBills > 0 && (
                                 <Badge
                                     variant="destructive"
@@ -496,6 +561,7 @@ export default function POSPage() {
                         >
                             <Trash2 className="h-3.5 w-3.5" />
                             Clear
+                            <kbd className="ml-0.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50 hidden sm:inline">F4</kbd>
                         </Button>
                     </div>
                 </div>
@@ -540,6 +606,7 @@ export default function POSPage() {
                         >
                             <ShoppingCart className="h-5 w-5" />
                             Charge {formatCurrency(cartTotals.total_amount)}
+                            <kbd className="ml-1 text-[10px] font-mono text-primary-foreground/70 border border-primary-foreground/30 rounded px-1 bg-primary-foreground/10">F8</kbd>
                         </Button>
                     </div>
                 </div>

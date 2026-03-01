@@ -30,7 +30,6 @@ import {
     Calendar,
     Clock,
     Shield,
-    Globe,
     Fingerprint,
     CreditCard,
     GraduationCap,
@@ -455,13 +454,6 @@ export function EmployeeDetailSheet({
                             value={formatRelativeTime(user.last_login_at)}
                             tooltip={user.last_login_at ? formatDate(user.last_login_at, true) : "Never"}
                         />
-                        {user.last_login_ip && (
-                            <InfoRow
-                                icon={<Globe className="h-4 w-4" />}
-                                label="Last Login IP"
-                                value={user.last_login_ip}
-                            />
-                        )}
                         <InfoRow
                             icon={<Shield className="h-4 w-4" />}
                             label="Two-Factor Auth"
