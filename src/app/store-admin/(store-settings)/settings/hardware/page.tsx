@@ -970,8 +970,9 @@ export default function HardwareSettingsPage() {
 
                     {bridgeErrorReason === "timeout" && (
                       <ul className="list-disc pl-4 text-xs text-red-700 dark:text-red-400 space-y-1">
-                        <li>The bridge may still be starting up — wait a few seconds and try again.</li>
-                        <li>If the issue persists, restart pos-print-bridge.exe.</li>
+                        <li>The bridge is responding too slowly — this usually means the printer is offline and the bridge is waiting for a printer response.</li>
+                        <li><strong>Download the latest pos-print-bridge.exe</strong> — the updated version responds instantly even when the printer is offline.</li>
+                        <li>If you already have the latest version: restart pos-print-bridge.exe and try again.</li>
                       </ul>
                     )}
 
