@@ -42,6 +42,7 @@ import {
 import toast from "react-hot-toast";
 import { useHardware, type ConnectionStatus, type HardwareDevice } from "@/hooks/use-hardware";
 import { cn } from "@/lib/utils";
+import { getBridgeErrorMessage } from "@/lib/print-bridge";
 import { ReceiptLayoutEditor } from "@/components/shared/receipt-layout-editor";
 import { useStoreStore } from "@/stores/store.store";
 
@@ -72,13 +73,18 @@ export default function HardwareSettingsPage() {
     bridgeHealth,
     bridgePrinters,
     hasBridgePrinter,
+    bridgeErrorReason,
+    bridgeDiagnostic,
     checkBridgeStatus,
+    runBridgeDiagnostic,
   } = useHardware();
 
   const [isScannerTesting, setIsScannerTesting] = useState(false);
   const [isPrinterTesting, setIsPrinterTesting] = useState(false);
   const [scannerTestResult, setScannerTestResult] = useState<boolean | null>(null);
   const [printerTestResult, setPrinterTestResult] = useState<boolean | null>(null);
+  const [isBridgeChecking, setIsBridgeChecking] = useState(false);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
 
   // Receipt layout config (persisted in store)
   const { receiptConfig, updateReceiptConfig } = useStoreStore();
@@ -781,16 +787,92 @@ export default function HardwareSettingsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                checkBridgeStatus();
-                toast.success("Checking Print Bridge...");
+              disabled={isBridgeChecking}
+              onClick={async () => {
+                setIsBridgeChecking(true);
+                toast("Checking Print Bridge...", { icon: "🔍" });
+                await checkBridgeStatus();
+                setIsBridgeChecking(false);
               }}
               className="gap-2"
             >
-              <RefreshCw className="h-3 w-3" />
+              <RefreshCw className={cn("h-3 w-3", isBridgeChecking && "animate-spin")} />
               Check
             </Button>
           </div>
+
+          {/* Error reason when bridge is offline */}
+          {bridgeStatus === "offline" && bridgeErrorReason && bridgeErrorReason !== "none" && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 dark:border-red-800 dark:bg-red-900/20">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />
+                <div className="text-xs space-y-1.5">
+                  <p className="font-medium text-red-800 dark:text-red-300">
+                    {getBridgeErrorMessage(bridgeErrorReason)}
+                  </p>
+                  {bridgeErrorReason === "private-network" && (
+                    <p className="text-red-700 dark:text-red-400">
+                      <strong>Fix:</strong> Open{" "}
+                      <code className="rounded bg-red-100 px-1 dark:bg-red-900">chrome://flags/#block-insecure-private-network-requests</code>{" "}
+                      → set to <strong>Disabled</strong> → restart Chrome.
+                    </p>
+                  )}
+                  {bridgeErrorReason === "connection-refused" && (
+                    <p className="text-red-700 dark:text-red-400">
+                      Ensure pos-print-bridge.exe is running. Check Windows Firewall (port 3001) and antivirus settings.
+                    </p>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isDiagnosing}
+                    onClick={async () => {
+                      setIsDiagnosing(true);
+                      await runBridgeDiagnostic();
+                      setIsDiagnosing(false);
+                    }}
+                    className="gap-1.5 text-xs h-6 border-red-300 dark:border-red-700"
+                  >
+                    {isDiagnosing ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Settings2 className="h-3 w-3" />
+                    )}
+                    Diagnose
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Diagnostic results */}
+          {bridgeDiagnostic && bridgeStatus === "offline" && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-800 dark:bg-amber-900/20">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1.5">Diagnostic Results</p>
+              <div className="space-y-1">
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Page: <strong>{bridgeDiagnostic.isHttps ? "HTTPS" : "HTTP"}</strong>
+                  {bridgeDiagnostic.isHttps && " (PNA rules apply)"}
+                </p>
+                {bridgeDiagnostic.candidates.map((c) => (
+                  <div key={c.url} className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                    {c.reachable ? (
+                      <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                    ) : (
+                      <XCircle className="h-3 w-3 text-red-500 shrink-0" />
+                    )}
+                    <code className="bg-amber-100 px-1 rounded dark:bg-amber-900 text-[10px]">{c.url}</code>
+                    <span className="truncate">
+                      {c.reachable ? `OK (${c.httpStatus})` : `${c.errorReason}`}
+                    </span>
+                  </div>
+                ))}
+                <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mt-1">
+                  {bridgeDiagnostic.summary}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Bridge Printers List */}
           {bridgePrinters.length > 0 && (

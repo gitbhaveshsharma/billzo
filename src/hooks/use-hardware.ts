@@ -11,8 +11,13 @@ import {
   printViaBridge,
   printTestViaBridge,
   listBridgePrinters,
+  getLastBridgeErrorReason,
+  diagnosePrintBridge,
+  getBridgeErrorMessage,
   type PrintBridgeHealthResponse,
   type BridgePrinterInfo,
+  type BridgeErrorReason,
+  type BridgeDiagnosticResult,
 } from "@/lib/print-bridge";
 
 // ============================================================================
@@ -176,6 +181,8 @@ export function useHardware() {
   const [bridgeStatus, setBridgeStatus] = useState<"unknown" | "running" | "connected" | "offline">("unknown");
   const [bridgeHealth, setBridgeHealth] = useState<PrintBridgeHealthResponse | null>(null);
   const [bridgePrinters, setBridgePrinters] = useState<BridgePrinterInfo[]>([]);
+  const [bridgeErrorReason, setBridgeErrorReason] = useState<BridgeErrorReason>("none");
+  const [bridgeDiagnostic, setBridgeDiagnostic] = useState<BridgeDiagnosticResult | null>(null);
 
   // For keyboard-wedge barcode scanner detection
   const keystrokeBuffer = useRef<string>("");
@@ -411,6 +418,9 @@ export function useHardware() {
   /**
    * Check Print Bridge status and populate bridgePrinters.
    * Called from detectPrinters/detectAllDevices.
+   *
+   * Now includes automatic retry (via getPrintBridgeHealth) and surfaces
+   * the specific error reason so the UI can show targeted troubleshooting.
    */
   const checkBridgeStatus = useCallback(async () => {
     console.log("[HW-Bridge] 🔍 Checking Print Bridge at localhost:3001...");
@@ -420,9 +430,16 @@ export function useHardware() {
     if (!health) {
       setBridgeStatus("offline");
       setBridgePrinters([]);
-      console.log("[HW-Bridge] ⚠️ Print Bridge not reachable");
+
+      // Capture and surface the error reason for the UI
+      const reason = getLastBridgeErrorReason();
+      setBridgeErrorReason(reason);
+      console.log("[HW-Bridge] ⚠️ Print Bridge not reachable —", getBridgeErrorMessage(reason));
       return false;
     }
+
+    // Success — clear any previous error
+    setBridgeErrorReason("none");
 
     if (health.printer?.connected) {
       setBridgeStatus("connected");
@@ -442,6 +459,19 @@ export function useHardware() {
     }
 
     return health.printer?.connected ?? false;
+  }, []);
+
+  /**
+   * Run a deep diagnostic on bridge connectivity — tests all candidate
+   * URLs and returns per-URL results. Used from the "Diagnose" button on
+   * the hardware settings page.
+   */
+  const runBridgeDiagnostic = useCallback(async () => {
+    console.log("[HW-Bridge] 🩺 Running bridge diagnostic...");
+    const result = await diagnosePrintBridge();
+    setBridgeDiagnostic(result);
+    console.log("[HW-Bridge] 🩺 Diagnostic result:", result);
+    return result;
   }, []);
 
   const detectPrinters = useCallback(async (): Promise<HardwareDevice[]> => {
@@ -765,6 +795,8 @@ export function useHardware() {
     bridgeHealth,
     bridgePrinters,
     hasBridgePrinter,
+    bridgeErrorReason,
+    bridgeDiagnostic,
 
     // Scanner actions
     connectSerialScanner,
@@ -777,6 +809,7 @@ export function useHardware() {
     printReceipt,
     hasUsbPrinter,
     checkBridgeStatus,
+    runBridgeDiagnostic,
 
     // Detection
     detectAllDevices,
