@@ -31,8 +31,12 @@ const BRIDGE_CANDIDATES = [
   "http://127.0.0.1:3001",
 ];
 
-const HEALTH_TIMEOUT_MS = 2000;
+const HEALTH_TIMEOUT_MS = 3000;
 const PRINT_TIMEOUT_MS  = 15000;
+
+/** Max retries for health checks — helps when bridge is still starting up. */
+const HEALTH_MAX_RETRIES = 3;
+const HEALTH_RETRY_DELAY_MS = 1000;
 
 /**
  * Cached base URL of the first candidate that successfully responded.
@@ -40,9 +44,100 @@ const PRINT_TIMEOUT_MS  = 15000;
  */
 let _resolvedBase: string | null = null;
 
+/**
+ * Last connection error reason — helps the UI show targeted troubleshooting.
+ */
+let _lastErrorReason: BridgeErrorReason = "none";
+
 /** Clear the cached URL (e.g. after the bridge restarts or goes offline). */
 export function resetBridgeUrlCache(): void {
   _resolvedBase = null;
+}
+
+/** Get the reason the last bridge connection attempt failed. */
+export function getLastBridgeErrorReason(): BridgeErrorReason {
+  return _lastErrorReason;
+}
+
+// ============================================================================
+// ERROR CATEGORISATION
+// ============================================================================
+
+/**
+ * Possible error categories — each maps to a specific user-facing
+ * troubleshooting action on the hardware settings page.
+ */
+export type BridgeErrorReason =
+  | "none"                 // No error
+  | "connection-refused"   // TCP connection refused — bridge not running / firewall
+  | "private-network"      // Chrome Private Network Access (PNA) blocked request
+  | "cors"                 // CORS headers missing on bridge response
+  | "timeout"              // Request timed out — bridge may be overloaded
+  | "mixed-content"        // HTTPS page blocked HTTP request (older browser)
+  | "unknown";             // Catch-all
+
+/**
+ * Categorise a fetch error into a BridgeErrorReason.
+ *
+ * Browser fetch errors are intentionally opaque (security), so we use
+ * heuristics on the error message + current page protocol to guess the
+ * most likely cause.
+ */
+function categorizeFetchError(err: unknown): BridgeErrorReason {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+
+  // Explicit connection refusal — nothing listening on port / firewall
+  if (msg.includes("err_connection_refused") || msg.includes("connection refused")) {
+    return "connection-refused";
+  }
+
+  // Network error + HTTPS page → likely Private Network Access (PNA) block
+  // Chrome blocks http://localhost from HTTPS without PNA preflight headers.
+  if (
+    (msg.includes("failed to fetch") || msg.includes("networkerror") || msg.includes("network error")) &&
+    typeof window !== "undefined" && window.location?.protocol === "https:"
+  ) {
+    return "private-network";
+  }
+
+  // Explicit CORS mention
+  if (msg.includes("cors") || msg.includes("cross-origin") || msg.includes("access-control")) {
+    return "cors";
+  }
+
+  // Timeout
+  if (msg.includes("timeout") || msg.includes("aborterror") || msg.includes("abort")) {
+    return "timeout";
+  }
+
+  // Mixed content (older browsers)
+  if (msg.includes("mixed content") || msg.includes("insecure")) {
+    return "mixed-content";
+  }
+
+  return "unknown";
+}
+
+/**
+ * User-friendly description for each error reason.
+ */
+export function getBridgeErrorMessage(reason: BridgeErrorReason): string {
+  switch (reason) {
+    case "none":
+      return "";
+    case "connection-refused":
+      return "Connection refused — the Print Bridge is not running, or Windows Firewall is blocking port 3001.";
+    case "private-network":
+      return "Blocked by Chrome Private Network Access — the browser is preventing this HTTPS page from reaching localhost. See troubleshooting steps below.";
+    case "cors":
+      return "CORS error — the Print Bridge is not sending the required Access-Control headers.";
+    case "timeout":
+      return "Connection timed out — the bridge may still be starting up. Try again in a few seconds.";
+    case "mixed-content":
+      return "Mixed content blocked — your browser is blocking HTTP requests from this HTTPS page.";
+    case "unknown":
+      return "Could not connect to the Print Bridge. Check that pos-print-bridge.exe is running on this computer.";
+  }
 }
 
 /**
@@ -54,6 +149,11 @@ export function resetBridgeUrlCache(): void {
  * machines "localhost" resolves to ::1 (IPv6) while the bridge only binds to
  * 127.0.0.1 (IPv4), causing a silent connection refusal. The fallback to
  * 127.0.0.1 covers that case.
+ *
+ * Chrome's **Private Network Access** (PNA) spec also requires the bridge
+ * server to respond to CORS preflight (OPTIONS) with the header
+ * `Access-Control-Allow-Private-Network: true`.  If your bridge does not
+ * include this header, Chrome will refuse the connection from an HTTPS page.
  */
 async function bridgeFetch(
   path: string,
@@ -63,10 +163,18 @@ async function bridgeFetch(
 
   // Fast-path: use cached working URL.
   if (_resolvedBase) {
-    return fetch(`${_resolvedBase}${path}`, {
-      ...rest,
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    try {
+      const res = await fetch(`${_resolvedBase}${path}`, {
+        ...rest,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      _lastErrorReason = "none";
+      return res;
+    } catch (err) {
+      // Cached URL failed — clear cache and try all candidates below.
+      _resolvedBase = null;
+      console.log("[PrintBridge] ⚠️ Cached URL failed, re-probing candidates...");
+    }
   }
 
   // Probe candidates in order and remember the first that responds.
@@ -78,12 +186,17 @@ async function bridgeFetch(
         signal: AbortSignal.timeout(timeoutMs),
       });
       _resolvedBase = base;
+      _lastErrorReason = "none";
       console.log(`[PrintBridge] ✅ Resolved bridge at ${base}`);
       return res;
     } catch (err) {
       lastErr = err;
     }
   }
+
+  // Categorise the error for UI troubleshooting
+  _lastErrorReason = categorizeFetchError(lastErr);
+  console.error(`[PrintBridge] ❌ All candidates failed. Reason: ${_lastErrorReason}`);
 
   throw lastErr ?? new Error("Print Bridge not reachable on localhost:3001 or 127.0.0.1:3001");
 }
@@ -135,6 +248,11 @@ export interface BridgePrinterListResponse {
 // HEALTH CHECK
 // ============================================================================
 
+/** Small helper — wait for `ms` milliseconds. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 /**
  * Check if the local POS Print Bridge service is running and the
  * printer is connected.
@@ -143,7 +261,7 @@ export interface BridgePrinterListResponse {
  *   1. The bridge service is reachable on localhost:3001
  *   2. The printer responds to a connection test
  *
- * Times out after 2 seconds — does not block the UI.
+ * Times out after 3 seconds — does not block the UI.
  */
 export async function isPrintBridgeAvailable(): Promise<boolean> {
   try {
@@ -174,21 +292,131 @@ export async function isPrintBridgeRunning(): Promise<boolean> {
 }
 
 /**
- * Get detailed health/status from the bridge.
- * Returns null if the bridge is not reachable.
+ * Get detailed health/status from the bridge **with automatic retries**.
+ *
+ * The bridge can take 1-3 seconds after starting before the HTTP server
+ * is ready. This function retries up to `HEALTH_MAX_RETRIES` times with
+ * a delay between attempts so it succeeds even if the user clicks "Check"
+ * right after launching the bridge exe.
+ *
+ * Returns null if the bridge is not reachable after all attempts.
  */
 export async function getPrintBridgeHealth(): Promise<PrintBridgeHealthResponse | null> {
-  try {
-    const res = await bridgeFetch("/health");
-    if (!res.ok) {
-      resetBridgeUrlCache(); // force re-probe next time
-      return null;
+  for (let attempt = 1; attempt <= HEALTH_MAX_RETRIES; attempt++) {
+    try {
+      const res = await bridgeFetch("/health");
+      if (!res.ok) {
+        resetBridgeUrlCache();
+        if (attempt < HEALTH_MAX_RETRIES) {
+          console.log(`[PrintBridge] ⏳ Attempt ${attempt}/${HEALTH_MAX_RETRIES} got HTTP ${res.status}, retrying...`);
+          await sleep(HEALTH_RETRY_DELAY_MS);
+          continue;
+        }
+        return null;
+      }
+      return await res.json();
+    } catch (err) {
+      resetBridgeUrlCache();
+      if (attempt < HEALTH_MAX_RETRIES) {
+        console.log(
+          `[PrintBridge] ⏳ Attempt ${attempt}/${HEALTH_MAX_RETRIES} failed (${_lastErrorReason}), retrying in ${HEALTH_RETRY_DELAY_MS}ms...`,
+        );
+        await sleep(HEALTH_RETRY_DELAY_MS);
+      } else {
+        console.error(`[PrintBridge] ❌ All ${HEALTH_MAX_RETRIES} health attempts failed. Last reason: ${_lastErrorReason}`);
+      }
     }
-    return await res.json();
-  } catch {
-    resetBridgeUrlCache(); // bridge went offline — re-probe on next call
-    return null;
   }
+  return null;
+}
+
+// ============================================================================
+// DIAGNOSTICS
+// ============================================================================
+
+export interface BridgeDiagnosticResult {
+  /** Is the page served over HTTPS? */
+  isHttps: boolean;
+  /** Results per candidate URL */
+  candidates: Array<{
+    url: string;
+    reachable: boolean;
+    errorReason: BridgeErrorReason;
+    errorDetail: string;
+    httpStatus?: number;
+  }>;
+  /** Aggregated likely cause */
+  likelyCause: BridgeErrorReason;
+  /** Human-readable summary */
+  summary: string;
+}
+
+/**
+ * Run a deep diagnostic against all bridge candidate URLs.
+ *
+ * Unlike the normal health check this does NOT cache results — it tests
+ * every candidate URL independently and returns detailed per-URL results
+ * so the UI can show the user exactly what went wrong.
+ */
+export async function diagnosePrintBridge(): Promise<BridgeDiagnosticResult> {
+  const isHttps = typeof window !== "undefined" && window.location?.protocol === "https:";
+  const candidates: BridgeDiagnosticResult["candidates"] = [];
+
+  for (const base of BRIDGE_CANDIDATES) {
+    const url = `${base}/health`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
+      candidates.push({
+        url: base,
+        reachable: true,
+        errorReason: "none",
+        errorDetail: "",
+        httpStatus: res.status,
+      });
+    } catch (err) {
+      const reason = categorizeFetchError(err);
+      candidates.push({
+        url: base,
+        reachable: false,
+        errorReason: reason,
+        errorDetail: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // If any candidate succeeded, bridge is fine
+  const anyReachable = candidates.some((c) => c.reachable);
+  if (anyReachable) {
+    return {
+      isHttps,
+      candidates,
+      likelyCause: "none",
+      summary: "Print Bridge is reachable.",
+    };
+  }
+
+  // Determine most likely cause from the failures
+  const reasons = candidates.map((c) => c.errorReason);
+  let likelyCause: BridgeErrorReason = "unknown";
+
+  if (reasons.includes("private-network")) {
+    likelyCause = "private-network";
+  } else if (reasons.includes("cors")) {
+    likelyCause = "cors";
+  } else if (reasons.includes("mixed-content")) {
+    likelyCause = "mixed-content";
+  } else if (reasons.includes("connection-refused")) {
+    likelyCause = "connection-refused";
+  } else if (reasons.includes("timeout")) {
+    likelyCause = "timeout";
+  }
+
+  return {
+    isHttps,
+    candidates,
+    likelyCause,
+    summary: getBridgeErrorMessage(likelyCause),
+  };
 }
 
 // ============================================================================

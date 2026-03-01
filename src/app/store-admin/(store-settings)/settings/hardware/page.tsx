@@ -46,6 +46,7 @@ import {
 import toast from "react-hot-toast";
 import { useHardware, type ConnectionStatus, type HardwareDevice } from "@/hooks/use-hardware";
 import { cn } from "@/lib/utils";
+import { getBridgeErrorMessage } from "@/lib/print-bridge";
 import { ReceiptLayoutEditor } from "@/components/shared/receipt-layout-editor";
 import { useStoreStore } from "@/stores/store.store";
 import { useStoreAdmin } from "../../../_context/store-admin-context";
@@ -75,7 +76,10 @@ export default function HardwareSettingsPage() {
     bridgeHealth,
     bridgePrinters,
     hasBridgePrinter,
+    bridgeErrorReason,
+    bridgeDiagnostic,
     checkBridgeStatus,
+    runBridgeDiagnostic,
   } = useHardware();
 
   const [isScannerTesting, setIsScannerTesting] = useState(false);
@@ -83,6 +87,8 @@ export default function HardwareSettingsPage() {
   const [scannerTestResult, setScannerTestResult] = useState<boolean | null>(null);
   const [printerTestResult, setPrinterTestResult] = useState<boolean | null>(null);
   const [isHttps, setIsHttps] = useState(false);
+  const [isBridgeChecking, setIsBridgeChecking] = useState(false);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
 
   // Detect HTTPS — browsers may block http://localhost from an HTTPS page in
   // some configurations; we show a contextual notice so the user knows what
@@ -239,44 +245,43 @@ export default function HardwareSettingsPage() {
         </Button>
       </div>
 
-      {/* HTTPS + localhost notice — only shown when served over HTTPS */}
+      {/* HTTPS + Private Network Access notice — only shown when served over HTTPS */}
       {isHttps && (
         <div className="flex gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-900/20">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
           <div className="text-sm text-blue-800 dark:text-blue-300 space-y-1">
-            <p className="font-medium">Accessing over HTTPS — Print Bridge note</p>
+            <p className="font-medium">Accessing over HTTPS — Chrome Private Network Access</p>
             <p className="text-xs text-blue-700 dark:text-blue-400">
-              Modern browsers (Chrome 94+, Firefox 95+) allow HTTPS pages to reach
-              {" "}<code className="rounded bg-blue-100 px-1 dark:bg-blue-900">http://localhost:3001</code>{" "}
-              because{" "}<code className="rounded bg-blue-100 px-1 dark:bg-blue-900">localhost</code>{" "}
-              is a{" "}<em>potentially trustworthy origin</em>.{" "}
-              If the Print Bridge still shows <strong>Offline</strong>, check these common causes:
+              Chrome&apos;s <strong>Private Network Access</strong> (PNA) security feature may block
+              this HTTPS page from reaching{" "}
+              <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">http://localhost:3001</code>.{" "}
+              If the Print Bridge shows <strong>Offline</strong> even though <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">pos-print-bridge.exe</code> is running:
             </p>
-            <ul className="list-disc pl-4 text-xs text-blue-700 dark:text-blue-400 space-y-0.5">
+            <ol className="list-decimal pl-4 text-xs text-blue-700 dark:text-blue-400 space-y-0.5">
               <li>
-                <strong>IPv6 resolution</strong> — Windows sometimes resolves{" "}
+                <strong>Recommended fix:</strong> Open{" "}
+                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">chrome://flags/#block-insecure-private-network-requests</code>{" "}
+                in Chrome and set it to <strong>Disabled</strong>, then restart Chrome.
+              </li>
+              <li>
+                <strong>IPv6 issue:</strong> If{" "}
                 <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">localhost</code>{" "}
-                to{" "}
+                resolves to{" "}
                 <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">::1</code>{" "}
-                while the bridge binds to{" "}
-                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">127.0.0.1</code>.{" "}
-                Open <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">C:\Windows\System32\drivers\etc\hosts</code>{" "}
-                and confirm that{" "}
+                (IPv6), open{" "}
+                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">C:\Windows\System32\drivers\etc\hosts</code>{" "}
+                and ensure{" "}
                 <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">127.0.0.1 localhost</code>{" "}
                 comes <em>before</em>{" "}
                 <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">::1 localhost</code>.
               </li>
               <li>
-                <strong>Bridge not running</strong> — make sure{" "}
-                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">pos-print-bridge.exe</code>{" "}
-                is running on this computer (check the console window).
+                <strong>Windows Firewall:</strong> Ensure port 3001 is not blocked — add an inbound rule if needed.
               </li>
               <li>
-                <strong>Chrome flag</strong> — if none of the above helps, visit{" "}
-                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">chrome://flags/#block-insecure-private-network-requests</code>{" "}
-                and set it to <strong>Disabled</strong>.
+                <strong>Antivirus:</strong> Some antivirus programs block localhost connections — try disabling real-time protection temporarily.
               </li>
-            </ul>
+            </ol>
           </div>
         </div>
       )}
@@ -865,52 +870,175 @@ export default function HardwareSettingsPage() {
           </div>
 
           {/* Current bridge status inline */}
-          <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-            <div className="flex items-center gap-3">
-              <Globe className={cn(
-                "h-5 w-5",
-                hasBridgePrinter ? "text-green-500" : bridgeStatus === "running" ? "text-yellow-500" : "text-muted-foreground"
-              )} />
-              <div>
-                <p className="text-sm font-medium">Bridge Status</p>
-                <p className="text-xs text-muted-foreground">
-                  {hasBridgePrinter
-                    ? "Connected and printer ready"
-                    : bridgeStatus === "running"
-                      ? "Bridge running — no printer detected"
-                      : "Not running on localhost:3001"}
-                </p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+              <div className="flex items-center gap-3">
+                <Globe className={cn(
+                  "h-5 w-5",
+                  hasBridgePrinter ? "text-green-500" : bridgeStatus === "running" ? "text-yellow-500" : "text-muted-foreground"
+                )} />
+                <div>
+                  <p className="text-sm font-medium">Bridge Status</p>
+                  <p className="text-xs text-muted-foreground">
+                    {hasBridgePrinter
+                      ? "Connected and printer ready"
+                      : bridgeStatus === "running"
+                        ? "Bridge running — no printer detected"
+                        : "Not running on localhost:3001"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasBridgePrinter ? (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Active
+                  </Badge>
+                ) : bridgeStatus === "running" ? (
+                  <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400">
+                    <AlertTriangle className="h-3 w-3 mr-1" />
+                    No Printer
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400">
+                    <WifiOff className="h-3 w-3 mr-1" />
+                    Offline
+                  </Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isBridgeChecking}
+                  onClick={async () => {
+                    setIsBridgeChecking(true);
+                    toast("Checking Print Bridge (retries automatically)...", { icon: "🔍" });
+                    await checkBridgeStatus();
+                    setIsBridgeChecking(false);
+                  }}
+                  className="gap-1.5 h-8"
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", isBridgeChecking && "animate-spin")} />
+                  Check
+                </Button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {hasBridgePrinter ? (
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400">
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Active
-                </Badge>
-              ) : bridgeStatus === "running" ? (
-                <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400">
-                  <AlertTriangle className="h-3 w-3 mr-1" />
-                  No Printer
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400">
-                  <WifiOff className="h-3 w-3 mr-1" />
-                  Offline
-                </Badge>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  checkBridgeStatus();
-                }}
-                className="gap-1.5 h-8"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Check
-              </Button>
-            </div>
+
+            {/* Error reason when bridge is offline */}
+            {bridgeStatus === "offline" && bridgeErrorReason && bridgeErrorReason !== "none" && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-900/20">
+                <div className="flex items-start gap-3">
+                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                  <div className="text-sm space-y-2">
+                    <p className="font-medium text-red-800 dark:text-red-300">
+                      {getBridgeErrorMessage(bridgeErrorReason)}
+                    </p>
+
+                    {/* Targeted troubleshooting per error reason */}
+                    {bridgeErrorReason === "connection-refused" && (
+                      <ul className="list-disc pl-4 text-xs text-red-700 dark:text-red-400 space-y-1">
+                        <li>Make sure <strong>pos-print-bridge.exe</strong> is running (you should see its console window).</li>
+                        <li>Check that nothing else is using port 3001 — open Command Prompt and run: <code className="rounded bg-red-100 px-1 dark:bg-red-900">netstat -an | findstr 3001</code></li>
+                        <li>Temporarily disable <strong>Windows Firewall</strong> and try again — if it works, add an inbound rule for port 3001.</li>
+                        <li>Disable any antivirus real-time protection temporarily to see if it&apos;s blocking localhost connections.</li>
+                      </ul>
+                    )}
+
+                    {bridgeErrorReason === "private-network" && (
+                      <ul className="list-disc pl-4 text-xs text-red-700 dark:text-red-400 space-y-1">
+                        <li>
+                          <strong>Chrome is blocking this HTTPS page from reaching localhost.</strong>{" "}
+                          This is Chrome&apos;s &quot;Private Network Access&quot; security feature.
+                        </li>
+                        <li>
+                          <strong>Quick fix:</strong> Open{" "}
+                          <code className="rounded bg-red-100 px-1 dark:bg-red-900">chrome://flags/#block-insecure-private-network-requests</code>{" "}
+                          in Chrome, set it to <strong>Disabled</strong>, and restart Chrome.
+                        </li>
+                        <li>
+                          <strong>Permanent fix:</strong> The Print Bridge needs to be updated to include
+                          CORS headers with <code className="rounded bg-red-100 px-1 dark:bg-red-900">Access-Control-Allow-Private-Network: true</code>.
+                          Download the latest version of pos-print-bridge.exe if available.
+                        </li>
+                      </ul>
+                    )}
+
+                    {bridgeErrorReason === "cors" && (
+                      <ul className="list-disc pl-4 text-xs text-red-700 dark:text-red-400 space-y-1">
+                        <li>The bridge is running but not sending CORS headers. Download the latest version of pos-print-bridge.exe.</li>
+                      </ul>
+                    )}
+
+                    {bridgeErrorReason === "timeout" && (
+                      <ul className="list-disc pl-4 text-xs text-red-700 dark:text-red-400 space-y-1">
+                        <li>The bridge may still be starting up — wait a few seconds and try again.</li>
+                        <li>If the issue persists, restart pos-print-bridge.exe.</li>
+                      </ul>
+                    )}
+
+                    {bridgeErrorReason === "mixed-content" && (
+                      <ul className="list-disc pl-4 text-xs text-red-700 dark:text-red-400 space-y-1">
+                        <li>Your browser is blocking HTTP requests from this HTTPS page. Try using Chrome (latest version) or Edge.</li>
+                        <li>
+                          Alternatively, open{" "}
+                          <code className="rounded bg-red-100 px-1 dark:bg-red-900">chrome://flags/#block-insecure-private-network-requests</code>{" "}
+                          and set it to <strong>Disabled</strong>.
+                        </li>
+                      </ul>
+                    )}
+
+                    {/* Diagnose button */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isDiagnosing}
+                      onClick={async () => {
+                        setIsDiagnosing(true);
+                        await runBridgeDiagnostic();
+                        setIsDiagnosing(false);
+                      }}
+                      className="gap-1.5 mt-2 text-xs h-7 border-red-300 dark:border-red-700"
+                    >
+                      {isDiagnosing ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Settings2 className="h-3 w-3" />
+                      )}
+                      Run Diagnostic
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Diagnostic results */}
+            {bridgeDiagnostic && bridgeStatus === "offline" && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900/20">
+                <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-2">Diagnostic Results</p>
+                <div className="space-y-1">
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Page protocol: <strong>{bridgeDiagnostic.isHttps ? "HTTPS" : "HTTP"}</strong>
+                    {bridgeDiagnostic.isHttps && " (Private Network Access rules apply)"}
+                  </p>
+                  {bridgeDiagnostic.candidates.map((c) => (
+                    <div key={c.url} className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                      {c.reachable ? (
+                        <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
+                      ) : (
+                        <XCircle className="h-3 w-3 text-red-500 shrink-0" />
+                      )}
+                      <code className="bg-amber-100 px-1 rounded dark:bg-amber-900">{c.url}</code>
+                      {c.reachable
+                        ? <span className="text-green-700 dark:text-green-400">— reachable (HTTP {c.httpStatus})</span>
+                        : <span>— {c.errorReason}: {c.errorDetail.slice(0, 80)}</span>
+                      }
+                    </div>
+                  ))}
+                  <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mt-1">
+                    Likely cause: {bridgeDiagnostic.summary}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
