@@ -188,6 +188,9 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
                             <span className="text-gray-600">Customer: </span>
                             {receipt.customer.name}
                             {receipt.customer.phone && ` (${receipt.customer.phone})`}
+                            {receipt.customer.address && (
+                                <div className="text-gray-600">{receipt.customer.address}</div>
+                            )}
                             {receipt.customer.gstin && (
                                 <div className="text-gray-600">
                                     GSTIN: {receipt.customer.gstin}

@@ -16,6 +16,8 @@ import { useSalesStore } from "@/stores/sales.store";
 import { usePosCatalogStore } from "@/stores/pos-catalog.store";
 import { useShiftsStore } from "@/stores/shifts.store";
 import { useStoreStore } from "@/stores/store.store";
+import { useOrganizationStore } from "@/stores/organization.store";
+import { persistStoreInfo, type CachedStoreInfo } from "@/lib/pos-cache";
 import {
     NoShiftGuard,
     ProductSearchBar,
@@ -64,6 +66,9 @@ export default function POSPage() {
     } = usePosData(storeId);
 
     const deductSoldStock = usePosCatalogStore((s) => s.deductSoldStock);
+    const cachedStoreInfo = usePosCatalogStore((s) => s.storeInfo);
+    const setStoreInfoInCatalog = usePosCatalogStore((s) => s.setStoreInfo);
+    const organization = useOrganizationStore((s) => s.organization);
 
     const {
         cart,
@@ -112,6 +117,7 @@ export default function POSPage() {
 
     // Store info for receipt
     const store = useStoreStore((s) => s.store);
+    const fetchStore = useStoreStore((s) => s.fetchStore);
     const receiptConfig = useStoreStore((s) => s.receiptConfig);
     const markReceiptPrinted = useSalesStore((s) => s.markReceiptPrinted);
 
@@ -130,8 +136,33 @@ export default function POSPage() {
         if (storeId) {
             fetchActiveShift(storeId);
             fetchHoldBills(storeId);
+            fetchStore(storeId);  // Fetch full store record for receipt printing
         }
-    }, [storeId, fetchActiveShift, fetchHoldBills]);
+    }, [storeId, fetchActiveShift, fetchHoldBills, fetchStore]);
+
+    // Build & cache store info for receipts once store data is available.
+    // Always rebuild when store/org changes so org GSTIN fallback is applied.
+    useEffect(() => {
+        if (!store) return;
+        const addressParts = [
+            store.address_line1,
+            store.address_line2,
+            store.city,
+            store.state,
+            store.pincode,
+        ].filter(Boolean);
+        // Use store GSTIN first; fall back to org GSTIN (e.g. store has no GSTIN registered yet)
+        const effectiveGstin = store.gstin ?? organization?.gstin ?? null;
+        const info: CachedStoreInfo = {
+            name: store.display_name || store.name,
+            address: addressParts.join(", "),
+            phone: store.phone ?? null,
+            gstin: effectiveGstin,
+            orgGstin: organization?.gstin ?? null,
+        };
+        setStoreInfoInCatalog(info);
+        persistStoreInfo(info).catch(() => {});
+    }, [store, organization, setStoreInfoInCatalog]);
 
     // Link shift to cart
     useEffect(() => {
@@ -684,10 +715,10 @@ export default function POSPage() {
                 open={receiptDialogOpen}
                 onOpenChange={setReceiptDialogOpen}
                 sale={lastCompletedSale}
-                storeName={appUser?.storeName ?? store?.name ?? "Store"}
-                storeAddress={store?.address_line1 ?? ""}
-                storeGstin={store?.gstin}
-                storePhone={store?.phone}
+                storeName={cachedStoreInfo?.name ?? appUser?.storeName ?? store?.name ?? "Store"}
+                storeAddress={cachedStoreInfo?.address ?? store?.address_line1 ?? ""}
+                storeGstin={cachedStoreInfo?.gstin ?? store?.gstin}
+                storePhone={cachedStoreInfo?.phone ?? store?.phone}
                 receiptConfig={receiptConfig}
                 printFn={printReceipt}
                 hasBridgePrinter={hasBridgePrinter}

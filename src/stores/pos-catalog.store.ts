@@ -22,8 +22,12 @@ import {
     clearPosCache,
     loadReceiptConfigFromCache,
     persistReceiptConfig,
+    loadStoreInfoFromCache,
+    persistStoreInfo,
+    type CachedStoreInfo,
 } from "@/lib/pos-cache";
 import { useStoreStore } from "@/stores/store.store";
+import { useOrganizationStore } from "@/stores/organization.store";
 
 // ============================================================================
 // STATE
@@ -40,6 +44,8 @@ interface PosCatalogState {
     status: PosDataStatus;
     /** Error message if last operation failed */
     error: string | null;
+    /** Cached store info for receipt printing (name, address, phone, gstin) */
+    storeInfo: CachedStoreInfo | null;
 }
 
 interface PosCatalogActions {
@@ -96,6 +102,11 @@ interface PosCatalogActions {
     injectItem: (item: SellableItem, storeId: string) => void;
 
     /**
+     * Set cached store info (for receipt printing).
+     */
+    setStoreInfo: (info: CachedStoreInfo) => void;
+
+    /**
      * Full reset — clears memory and IndexedDB.
      */
     reset: () => Promise<void>;
@@ -122,6 +133,7 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
             cacheMeta: null,
             status: "idle",
             error: null,
+            storeInfo: null,
 
             // ==============================================================
             // HYDRATE — Load from IndexedDB if valid, else network fetch
@@ -167,6 +179,20 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
                                 }
                             });
 
+                            // Hydrate store info from IndexedDB for receipt printing
+                            // If not in IndexedDB yet (first run after update), build from Zustand state & persist
+                            loadStoreInfoFromCache().then((cached) => {
+                                if (cached) {
+                                    set({ storeInfo: cached });
+                                } else {
+                                    const info = buildStoreInfo();
+                                    if (info) {
+                                        set({ storeInfo: info });
+                                        persistStoreInfo(info).catch(() => {});
+                                    }
+                                }
+                            });
+
                             return;
                         }
                     }
@@ -206,6 +232,13 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
                     const receiptCfg = useStoreStore.getState().receiptConfig;
                     if (receiptCfg) {
                         persistReceiptConfig(receiptCfg).catch(() => {});
+                    }
+
+                    // Cache store info for offline receipt printing
+                    const storeInfo = buildStoreInfo();
+                    if (storeInfo) {
+                        set({ storeInfo });
+                        persistStoreInfo(storeInfo).catch(() => {});
                     }
                 } catch {
                     set({
@@ -257,6 +290,13 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
                     const refreshReceiptCfg = useStoreStore.getState().receiptConfig;
                     if (refreshReceiptCfg) {
                         persistReceiptConfig(refreshReceiptCfg).catch(() => {});
+                    }
+
+                    // Re-cache store info on refresh
+                    const refreshStoreInfo = buildStoreInfo();
+                    if (refreshStoreInfo) {
+                        set({ storeInfo: refreshStoreInfo });
+                        persistStoreInfo(refreshStoreInfo).catch(() => {});
                     }
                 } catch {
                     set({
@@ -343,6 +383,13 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
             },
 
             // ==============================================================
+            // SET STORE INFO — for receipt printing
+            // ==============================================================
+            setStoreInfo: (info: CachedStoreInfo) => {
+                set({ storeInfo: info });
+            },
+
+            // ==============================================================
             // RESET — Full wipe
             // ==============================================================
             reset: async () => {
@@ -352,6 +399,7 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
                     cacheMeta: null,
                     status: "idle",
                     error: null,
+                    storeInfo: null,
                 });
                 await clearPosCache();
             },
@@ -359,3 +407,36 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
         { name: "pos-catalog" }
     )
 );
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Build a CachedStoreInfo from the current Zustand stores.
+ * Returns null if store data isn't available yet.
+ */
+function buildStoreInfo(): CachedStoreInfo | null {
+    const store = useStoreStore.getState().store;
+    if (!store) return null;
+
+    const org = useOrganizationStore.getState().organization;
+
+    // Build a full address string from store fields
+    const addressParts = [
+        store.address_line1,
+        store.address_line2,
+        store.city,
+        store.state,
+        store.pincode,
+    ].filter(Boolean);
+
+    return {
+        name: store.display_name || store.name,
+        address: addressParts.join(", "),
+        phone: store.phone ?? null,
+        // Use store GSTIN first; fall back to org GSTIN when store has none
+        gstin: store.gstin ?? org?.gstin ?? null,
+        orgGstin: org?.gstin ?? null,
+    };
+}

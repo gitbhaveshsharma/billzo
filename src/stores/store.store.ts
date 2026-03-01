@@ -28,6 +28,8 @@ interface StoreState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   updateStatus: (status: string) => void;
+  /** Fetch store by ID and populate the store state */
+  fetchStore: (storeId: string) => Promise<void>;
   /** Patch receiptConfig locally (live preview). Call saveReceiptConfig to persist to DB. */
   updateReceiptConfig: (patch: Partial<ReceiptLayoutConfig>) => void;
   /** Save the current receiptConfig to the DB via store_settings.printer_settings */
@@ -62,6 +64,23 @@ export const useStoreStore = create<StoreState>()(
       setStore: (store) => set({ store, error: null }),
       setLoading: (isLoading) => set({ isLoading }),
       setError: (error) => set({ error, isLoading: false }),
+
+      fetchStore: async (storeId: string) => {
+        // Skip if already loaded for this store
+        if (get().store?.id === storeId) return;
+        set({ isLoading: true, error: null });
+        const { data, error } = await storeService.getById(storeId);
+        if (error || !data) {
+          set({ isLoading: false, error: error ?? "Failed to fetch store" });
+          return;
+        }
+        set({ store: data, isLoading: false, error: null });
+        // Also fetch the org for this store's organization_id so GSTIN is available
+        if (data.organization_id) {
+          const { useOrganizationStore } = await import("@/stores/organization.store");
+          useOrganizationStore.getState().fetchOrganization(data.organization_id);
+        }
+      },
 
       updateStatus: (status) =>
         set((state) => ({
