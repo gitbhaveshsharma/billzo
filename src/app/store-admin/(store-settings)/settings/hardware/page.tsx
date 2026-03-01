@@ -21,6 +21,7 @@ import {
   Download,
   FileJson,
   AppWindow,
+  Info,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,6 +82,14 @@ export default function HardwareSettingsPage() {
   const [isPrinterTesting, setIsPrinterTesting] = useState(false);
   const [scannerTestResult, setScannerTestResult] = useState<boolean | null>(null);
   const [printerTestResult, setPrinterTestResult] = useState<boolean | null>(null);
+  const [isHttps, setIsHttps] = useState(false);
+
+  // Detect HTTPS — browsers may block http://localhost from an HTTPS page in
+  // some configurations; we show a contextual notice so the user knows what
+  // to do if the Print Bridge shows as Offline on the production URL.
+  useEffect(() => {
+    setIsHttps(window.location.protocol === "https:");
+  }, []);
 
   // Receipt layout config — persisted in store_settings (DB-backed)
   const {
@@ -229,6 +238,48 @@ export default function HardwareSettingsPage() {
           Refresh
         </Button>
       </div>
+
+      {/* HTTPS + localhost notice — only shown when served over HTTPS */}
+      {isHttps && (
+        <div className="flex gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-900/20">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+          <div className="text-sm text-blue-800 dark:text-blue-300 space-y-1">
+            <p className="font-medium">Accessing over HTTPS — Print Bridge note</p>
+            <p className="text-xs text-blue-700 dark:text-blue-400">
+              Modern browsers (Chrome 94+, Firefox 95+) allow HTTPS pages to reach
+              {" "}<code className="rounded bg-blue-100 px-1 dark:bg-blue-900">http://localhost:3001</code>{" "}
+              because{" "}<code className="rounded bg-blue-100 px-1 dark:bg-blue-900">localhost</code>{" "}
+              is a{" "}<em>potentially trustworthy origin</em>.{" "}
+              If the Print Bridge still shows <strong>Offline</strong>, check these common causes:
+            </p>
+            <ul className="list-disc pl-4 text-xs text-blue-700 dark:text-blue-400 space-y-0.5">
+              <li>
+                <strong>IPv6 resolution</strong> — Windows sometimes resolves{" "}
+                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">localhost</code>{" "}
+                to{" "}
+                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">::1</code>{" "}
+                while the bridge binds to{" "}
+                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">127.0.0.1</code>.{" "}
+                Open <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">C:\Windows\System32\drivers\etc\hosts</code>{" "}
+                and confirm that{" "}
+                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">127.0.0.1 localhost</code>{" "}
+                comes <em>before</em>{" "}
+                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">::1 localhost</code>.
+              </li>
+              <li>
+                <strong>Bridge not running</strong> — make sure{" "}
+                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">pos-print-bridge.exe</code>{" "}
+                is running on this computer (check the console window).
+              </li>
+              <li>
+                <strong>Chrome flag</strong> — if none of the above helps, visit{" "}
+                <code className="rounded bg-blue-100 px-1 dark:bg-blue-900">chrome://flags/#block-insecure-private-network-requests</code>{" "}
+                and set it to <strong>Disabled</strong>.
+              </li>
+            </ul>
+          </div>
+        </div>
+      )}
 
       {/* Hardware Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
