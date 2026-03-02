@@ -61,6 +61,10 @@ export function ProductSearchBar({
     const scannerBufferRef = useRef<string>("");
     const isScannerInputRef = useRef(false);
     const scanLockRef = useRef(false);
+    /** Auto-fire timer — triggers lookup after scanner input silence (~30ms) */
+    const scannerAutoFireRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    /** Stable ref to handleBarcodeScan so the auto-fire timer always calls the latest version */
+    const handleBarcodeScanCallbackRef = useRef<((barcode: string) => void) | null>(null);
 
     // ── Global barcode listener (works even when input is not focused) ─────
     const globalBufferRef = useRef<string>("");
@@ -174,6 +178,9 @@ export function ProductSearchBar({
         [storeId, lookupBarcode, onAddProduct]
     );
 
+    // Keep ref in sync so auto-fire timer always calls the latest version
+    handleBarcodeScanCallbackRef.current = handleBarcodeScan;
+
     const handleSelect = useCallback(
         (item: SellableItem) => {
             onAddProduct(item);
@@ -195,6 +202,12 @@ export function ProductSearchBar({
             const recentCutoff = now - 1000;
             keystrokeTimestamps.current = timestamps.filter((t) => t > recentCutoff);
 
+            // Cancel any pending auto-fire timer (more chars coming in)
+            if (scannerAutoFireRef.current) {
+                clearTimeout(scannerAutoFireRef.current);
+                scannerAutoFireRef.current = null;
+            }
+
             // Detect scanner: fast consecutive keystrokes
             if (timestamps.length >= 3) {
                 const recentGaps: number[] = [];
@@ -203,10 +216,19 @@ export function ProductSearchBar({
                 }
                 const avgGap = recentGaps.reduce((a, b) => a + b, 0) / recentGaps.length;
 
-                // If average gap is very fast, it's a scanner
+                // If average gap is very fast, it's a scanner — auto-fire after 30ms silence
                 if (avgGap < SCANNER_KEYSTROKE_GAP && recentGaps.length >= 2) {
                     isScannerInputRef.current = true;
                     scannerBufferRef.current = value;
+
+                    // Auto-fire: wait 30ms after the last character to ensure scan is complete
+                    scannerAutoFireRef.current = setTimeout(() => {
+                        const barcode = scannerBufferRef.current.trim();
+                        if (barcode.length >= SCANNER_MIN_LENGTH) {
+                            handleBarcodeScanCallbackRef.current?.(barcode);
+                        }
+                        scannerAutoFireRef.current = null;
+                    }, 30);
                 }
             }
 
@@ -228,6 +250,12 @@ export function ProductSearchBar({
         (e: React.KeyboardEvent) => {
             if (e.key === "Enter") {
                 e.preventDefault();
+
+                // Cancel any pending auto-fire timer (user pressed Enter manually)
+                if (scannerAutoFireRef.current) {
+                    clearTimeout(scannerAutoFireRef.current);
+                    scannerAutoFireRef.current = null;
+                }
 
                 // If a product is highlighted in dropdown, select it
                 if (isOpen && highlightedIndex >= 0 && highlightedIndex < filteredProducts.length) {

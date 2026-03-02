@@ -180,7 +180,7 @@ export default function HardwareSettingsPage() {
   // ========================================================================
 
   return (
-    <div className="container max-w-4xl mx-auto py-6 px-4 space-y-6" data-hardware-settings>
+    <div className="max-w-6xl mx-auto py-6 px-4 space-y-6" data-hardware-settings>
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>

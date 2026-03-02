@@ -8,6 +8,7 @@ import {
     ShoppingCart,
     Trash2,
     Receipt,
+    Tag,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { usePosData } from "@/hooks/use-pos-data";
@@ -28,6 +29,7 @@ import {
     HoldBillsDrawer,
     HardwareStatusIndicator,
     PosRefreshButton,
+    PriceLookupDialog,
 } from "../store-admin/_components/sales";
 import { PostSaleActionsDialog } from "../store-admin/_components/sales/post-sale-actions-dialog";
 import { AddCustomerDialog } from "../store-admin/_components/customer";
@@ -127,6 +129,7 @@ export default function POSPage() {
     const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
     const [lastCompletedSale, setLastCompletedSale] = useState<EnrichedSale | null>(null);
     const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+    const [priceLookupOpen, setPriceLookupOpen] = useState(false);
 
     // ========================================================================
     // INITIAL DATA LOAD — Shift & hold bills only (catalog loaded by usePosData)
@@ -475,7 +478,7 @@ export default function POSPage() {
             const isFKey = e.key.startsWith("F") && e.key.length <= 3;
 
             // Don't intercept when dialog open (let dialog handle it)
-            if (paymentOpen || addCustomerOpen || receiptDialogOpen) return;
+            if (paymentOpen || addCustomerOpen || receiptDialogOpen || priceLookupOpen) return;
 
             if (!isFKey && isInput) return;
 
@@ -483,6 +486,10 @@ export default function POSPage() {
                 case "F2":
                     e.preventDefault();
                     if (cart.length > 0) handleHold();
+                    break;
+                case "F5":
+                    e.preventDefault();
+                    setPriceLookupOpen(true);
                     break;
                 case "F3":
                     e.preventDefault();
@@ -518,7 +525,7 @@ export default function POSPage() {
 
         document.addEventListener("keydown", handlePosKey);
         return () => document.removeEventListener("keydown", handlePosKey);
-    }, [cart.length, handleHold, handleCharge, clearCart, paymentOpen, addCustomerOpen, receiptDialogOpen, holdDrawerOpen]);
+    }, [cart.length, handleHold, handleCharge, clearCart, paymentOpen, addCustomerOpen, receiptDialogOpen, holdDrawerOpen, priceLookupOpen]);
 
     // ========================================================================
     // LOADING
@@ -581,6 +588,16 @@ export default function POSPage() {
                             <Pause className="h-3.5 w-3.5" />
                             Hold
                             <kbd className="ml-0.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50 hidden sm:inline">F2</kbd>
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1 text-xs"
+                            onClick={() => setPriceLookupOpen(true)}
+                        >
+                            <Tag className="h-3.5 w-3.5" />
+                            Price   
+                            <kbd className="ml-0.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50 hidden sm:inline">F5</kbd>
                         </Button>
                         <Button
                             variant="outline"
@@ -708,6 +725,14 @@ export default function POSPage() {
                 onRecallLocal={handleRecallLocal}
                 onRemoveLocal={handleRemoveLocalHold}
                 onRecallServer={handleRecallServer}
+            />
+
+            {/* Price Lookup Dialog */}
+            <PriceLookupDialog
+                open={priceLookupOpen}
+                onOpenChange={setPriceLookupOpen}
+                storeId={storeId}
+                onAddProduct={handleProductSelect}
             />
 
             {/* Post-Sale Receipt Actions Dialog */}

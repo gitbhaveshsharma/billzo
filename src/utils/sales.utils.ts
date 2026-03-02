@@ -188,6 +188,168 @@ export const formatCurrency = (amount: number | null | undefined): string => {
     }).format(amount);
 };
 
+// ============================================================================
+// UNIT OF MEASURE — Quantity input behavior
+// ============================================================================
+
+/**
+ * Unit categories — maps common unit names / codes to their category.
+ * Weight & volume units allow fractional (decimal) quantities;
+ * "quantity" / "length" units default to whole numbers.
+ */
+const WEIGHT_UNIT_NAMES = new Set([
+    "kg", "g", "gm", "gram", "grams", "kilogram", "kilograms",
+    "mg", "milligram", "milligrams", "quintal", "ton", "tonne",
+]);
+const VOLUME_UNIT_NAMES = new Set([
+    "l", "ltr", "litre", "liter", "litres", "liters",
+    "ml", "millilitre", "milliliter", "millilitres", "milliliters",
+    "kl", "kilolitre", "kiloliter",
+]);
+const LENGTH_UNIT_NAMES = new Set([
+    "m", "meter", "meters", "metre", "metres",
+    "cm", "centimeter", "centimeters", "centimetre", "centimetres",
+    "mm", "millimeter", "millimeters", "millimetre", "millimetres",
+    "ft", "feet", "foot", "inch", "inches", "in",
+    "yd", "yard", "yards",
+]);
+
+export type UnitInputCategory = "weight" | "volume" | "length" | "quantity";
+
+/** Quick presets for weight units (shown as buttons in the cart) */
+export interface QuantityPreset {
+    label: string;
+    value: number;
+}
+
+/**
+ * Configuration object for a unit — controls step, decimal places, presets, etc.
+ */
+export interface UnitInputConfig {
+    /** Category inferred from unit_name */
+    category: UnitInputCategory;
+    /** Whether fractional input is allowed */
+    allowDecimal: boolean;
+    /** Input step attribute */
+    step: number;
+    /** Number of decimal places for display */
+    decimalPlaces: number;
+    /** Min quantity (0.001 for weight/volume, 1 for quantity) */
+    min: number;
+    /** Quick-pick presets (e.g. 250g, 500g, 1kg) */
+    presets: QuantityPreset[];
+}
+
+/**
+ * Detect unit category from the `unit_name` string on a SellableItem.
+ * Returns a config object that drives the quantity input UI.
+ */
+export function getUnitInputConfig(unitName: string | null | undefined): UnitInputConfig {
+    const lower = (unitName ?? "").trim().toLowerCase();
+
+    if (WEIGHT_UNIT_NAMES.has(lower)) {
+        // Weight units like kg, g — allow up to 3 decimal places
+        // Presets are relative to the unit: if unit is "g" presets are in grams, if "kg" in kg fractions
+        const isGrams = ["g", "gm", "gram", "grams", "mg", "milligram", "milligrams"].includes(lower);
+        return {
+            category: "weight",
+            allowDecimal: true,
+            step: isGrams ? 1 : 0.001,
+            decimalPlaces: isGrams ? 0 : 3,
+            min: isGrams ? 1 : 0.001,
+            presets: isGrams
+                ? [
+                      { label: "100g", value: 100 },
+                      { label: "250g", value: 250 },
+                      { label: "500g", value: 500 },
+                      { label: "1kg",  value: 1000 },
+                  ]
+                : [
+                      { label: "250g", value: 0.25 },
+                      { label: "500g", value: 0.5 },
+                      { label: "1kg",  value: 1 },
+                      { label: "2kg",  value: 2 },
+                  ],
+        };
+    }
+
+    if (VOLUME_UNIT_NAMES.has(lower)) {
+        const isMl = ["ml", "millilitre", "milliliter", "millilitres", "milliliters"].includes(lower);
+        return {
+            category: "volume",
+            allowDecimal: true,
+            step: isMl ? 1 : 0.001,
+            decimalPlaces: isMl ? 0 : 3,
+            min: isMl ? 1 : 0.001,
+            presets: isMl
+                ? [
+                      { label: "100ml", value: 100 },
+                      { label: "250ml", value: 250 },
+                      { label: "500ml", value: 500 },
+                      { label: "1L",    value: 1000 },
+                  ]
+                : [
+                      { label: "250ml", value: 0.25 },
+                      { label: "500ml", value: 0.5 },
+                      { label: "1L",    value: 1 },
+                      { label: "2L",    value: 2 },
+                  ],
+        };
+    }
+
+    if (LENGTH_UNIT_NAMES.has(lower)) {
+        return {
+            category: "length",
+            allowDecimal: true,
+            step: 0.01,
+            decimalPlaces: 2,
+            min: 0.01,
+            presets: [
+                { label: "0.5",  value: 0.5 },
+                { label: "1",    value: 1 },
+                { label: "2",    value: 2 },
+                { label: "5",    value: 5 },
+            ],
+        };
+    }
+
+    // Default — "pcs", "nos", "box", etc. — whole numbers only
+    return {
+        category: "quantity",
+        allowDecimal: false,
+        step: 1,
+        decimalPlaces: 0,
+        min: 1,
+        presets: [],
+    };
+}
+
+/**
+ * Format a quantity value respecting the unit's decimal precision.
+ * @example formatQty(1.5, "kg") → "1.5 kg"
+ * @example formatQty(2, "pcs") → "2 pcs"
+ */
+export function formatQty(quantity: number, unitName?: string | null): string {
+    const cfg = getUnitInputConfig(unitName);
+    const formatted = cfg.allowDecimal
+        ? quantity.toFixed(cfg.decimalPlaces).replace(/\.?0+$/, "")
+        : Math.round(quantity).toString();
+    return unitName ? `${formatted} ${unitName}` : formatted;
+}
+
+/**
+ * Parse a quantity string into a number, clamped to the unit's min.
+ */
+export function parseQtyInput(value: string, unitName?: string | null): number {
+    const cfg = getUnitInputConfig(unitName);
+    const parsed = parseFloat(value);
+    if (isNaN(parsed) || parsed < cfg.min) return cfg.min;
+    if (!cfg.allowDecimal) return Math.round(parsed);
+    // Round to allowed decimal places
+    const factor = Math.pow(10, cfg.decimalPlaces);
+    return Math.round(parsed * factor) / factor;
+}
+
 /**
  * Format a date string into localized display format
  * @example formatDate("2025-06-15") → "15 Jun 2025"

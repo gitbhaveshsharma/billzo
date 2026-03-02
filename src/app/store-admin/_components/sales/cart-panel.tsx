@@ -1,10 +1,19 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { Minus, Plus, Trash2, Percent, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import {
+    Item,
+    ItemContent,
+    ItemTitle,
+    ItemDescription,
+    ItemActions,
+    ItemGroup,
+} from "@/components/ui/item";
 import {
     Tooltip,
     TooltipContent,
@@ -12,8 +21,13 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { CartItem, DiscountType } from "@/types/sales.types";
-import { formatCurrency } from "@/utils/sales.utils";
-import { calculateItemTotals } from "@/utils/sales.utils";
+import {
+    formatCurrency,
+    calculateItemTotals,
+    getUnitInputConfig,
+    parseQtyInput,
+    formatQty,
+} from "@/utils/sales.utils";
 
 // ============================================================================
 // TYPES
@@ -33,7 +47,7 @@ interface CartPanelProps {
 }
 
 // ============================================================================
-// CART ITEM ROW
+// CART ITEM ROW — Uses shadcn Item component + unit-aware quantity input
 // ============================================================================
 
 function CartItemRow({
@@ -67,55 +81,156 @@ function CartItemRow({
         isInterstate
     );
 
+    const unitCfg = getUnitInputConfig(item.unit_name);
+
+    // Local string state for the quantity input so the user can type freely
+    const [qtyInputValue, setQtyInputValue] = useState<string>(
+        unitCfg.allowDecimal
+            ? item.quantity.toString()
+            : Math.round(item.quantity).toString()
+    );
+
+    // Sync if parent changes quantity externally (e.g. preset click)
+    const displayQty = unitCfg.allowDecimal
+        ? item.quantity.toString()
+        : Math.round(item.quantity).toString();
+
+    // When the input loses focus, commit the parsed value
+    const commitQty = useCallback(
+        (raw: string) => {
+            const parsed = parseQtyInput(raw, item.unit_name);
+            onUpdateQuantity(item.cart_key, parsed);
+            setQtyInputValue(parsed.toString());
+        },
+        [item.cart_key, item.unit_name, onUpdateQuantity]
+    );
+
+    const handleQtyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setQtyInputValue(e.target.value);
+    };
+
+    const handleQtyBlur = () => {
+        commitQty(qtyInputValue);
+    };
+
+    const handleQtyKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            commitQty(qtyInputValue);
+            (e.target as HTMLInputElement).blur();
+        }
+    };
+
+    const handleStepDown = () => {
+        const next = Math.max(unitCfg.min, item.quantity - unitCfg.step);
+        const parsed = parseQtyInput(next.toString(), item.unit_name);
+        onUpdateQuantity(item.cart_key, parsed);
+        setQtyInputValue(parsed.toString());
+    };
+
+    const handleStepUp = () => {
+        const next = item.quantity + unitCfg.step;
+        const parsed = parseQtyInput(next.toString(), item.unit_name);
+        onUpdateQuantity(item.cart_key, parsed);
+        setQtyInputValue(parsed.toString());
+    };
+
+    const handlePreset = (value: number) => {
+        onUpdateQuantity(item.cart_key, value);
+        setQtyInputValue(value.toString());
+    };
+
     const handleDiscountChange = (value: string) => {
         const pct = Math.min(100, Math.max(0, Number(value) || 0));
         onApplyDiscount(item.cart_key, "PERCENTAGE", pct, 0);
     };
 
     return (
-        <div className="flex items-start gap-2 py-2 px-2 border-b last:border-b-0 hover:bg-accent/30 transition-colors">
-            <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{item.product_name}</p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{item.product_code}</span>
-                    <span>×</span>
-                    <span>{formatCurrency(item.unit_price)}</span>
+        <Item variant="default" size="sm" className="border-b rounded-none last:border-b-0 hover:bg-accent/30 gap-2">
+            {/* Product info */}
+            <ItemContent className="gap-0.5 min-w-0">
+                <ItemTitle className="text-sm truncate">{item.product_name}</ItemTitle>
+                <ItemDescription className="text-xs line-clamp-1 flex items-center gap-1.5">
+                    <span className="font-mono">{item.product_code}</span>
+                    <span className="text-muted-foreground/50">·</span>
+                    <span>{formatCurrency(item.unit_price)}{item.unit_name ? `/${item.unit_name}` : ""}</span>
+                    {item.gst_percentage > 0 && (
+                        <>
+                            <span className="text-muted-foreground/50">·</span>
+                            <span className="text-blue-600 dark:text-blue-400">{item.gst_percentage}%</span>
+                        </>
+                    )}
+                </ItemDescription>
+
+                {/* Quick quantity presets for weight/volume/length units */}
+                {unitCfg.presets.length > 0 && (
+                    <div className="flex items-center gap-1 mt-1">
+                        {unitCfg.presets.map((preset) => (
+                            <Button
+                                key={preset.label}
+                                type="button"
+                                variant={item.quantity === preset.value ? "default" : "outline"}
+                                size="sm"
+                                className="h-5 px-1.5 text-[10px] font-medium"
+                                onClick={() => handlePreset(preset.value)}
+                            >
+                                {preset.label}
+                            </Button>
+                        ))}
+                    </div>
+                )}
+            </ItemContent>
+
+            {/* Quantity + Discount + Total + Remove */}
+            <ItemActions className="flex-wrap gap-1.5 items-start">
+                {/* Quantity Stepper */}
+                <div className="flex items-center gap-0.5">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={handleStepDown}
+                        disabled={item.quantity <= unitCfg.min}
+                    >
+                        <Minus className="h-3 w-3" />
+                    </Button>
+                    <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Input
+                                    type="number"
+                                    value={qtyInputValue}
+                                    onChange={handleQtyChange}
+                                    onBlur={handleQtyBlur}
+                                    onKeyDown={handleQtyKeyDown}
+                                    onFocus={(e) => e.target.select()}
+                                    className="h-6 w-16 text-center text-xs p-0"
+                                    min={unitCfg.min}
+                                    step={unitCfg.step}
+                                    inputMode={unitCfg.allowDecimal ? "decimal" : "numeric"}
+                                />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                                {unitCfg.allowDecimal
+                                    ? `Enter qty in ${item.unit_name ?? "units"} (decimals OK)`
+                                    : `Qty (whole numbers)`}
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={handleStepUp}
+                    >
+                        <Plus className="h-3 w-3" />
+                    </Button>
+                    {item.unit_name && (
+                        <span className="text-[10px] text-muted-foreground ml-0.5">{item.unit_name}</span>
+                    )}
                 </div>
-            </div>
 
-            {/* Quantity Stepper */}
-            <div className="flex items-center gap-1">
-                <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => onUpdateQuantity(item.cart_key, item.quantity - 1)}
-                    disabled={item.quantity <= 1}
-                >
-                    <Minus className="h-3 w-3" />
-                </Button>
-                <Input
-                    type="number"
-                    value={item.quantity}
-                    onChange={(e) => {
-                        const val = Math.max(1, parseInt(e.target.value) || 1);
-                        onUpdateQuantity(item.cart_key, val);
-                    }}
-                    className="h-6 w-12 text-center text-xs p-0"
-                    min={1}
-                />
-                <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => onUpdateQuantity(item.cart_key, item.quantity + 1)}
-                >
-                    <Plus className="h-3 w-3" />
-                </Button>
-            </div>
-
-            {/* Discount */}
-            <div className="flex items-center gap-0.5">
+                {/* Discount */}
                 <TooltipProvider delayDuration={200}>
                     <Tooltip>
                         <TooltipTrigger asChild>
@@ -137,28 +252,28 @@ function CartItemRow({
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
-            </div>
 
-            {/* Line Total */}
-            <div className="text-right min-w-[70px]">
-                <p className="text-sm font-bold">{formatCurrency(totals.total_amount)}</p>
-                {totals.discount_total > 0 && (
-                    <p className="text-[10px] text-green-600">
-                        -{formatCurrency(totals.discount_total)}
-                    </p>
-                )}
-            </div>
+                {/* Line Total */}
+                <div className="text-right min-w-[70px]">
+                    <p className="text-sm font-bold tabular-nums">{formatCurrency(totals.total_amount)}</p>
+                    {totals.discount_total > 0 && (
+                        <p className="text-[10px] text-green-600 dark:text-green-400 tabular-nums">
+                            -{formatCurrency(totals.discount_total)}
+                        </p>
+                    )}
+                </div>
 
-            {/* Remove */}
-            <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-red-500 hover:text-red-700 flex-shrink-0"
-                onClick={() => onRemoveItem(item.cart_key)}
-            >
-                <Trash2 className="h-3 w-3" />
-            </Button>
-        </div>
+                {/* Remove */}
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-red-500 hover:text-red-700 dark:hover:text-red-400 flex-shrink-0"
+                    onClick={() => onRemoveItem(item.cart_key)}
+                >
+                    <Trash2 className="h-3 w-3" />
+                </Button>
+            </ItemActions>
+        </Item>
     );
 }
 
@@ -195,21 +310,27 @@ export function CartPanel({
         return <EmptyCart />;
     }
 
+    const totalQtyDisplay = items.reduce((sum, item) => sum + item.quantity, 0);
+    const hasDecimalQty = items.some((item) => !Number.isInteger(item.quantity));
+
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="flex items-center justify-between px-2 py-1.5 border-b">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b">
                 <span className="text-xs font-medium text-muted-foreground">
                     {items.length} item{items.length !== 1 ? "s" : ""}
                 </span>
-                <Badge variant="secondary" className="text-xs">
-                    {items.reduce((sum, item) => sum + item.quantity, 0)} qty
+                <Badge variant="secondary" className="text-xs tabular-nums">
+                    {hasDecimalQty
+                        ? totalQtyDisplay.toFixed(3).replace(/\.?0+$/, "")
+                        : totalQtyDisplay}{" "}
+                    qty
                 </Badge>
             </div>
 
             {/* Items */}
             <ScrollArea className="flex-1">
-                <div className="divide-y-0">
+                <ItemGroup>
                     {items.map((item) => (
                         <CartItemRow
                             key={item.cart_key}
@@ -220,7 +341,7 @@ export function CartPanel({
                             onApplyDiscount={onApplyDiscount}
                         />
                     ))}
-                </div>
+                </ItemGroup>
             </ScrollArea>
         </div>
     );

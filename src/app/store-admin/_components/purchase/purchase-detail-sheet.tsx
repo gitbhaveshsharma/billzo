@@ -371,7 +371,7 @@ export function PurchaseDetailSheet({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-full sm:max-w-xl flex flex-col">
+            <SheetContent className="w-full sm:max-w-2xl flex flex-col">
                 <SheetHeader>
                     <SheetTitle className="flex items-center gap-2">
                         {order ? order.po_number : "Purchase Order"}
