@@ -340,7 +340,7 @@ export function CartPanel({
 
             {/* Items */}
             <ScrollArea className="flex-1 overflow-x-auto">
-                <div className="flex flex-col gap-0.5 p-4">
+                <div className="flex flex-col gap-0.5 p-4 ml-2">
                     {items.map((item, index) => (
                         <div key={item.cart_key}>
                             <CartItemRow

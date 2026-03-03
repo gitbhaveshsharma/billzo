@@ -578,7 +578,7 @@ export default function POSPage() {
                     </div>
 
                     {/* Bottom Actions */}
-                    <div className="border-t p-3 flex items-center gap-2">
+                    <div className="border-t p-3 flex items-center gap-2 px-5">
                         <Button
                             variant="outline"
                             size="sm"
@@ -590,16 +590,7 @@ export default function POSPage() {
                             Hold
                             <kbd className="ml-0.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50 hidden sm:inline">F2</kbd>
                         </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-1 text-xs"
-                            onClick={() => setPriceLookupOpen(true)}
-                        >
-                            <Tag className="h-3.5 w-3.5" />
-                            Price   
-                            <kbd className="ml-0.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50 hidden sm:inline">F5</kbd>
-                        </Button>
+                        
                         <Button
                             variant="outline"
                             size="sm"
@@ -618,7 +609,16 @@ export default function POSPage() {
                                 </Badge>
                             )}
                         </Button>
-
+<Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1 text-xs"
+                            onClick={() => setPriceLookupOpen(true)}
+                        >
+                            <Tag className="h-3.5 w-3.5" />
+                            Price   
+                            <kbd className="ml-0.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50 hidden sm:inline">F5</kbd>
+                        </Button>
                         {/* Hardware Status */}
                         <HardwareStatusIndicator />
 
