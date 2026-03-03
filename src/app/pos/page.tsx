@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -631,9 +632,9 @@ export default function POSPage() {
 
                         <div className="flex-1" />
                         <Button
-                            variant="ghost"
+                            variant="destructive"
                             size="sm"
-                            className="text-xs text-red-500 hover:text-red-700 gap-1"
+                            className="text-xs hover:bg-red-600 gap-1"
                             onClick={() => {
                                 if (cart.length === 0) return;
                                 clearCart();
@@ -678,9 +679,20 @@ export default function POSPage() {
                             }
                         />
                     </div>
-
-                    {/* Charge Button */}
+                    <div className="flex items-center justify-center mb-2 opacity-60 hover:opacity-100 transition-opacity">
+                            <Image
+                                src="/billzo-logo.png"
+                                alt="Billzo"
+                                width={172}
+                                height={122}
+                                className="h-full w-auto object-contain"
+                                priority
+                            />
+                        </div>
+                    {/*  Charge Button */}
                     <div className="p-3 border-t">
+                        {/* Branding strip */}
+                        
                         <Button
                             className="w-full h-12 text-base font-bold gap-2"
                             onClick={handleCharge}

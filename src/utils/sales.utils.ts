@@ -338,6 +338,45 @@ export function formatQty(quantity: number, unitName?: string | null): string {
 }
 
 /**
+ * Convert a quantity into a human-readable string with smart unit conversion.
+ * Fractional kg → grams, fractional L → ml, etc.
+ * This makes "0.15 kg" → "150g", "0.5 L" → "500ml", "1.5 kg" → "1.5 kg"
+ *
+ * @example humanReadableQty(0.15, "kg")  → "150g"
+ * @example humanReadableQty(0.25, "kg")  → "250g"
+ * @example humanReadableQty(1.5,  "kg")  → "1.5 kg"
+ * @example humanReadableQty(0.5,  "l")   → "500 ml"
+ * @example humanReadableQty(2,    "pcs") → "2 pcs"
+ */
+export function humanReadableQty(quantity: number, unitName?: string | null): string {
+    const lower = (unitName ?? "").trim().toLowerCase();
+
+    // Weight: kg family → convert sub-1 values to grams
+    if (["kg", "kilogram", "kilograms"].includes(lower)) {
+        if (quantity < 1) {
+            const grams = Math.round(quantity * 1000);
+            return `${grams}g`;
+        }
+        // Trim trailing zeros
+        const s = quantity.toFixed(3).replace(/\.?0+$/, "");
+        return `${s} kg`;
+    }
+
+    // Volume: l/ltr/litre family → convert sub-1 values to ml
+    if (["l", "ltr", "litre", "liter", "litres", "liters"].includes(lower)) {
+        if (quantity < 1) {
+            const ml = Math.round(quantity * 1000);
+            return `${ml} ml`;
+        }
+        const s = quantity.toFixed(3).replace(/\.?0+$/, "");
+        return `${s} L`;
+    }
+
+    // All other units: fall back to standard formatQty
+    return formatQty(quantity, unitName);
+}
+
+/**
  * Parse a quantity string into a number, clamped to the unit's min.
  */
 export function parseQtyInput(value: string, unitName?: string | null): number {

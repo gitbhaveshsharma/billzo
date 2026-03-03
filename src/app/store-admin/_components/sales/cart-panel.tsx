@@ -12,7 +12,7 @@ import {
     ItemTitle,
     ItemDescription,
     ItemActions,
-    ItemGroup,
+    ItemSeparator,
 } from "@/components/ui/item";
 import {
     Tooltip,
@@ -26,7 +26,7 @@ import {
     calculateItemTotals,
     getUnitInputConfig,
     parseQtyInput,
-    formatQty,
+    humanReadableQty,
 } from "@/utils/sales.utils";
 
 // ============================================================================
@@ -47,7 +47,12 @@ interface CartPanelProps {
 }
 
 // ============================================================================
-// CART ITEM ROW — Uses shadcn Item component + unit-aware quantity input
+// CART ITEM ROW
+// Layout: [LEFT: name+info 2 rows] [RIGHT: controls 2 rows]
+// Row 1 left : Product name  |  qty badge
+// Row 2 left : ₹38/kg · GST 5% · SKU
+// Row 1 right: [−][qty input][+]  [disc %]
+// Row 2 right: ₹5.98  🗑
 // ============================================================================
 
 function CartItemRow({
@@ -83,19 +88,12 @@ function CartItemRow({
 
     const unitCfg = getUnitInputConfig(item.unit_name);
 
-    // Local string state for the quantity input so the user can type freely
     const [qtyInputValue, setQtyInputValue] = useState<string>(
         unitCfg.allowDecimal
             ? item.quantity.toString()
             : Math.round(item.quantity).toString()
     );
 
-    // Sync if parent changes quantity externally (e.g. preset click)
-    const displayQty = unitCfg.allowDecimal
-        ? item.quantity.toString()
-        : Math.round(item.quantity).toString();
-
-    // When the input loses focus, commit the parsed value
     const commitQty = useCallback(
         (raw: string) => {
             const parsed = parseQtyInput(raw, item.unit_name);
@@ -105,96 +103,98 @@ function CartItemRow({
         [item.cart_key, item.unit_name, onUpdateQuantity]
     );
 
-    const handleQtyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setQtyInputValue(e.target.value);
-    };
-
-    const handleQtyBlur = () => {
-        commitQty(qtyInputValue);
-    };
-
+    const handleQtyChange  = (e: React.ChangeEvent<HTMLInputElement>) => setQtyInputValue(e.target.value);
+    const handleQtyBlur    = () => commitQty(qtyInputValue);
     const handleQtyKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter") {
-            e.preventDefault();
-            commitQty(qtyInputValue);
-            (e.target as HTMLInputElement).blur();
-        }
+        if (e.key === "Enter") { e.preventDefault(); commitQty(qtyInputValue); (e.target as HTMLInputElement).blur(); }
     };
 
     const handleStepDown = () => {
-        const next = Math.max(unitCfg.min, item.quantity - unitCfg.step);
+        const next   = Math.max(unitCfg.min, item.quantity - unitCfg.step);
         const parsed = parseQtyInput(next.toString(), item.unit_name);
         onUpdateQuantity(item.cart_key, parsed);
         setQtyInputValue(parsed.toString());
     };
-
     const handleStepUp = () => {
-        const next = item.quantity + unitCfg.step;
+        const next   = item.quantity + unitCfg.step;
         const parsed = parseQtyInput(next.toString(), item.unit_name);
         onUpdateQuantity(item.cart_key, parsed);
         setQtyInputValue(parsed.toString());
     };
-
-    const handlePreset = (value: number) => {
-        onUpdateQuantity(item.cart_key, value);
-        setQtyInputValue(value.toString());
-    };
-
     const handleDiscountChange = (value: string) => {
         const pct = Math.min(100, Math.max(0, Number(value) || 0));
         onApplyDiscount(item.cart_key, "PERCENTAGE", pct, 0);
     };
 
-    return (
-        <Item variant="default" size="sm" className="border-b rounded-none last:border-b-0 hover:bg-accent/30 gap-2">
-            {/* Product info */}
-            <ItemContent className="gap-0.5 min-w-0">
-                <ItemTitle className="text-sm truncate">{item.product_name}</ItemTitle>
-                <ItemDescription className="text-xs line-clamp-1 flex items-center gap-1.5">
-                    <span className="font-mono">{item.product_code}</span>
-                    <span className="text-muted-foreground/50">·</span>
-                    <span>{formatCurrency(item.unit_price)}{item.unit_name ? `/${item.unit_name}` : ""}</span>
-                    {item.gst_percentage > 0 && (
-                        <>
-                            <span className="text-muted-foreground/50">·</span>
-                            <span className="text-blue-600 dark:text-blue-400">{item.gst_percentage}%</span>
-                        </>
-                    )}
-                </ItemDescription>
+    const readableQty = humanReadableQty(item.quantity, item.unit_name);
 
-                {/* Quick quantity presets for weight/volume/length units */}
-                {unitCfg.presets.length > 0 && (
-                    <div className="flex items-center gap-1 mt-1">
-                        {unitCfg.presets.map((preset) => (
-                            <Button
-                                key={preset.label}
-                                type="button"
-                                variant={item.quantity === preset.value ? "default" : "outline"}
-                                size="sm"
-                                className="h-5 px-1.5 text-[10px] font-medium"
-                                onClick={() => handlePreset(preset.value)}
-                            >
-                                {preset.label}
-                            </Button>
-                        ))}
-                    </div>
-                )}
+    // Build description text: ₹38/kg · GST 5% · SKU-...
+    const descParts: string[] = [];
+    descParts.push(
+        item.unit_name
+            ? `${formatCurrency(item.unit_price)} / ${item.unit_name}`
+            : formatCurrency(item.unit_price)
+    );
+    if (item.gst_percentage > 0) descParts.push(`GST ${item.gst_percentage}%`);
+    descParts.push(item.product_code);
+
+    return (
+        <Item
+    variant="default"
+    className="bg-white dark:bg-card hover:text-primary hover:bg-primary/10 dark:hover:text-primary dark:hover:bg-primary/10 hover:scale-[1.01] transition-all duration-150 items-center gap-3 px-3 py-2.5 rounded-md shadow-sm"
+>
+            {/* ── LEFT: 2-row product info ──────────────────────────────── */}
+            <ItemContent className="gap-0.5 min-w-0">
+                {/* Row 1: name + readable qty badge + optional discount badge */}
+                <ItemTitle className="flex items-center gap-1.5 flex-wrap  h-7">
+                    <span className="font-bold text-[15px] leading-tight truncate max-w-[180px] sm:max-w-none ">
+                        {item.product_name}
+                    </span>
+                    <Badge
+                        variant="secondary"
+                        className="text-[13px] font-bold tabular-nums px-1.5 py-0 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-0 shrink-0"
+                    >
+                        {readableQty}
+                    </Badge>
+                    {item.discount_percentage > 0 && (
+                        <Badge
+                            variant="secondary"
+                            className="text-[13px] font-medium px-1.5 py-0 bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-0 shrink-0"
+                        >
+                            {item.discount_percentage}% off
+                        </Badge>
+                    )}
+                </ItemTitle>
+
+                {/* Row 2: rate · GST · SKU — single truncated line */}
+                <ItemDescription className="text-xs truncate">
+                    {descParts.join(" · ")}
+                </ItemDescription>
             </ItemContent>
 
-            {/* Quantity + Discount + Total + Remove */}
-            <ItemActions className="flex-wrap gap-1.5 items-start">
-                {/* Quantity Stepper */}
-                <div className="flex items-center gap-0.5">
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={handleStepDown}
-                        disabled={item.quantity <= unitCfg.min}
-                    >
-                        <Minus className="h-3 w-3" />
-                    </Button>
-                    <TooltipProvider delayDuration={200}>
+            {/* ── RIGHT: 2-row controls ────────────────────────────────── */}
+            <ItemActions className="flex-col items-end gap-1.5 self-center shrink-0">
+                {/* Row 1: qty stepper + discount input */}
+                <div className="flex items-center gap-1">
+                    {/* Qty stepper */}
+                    <TooltipProvider delayDuration={300}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={handleStepDown}
+                                    disabled={item.quantity <= unitCfg.min}
+                                >
+                                    <Minus className="h-3 w-3" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Decrease</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+
+                    <TooltipProvider delayDuration={300}>
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Input
@@ -204,7 +204,7 @@ function CartItemRow({
                                     onBlur={handleQtyBlur}
                                     onKeyDown={handleQtyKeyDown}
                                     onFocus={(e) => e.target.select()}
-                                    className="h-6 w-16 text-center text-xs p-0"
+                                    className="h-6 w-14 text-center text-xs p-0"
                                     min={unitCfg.min}
                                     step={unitCfg.step}
                                     inputMode={unitCfg.allowDecimal ? "decimal" : "numeric"}
@@ -212,66 +212,78 @@ function CartItemRow({
                             </TooltipTrigger>
                             <TooltipContent side="top" className="text-xs">
                                 {unitCfg.allowDecimal
-                                    ? `Enter qty in ${item.unit_name ?? "units"} (decimals OK)`
-                                    : `Qty (whole numbers)`}
+                                    ? `Quantity in ${item.unit_name ?? "units"} (e.g. 0.5 = 500g)`
+                                    : "Quantity"}
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={handleStepUp}
-                    >
-                        <Plus className="h-3 w-3" />
-                    </Button>
-                    {item.unit_name && (
-                        <span className="text-[10px] text-muted-foreground ml-0.5">{item.unit_name}</span>
-                    )}
+
+                    <TooltipProvider delayDuration={300}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={handleStepUp}
+                                >
+                                    <Plus className="h-3 w-3" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Increase</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+
+                    {/* Discount % input */}
+                    <TooltipProvider delayDuration={300}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="relative">
+                                    <Input
+                                        type="number"
+                                        value={item.discount_percentage || ""}
+                                        onChange={(e) => handleDiscountChange(e.target.value)}
+                                        placeholder="0"
+                                        className="h-6 w-11 text-center text-xs p-0 pr-3"
+                                        min={0}
+                                        max={100}
+                                    />
+                                    <Percent className="absolute right-0.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-muted-foreground pointer-events-none" />
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Item discount %</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 </div>
 
-                {/* Discount */}
-                <TooltipProvider delayDuration={200}>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <div className="relative">
-                                <Input
-                                    type="number"
-                                    value={item.discount_percentage || ""}
-                                    onChange={(e) => handleDiscountChange(e.target.value)}
-                                    placeholder="0"
-                                    className="h-6 w-12 text-center text-xs p-0 pr-3"
-                                    min={0}
-                                    max={100}
-                                />
-                                <Percent className="absolute right-0.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-muted-foreground" />
-                            </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="text-xs">
-                            Item discount %
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-
-                {/* Line Total */}
-                <div className="text-right min-w-[70px]">
-                    <p className="text-sm font-bold tabular-nums">{formatCurrency(totals.total_amount)}</p>
-                    {totals.discount_total > 0 && (
-                        <p className="text-[10px] text-green-600 dark:text-green-400 tabular-nums">
-                            -{formatCurrency(totals.discount_total)}
-                        </p>
-                    )}
+                {/* Row 2: line total + delete */}
+                <div className="flex items-center gap-1.5">
+                    <div className="text-right">
+                        <span className="text-sm font-bold tabular-nums">
+                            {formatCurrency(totals.total_amount)}
+                        </span>
+                        {totals.discount_total > 0 && (
+                            <span className="ml-1 text-[10px] text-green-600 dark:text-green-400 tabular-nums">
+                                -{formatCurrency(totals.discount_total)}
+                            </span>
+                        )}
+                    </div>
+                    <TooltipProvider delayDuration={300}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-destructive/50 hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => onRemoveItem(item.cart_key)}
+                                >
+                                    <Trash2 className="h-3 w-3" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Remove item</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 </div>
-
-                {/* Remove */}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-red-500 hover:text-red-700 dark:hover:text-red-400 flex-shrink-0"
-                    onClick={() => onRemoveItem(item.cart_key)}
-                >
-                    <Trash2 className="h-3 w-3" />
-                </Button>
             </ItemActions>
         </Item>
     );
@@ -310,38 +322,38 @@ export function CartPanel({
         return <EmptyCart />;
     }
 
-    const totalQtyDisplay = items.reduce((sum, item) => sum + item.quantity, 0);
-    const hasDecimalQty = items.some((item) => !Number.isInteger(item.quantity));
+    const qtyChips = items.map((item) =>
+        humanReadableQty(item.quantity, item.unit_name)
+    );
 
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
-            <div className="flex items-center justify-between px-3 py-1.5 border-b">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
                 <span className="text-xs font-medium text-muted-foreground">
                     {items.length} item{items.length !== 1 ? "s" : ""}
                 </span>
-                <Badge variant="secondary" className="text-xs tabular-nums">
-                    {hasDecimalQty
-                        ? totalQtyDisplay.toFixed(3).replace(/\.?0+$/, "")
-                        : totalQtyDisplay}{" "}
-                    qty
+                <Badge variant="default" className="text-xs tabular-nums font-medium">
+                    {qtyChips.length <= 3 ? qtyChips.join(" · ") : `${qtyChips.length} items`}
                 </Badge>
             </div>
 
             {/* Items */}
-            <ScrollArea className="flex-1">
-                <ItemGroup>
-                    {items.map((item) => (
-                        <CartItemRow
-                            key={item.cart_key}
-                            item={item}
-                            isInterstate={isInterstate}
-                            onUpdateQuantity={onUpdateQuantity}
-                            onRemoveItem={onRemoveItem}
-                            onApplyDiscount={onApplyDiscount}
-                        />
+            <ScrollArea className="flex-1 overflow-x-auto">
+                <div className="flex flex-col gap-0.5 p-4">
+                    {items.map((item, index) => (
+                        <div key={item.cart_key}>
+                            <CartItemRow
+                                item={item}
+                                isInterstate={isInterstate}
+                                onUpdateQuantity={onUpdateQuantity}
+                                onRemoveItem={onRemoveItem}
+                                onApplyDiscount={onApplyDiscount}
+                            />
+                            {index < items.length - 1 && <ItemSeparator className="my-0.5" />}
+                        </div>
                     ))}
-                </ItemGroup>
+                </div>
             </ScrollArea>
         </div>
     );
