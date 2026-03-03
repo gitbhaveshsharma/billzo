@@ -555,7 +555,7 @@ export default function POSPage() {
             isLoading={shiftsLoading}
             onOpenShift={() => router.push("/pos/shifts")}
         >
-            <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] overflow-hidden">
+            <div className="flex flex-col lg:flex-row h-full overflow-hidden">
                 {/* LEFT PANEL — Product Search & Cart */}
                 <div className="flex-1 flex flex-col min-w-0 border-r">
                     {/* Product Search */}
