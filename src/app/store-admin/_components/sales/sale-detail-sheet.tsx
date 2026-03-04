@@ -337,15 +337,15 @@ export function SaleDetailSheet({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-[800px] sm:w-[900px] p-0">
+            <SheetContent className="sm:max-w-3xl p-0">
                 <SheetHeader className="p-4 pb-0">
                     <SheetTitle className="flex items-center gap-2">
                         <Receipt className="h-4 w-4" />
                         Sale Details
                     </SheetTitle>
-                    <div className="text-muted-foreground text-sm">
+                    <SheetDescription className="text-muted-foreground text-sm">
                         {sale?.invoice_number || "Loading..."}
-                    </div>
+                    </SheetDescription>
                 </SheetHeader>
 
                 <ScrollArea className="h-[calc(100vh-80px)]">

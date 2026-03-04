@@ -333,7 +333,7 @@ export function ProcessReturnDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg max-h-[90vh]">
+            <DialogContent className="max-w-3xl max-h-[95vh]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <RotateCcw className="h-5 w-5" />
@@ -346,8 +346,8 @@ export function ProcessReturnDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <ScrollArea className="max-h-[55vh] pr-2">
-                    <div className="space-y-4">
+                    <ScrollArea className="max-h-[95vh] overflow-y-auto">
+                    <div className="space-y-4 p-4">
                         {/* Return reason */}
                         <div className="space-y-1">
                             <Label className="text-sm">Return Reason *</Label>

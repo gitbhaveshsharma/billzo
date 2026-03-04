@@ -31,6 +31,8 @@ import type {
     CreateSalePaymentRequest,
     CreateSaleReturnRequest,
 } from "@/types/sales.types";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
 
 // ============================================================================
 // POS ORDERS PAGE — CASHIER SALES HISTORY
@@ -394,10 +396,12 @@ export default function POSOrdersPage() {
 
             {/* Receipt Dialog */}
             <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
-                <DialogContent className="max-w-md max-h-[90vh] overflow-auto">
+                <DialogContent className="max-w-md max-h-[95vh] overflow-auto">
                     <DialogHeader>
                         <DialogTitle>Receipt</DialogTitle>
                     </DialogHeader>
+                    <ScrollArea className="max-h-[95vh] overflow-y-auto">
+                        <div className="space-y-2 p-4">
                     {receiptSale && (
                         <ReceiptView
                             sale={receiptSale}
@@ -408,6 +412,8 @@ export default function POSOrdersPage() {
                             compact
                         />
                     )}
+                    </div>
+                    </ScrollArea>
                 </DialogContent>
             </Dialog>
         </div>
