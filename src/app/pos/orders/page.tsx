@@ -5,6 +5,8 @@ import toast from "react-hot-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useSalesStore } from "@/stores/sales.store";
 import { usePosCatalogStore } from "@/stores/pos-catalog.store";
+import { useStoreStore } from "@/stores/store.store";
+import { useHardware } from "@/hooks/use-hardware";
 import {
     SalesStats,
     SalesToolbar,
@@ -14,16 +16,10 @@ import {
     PaymentDialog,
     CancelSaleDialog,
     ProcessReturnDialog,
-    ReceiptView,
+    PostSaleActionsDialog,
     type SaleAction,
 } from "../../store-admin/_components/sales";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
 import type {
     Sale,
     EnrichedSale,
@@ -31,7 +27,6 @@ import type {
     CreateSalePaymentRequest,
     CreateSaleReturnRequest,
 } from "@/types/sales.types";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 
 // ============================================================================
@@ -42,6 +37,8 @@ export default function POSOrdersPage() {
     const { appUser, isLoading: authLoading } = useAuth();
     const storeId = appUser?.storeId ?? null;
     const cachedStoreInfo = usePosCatalogStore((s) => s.storeInfo);
+    const receiptConfig = useStoreStore((s) => s.receiptConfig);
+    const { printReceipt, hasBridgePrinter, bridgeStatus, detectAllDevices } = useHardware();
 
     const {
         sales,
@@ -69,8 +66,8 @@ export default function POSOrdersPage() {
     const [paymentOpen, setPaymentOpen] = useState(false);
     const [cancelOpen, setCancelOpen] = useState(false);
     const [returnOpen, setReturnOpen] = useState(false);
-    const [receiptOpen, setReceiptOpen] = useState(false);
-    const [receiptSale, setReceiptSale] = useState<EnrichedSale | null>(null);
+    const [postSaleOpen, setPostSaleOpen] = useState(false);
+    const [postSaleSale, setPostSaleSale] = useState<EnrichedSale | null>(null);
 
     // ========================================================================
     // LOAD DATA
@@ -99,8 +96,8 @@ export default function POSOrdersPage() {
                         await fetchSaleById(storeId, sale.id);
                         const enriched = useSalesStore.getState().currentSale;
                         if (enriched) {
-                            setReceiptSale(enriched);
-                            setReceiptOpen(true);
+                            setPostSaleSale(enriched);
+                            setPostSaleOpen(true);
                         }
                     }
                     break;
@@ -260,10 +257,10 @@ export default function POSOrdersPage() {
     );
 
     const handleDetailPrint = useCallback(
-        (saleId: string) => {
+        (_saleId: string) => {
             if (currentSale) {
-                setReceiptSale(currentSale);
-                setReceiptOpen(true);
+                setPostSaleSale(currentSale);
+                setPostSaleOpen(true);
             }
         },
         [currentSale]
@@ -394,28 +391,21 @@ export default function POSOrdersPage() {
                 isProcessing={isSaving}
             />
 
-            {/* Receipt Dialog */}
-            <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
-                <DialogContent className="max-w-md max-h-[95vh] overflow-auto">
-                    <DialogHeader>
-                        <DialogTitle>Receipt</DialogTitle>
-                    </DialogHeader>
-                    <ScrollArea className="max-h-[95vh] overflow-y-auto">
-                        <div className="space-y-2 p-4">
-                    {receiptSale && (
-                        <ReceiptView
-                            sale={receiptSale}
-                            storeName={cachedStoreInfo?.name ?? appUser?.storeName ?? "Store"}
-                            storeAddress={cachedStoreInfo?.address ?? ""}
-                            storeGstin={cachedStoreInfo?.gstin}
-                            storePhone={cachedStoreInfo?.phone}
-                            compact
-                        />
-                    )}
-                    </div>
-                    </ScrollArea>
-                </DialogContent>
-            </Dialog>
+            {/* Receipt / Post-Sale Actions Dialog — uses bridge printer, no browser popup */}
+            <PostSaleActionsDialog
+                open={postSaleOpen}
+                onOpenChange={setPostSaleOpen}
+                sale={postSaleSale}
+                storeName={cachedStoreInfo?.name ?? appUser?.storeName ?? "Store"}
+                storeAddress={cachedStoreInfo?.address ?? ""}
+                storeGstin={cachedStoreInfo?.gstin}
+                storePhone={cachedStoreInfo?.phone ?? undefined}
+                receiptConfig={receiptConfig}
+                printFn={printReceipt}
+                hasBridgePrinter={hasBridgePrinter}
+                bridgeStatus={bridgeStatus}
+                onRetryBridge={detectAllDevices}
+            />
         </div>
     );
 }
