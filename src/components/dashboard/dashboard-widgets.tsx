@@ -5,10 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   AlertTriangle,
   Package,
   Clock,
   ArrowRight,
+  Info,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { DashboardAlertItem } from "./types";
@@ -416,6 +423,8 @@ interface MiniStatListProps {
     label: string;
     value: string | number;
     color?: string;
+    /** Short human-readable tooltip explaining what this metric means */
+    tooltip?: string;
   }>;
   isLoading?: boolean;
   className?: string;
@@ -449,8 +458,20 @@ export function MiniStatList({
               key={item.label}
               className="flex items-center justify-between px-6 py-3"
             >
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-muted-foreground flex items-center gap-1">
                 {item.label}
+                {item.tooltip && (
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 text-muted-foreground/60 hover:text-muted-foreground cursor-help shrink-0" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[220px] text-xs font-normal">
+                        {item.tooltip}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
               </span>
               <span
                 className={cn(

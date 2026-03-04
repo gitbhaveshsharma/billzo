@@ -69,6 +69,7 @@ export default function POSPage() {
     } = usePosData(storeId);
 
     const deductSoldStock = usePosCatalogStore((s) => s.deductSoldStock);
+    const lookupById = usePosCatalogStore((s) => s.lookupById);
     const cachedStoreInfo = usePosCatalogStore((s) => s.storeInfo);
     const setStoreInfoInCatalog = usePosCatalogStore((s) => s.setStoreInfo);
     const organization = useOrganizationStore((s) => s.organization);
@@ -176,11 +177,42 @@ export default function POSPage() {
     }, [activeShift?.id, setCartShiftId]);
 
     // ========================================================================
+    // STOCK HELPERS
+    // ========================================================================
+
+    /** Returns current available stock for a given catalog item ID */
+    const getItemStock = useCallback(
+        (catalogId: string): number | undefined => {
+            const item = lookupById(catalogId);
+            return item?.stock;
+        },
+        [lookupById]
+    );
+
+    // ========================================================================
     // PRODUCT SELECTION
     // ========================================================================
 
     const handleProductSelect = useCallback(
         (item: SellableItem) => {
+            // ── Stock validation: check if enough stock to add 1 more ──
+            const catalogId = item.variant_id ?? item.product_id;
+            const currentStock = item.stock;
+            const alreadyInCart = cart
+                .filter((c) => (c.variant_id ?? c.product_id) === catalogId)
+                .reduce((sum, c) => sum + c.quantity, 0);
+
+            if (currentStock <= 0) {
+                toast.error(`"${item.name}" is out of stock`);
+                return;
+            }
+            if (alreadyInCart + 1 > currentStock) {
+                toast.error(
+                    `Only ${currentStock} ${item.unit_name ?? "units"} of "${item.name}" available (${alreadyInCart} already in cart)`
+                );
+                return;
+            }
+
             addToCart({
                 product_id: item.product_id,
                 variant_id: item.variant_id,
@@ -203,7 +235,7 @@ export default function POSPage() {
                 sort_order: cart.length,
             });
         },
-        [addToCart, cart.length]
+        [addToCart, cart, cart.length]
     );
 
     // ========================================================================
@@ -574,6 +606,7 @@ export default function POSPage() {
                             onUpdateQuantity={updateCartQuantity}
                             onApplyDiscount={applyCartItemDiscount}
                             onRemoveItem={removeFromCart}
+                            getItemStock={getItemStock}
                         />
                     </div>
 

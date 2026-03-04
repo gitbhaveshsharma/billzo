@@ -44,6 +44,8 @@ interface CartPanelProps {
         discountPercentage: number,
         discountAmount: number
     ) => void;
+    /** Optional stock lookup — returns available stock for a cart item's catalog ID */
+    getItemStock?: (catalogId: string) => number | undefined;
 }
 
 // ============================================================================
@@ -61,6 +63,7 @@ function CartItemRow({
     onUpdateQuantity,
     onRemoveItem,
     onApplyDiscount,
+    maxStock,
 }: {
     item: CartItem;
     isInterstate: boolean;
@@ -72,6 +75,8 @@ function CartItemRow({
         discountPercentage: number,
         discountAmount: number
     ) => void;
+    /** Maximum allowed quantity (available stock). undefined = no cap. */
+    maxStock?: number;
 }) {
     const totals = calculateItemTotals(
         {
@@ -96,11 +101,15 @@ function CartItemRow({
 
     const commitQty = useCallback(
         (raw: string) => {
-            const parsed = parseQtyInput(raw, item.unit_name);
+            let parsed = parseQtyInput(raw, item.unit_name);
+            // Cap at available stock if provided
+            if (maxStock !== undefined && parsed > maxStock) {
+                parsed = Math.max(0, maxStock);
+            }
             onUpdateQuantity(item.cart_key, parsed);
             setQtyInputValue(parsed.toString());
         },
-        [item.cart_key, item.unit_name, onUpdateQuantity]
+        [item.cart_key, item.unit_name, onUpdateQuantity, maxStock]
     );
 
     const handleQtyChange  = (e: React.ChangeEvent<HTMLInputElement>) => setQtyInputValue(e.target.value);
@@ -115,9 +124,13 @@ function CartItemRow({
         onUpdateQuantity(item.cart_key, parsed);
         setQtyInputValue(parsed.toString());
     };
+    const isAtStockLimit = maxStock !== undefined && item.quantity >= maxStock;
+
     const handleStepUp = () => {
+        if (isAtStockLimit) return;
         const next   = item.quantity + unitCfg.step;
-        const parsed = parseQtyInput(next.toString(), item.unit_name);
+        const capped = maxStock !== undefined ? Math.min(next, maxStock) : next;
+        const parsed = parseQtyInput(capped.toString(), item.unit_name);
         onUpdateQuantity(item.cart_key, parsed);
         setQtyInputValue(parsed.toString());
     };
@@ -162,6 +175,14 @@ function CartItemRow({
                             className="text-[13px] font-medium px-1.5 py-0 bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-0 shrink-0"
                         >
                             {item.discount_percentage}% off
+                        </Badge>
+                    )}
+                    {isAtStockLimit && (
+                        <Badge
+                            variant="secondary"
+                            className="text-[11px] font-medium px-1.5 py-0 bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-0 shrink-0"
+                        >
+                            Max stock
                         </Badge>
                     )}
                 </ItemTitle>
@@ -226,11 +247,14 @@ function CartItemRow({
                                     size="icon"
                                     className="h-6 w-6"
                                     onClick={handleStepUp}
+                                    disabled={isAtStockLimit}
                                 >
                                     <Plus className="h-3 w-3" />
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">Increase</TooltipContent>
+                            <TooltipContent side="top" className="text-xs">
+                                {isAtStockLimit ? "Stock limit reached" : "Increase"}
+                            </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
 
@@ -317,6 +341,7 @@ export function CartPanel({
     onUpdateQuantity,
     onRemoveItem,
     onApplyDiscount,
+    getItemStock,
 }: CartPanelProps) {
     if (items.length === 0) {
         return <EmptyCart />;
@@ -341,7 +366,11 @@ export function CartPanel({
             {/* Items */}
             <ScrollArea className="flex-1 overflow-x-auto">
                 <div className="flex flex-col gap-0.5 p-4 ml-2">
-                    {items.map((item, index) => (
+                    {items.map((item, index) => {
+                        // Resolve max stock from catalog lookup
+                        const catalogId = item.variant_id ?? item.product_id;
+                        const stockOnHand = getItemStock?.(catalogId);
+                        return (
                         <div key={item.cart_key}>
                             <CartItemRow
                                 item={item}
@@ -349,10 +378,12 @@ export function CartPanel({
                                 onUpdateQuantity={onUpdateQuantity}
                                 onRemoveItem={onRemoveItem}
                                 onApplyDiscount={onApplyDiscount}
+                                maxStock={stockOnHand}
                             />
                             {index < items.length - 1 && <ItemSeparator className="my-0.5" />}
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </ScrollArea>
         </div>

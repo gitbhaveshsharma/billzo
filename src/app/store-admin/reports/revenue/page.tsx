@@ -64,6 +64,7 @@ export default function RevenueReportPage() {
         color: "bg-emerald-500",
         subtitle: `${s.today_sales_count} transactions`,
         isCurrency: true,
+        tooltip: "Total value of all sales before discounts and returns",
       },
       {
         label: "Net Revenue",
@@ -72,6 +73,7 @@ export default function RevenueReportPage() {
         color: "bg-blue-500",
         subtitle: "After returns & discounts",
         isCurrency: true,
+        tooltip: "Gross sales minus returns and discounts — what you actually earned",
       },
       {
         label: "Gross Profit",
@@ -80,6 +82,7 @@ export default function RevenueReportPage() {
         color: profitSummary.totalProfit >= 0 ? "bg-teal-500" : "bg-red-500",
         subtitle: `${profitSummary.profitPct.toFixed(1)}% margin`,
         isCurrency: true,
+        tooltip: "Revenue minus cost of goods sold — your actual earnings",
       },
       {
         label: "Tax Collected",
@@ -88,6 +91,7 @@ export default function RevenueReportPage() {
         color: "bg-indigo-500",
         subtitle: "GST & other taxes",
         isCurrency: true,
+        tooltip: "Total GST and cess collected — this is owed to the government",
       },
     ],
     [grossSales, netRevenue, s, profitSummary]
@@ -188,25 +192,30 @@ export default function RevenueReportPage() {
               label: "Gross Sales",
               value: formatCurrency(grossSales),
               color: "text-emerald-600 dark:text-emerald-400",
+              tooltip: "Total sales before any deductions",
             },
             {
               label: "Discounts",
               value: `- ${formatCurrency(discounts)}`,
               color: discounts > 0 ? "text-orange-600 dark:text-orange-400" : undefined,
+              tooltip: "Item and bill discounts deducted from gross sales",
             },
             {
               label: "Returns",
               value: `- ${formatCurrency(returns)}`,
               color: returns > 0 ? "text-red-600 dark:text-red-400" : undefined,
+              tooltip: "Value of goods returned by customers",
             },
             {
               label: "Net Revenue",
               value: formatCurrency(netRevenue),
               color: "text-blue-600 dark:text-blue-400",
+              tooltip: "Gross sales minus discounts and returns",
             },
             {
               label: "Tax (Included)",
               value: formatCurrency(s.today_tax_total),
+              tooltip: "GST already included in the sale price, owed to government",
             },
           ]}
           isLoading={isLoading}
@@ -223,10 +232,12 @@ export default function RevenueReportPage() {
               label: "Total Revenue",
               value: formatCurrency(profitSummary.totalRevenue),
               color: "text-emerald-600 dark:text-emerald-400",
+              tooltip: "Net selling price of all items sold",
             },
             {
               label: "Total Cost (COGS)",
               value: formatCurrency(profitSummary.totalCost),
+              tooltip: "What you paid to purchase the goods you sold",
             },
             {
               label: "Gross Profit",
@@ -235,6 +246,7 @@ export default function RevenueReportPage() {
                 profitSummary.totalProfit >= 0
                   ? "text-emerald-600 dark:text-emerald-400"
                   : "text-red-600 dark:text-red-400",
+              tooltip: "Revenue minus cost — money earned after covering purchase cost",
             },
             {
               label: "Profit Margin",
@@ -243,6 +255,7 @@ export default function RevenueReportPage() {
                 profitSummary.profitPct >= 0
                   ? "text-emerald-600 dark:text-emerald-400"
                   : "text-red-600 dark:text-red-400",
+              tooltip: "Percentage of revenue that is profit — higher is better",
             },
           ]}
           isLoading={isLoading}
@@ -255,20 +268,24 @@ export default function RevenueReportPage() {
             {
               label: "Credit Sales",
               value: s.today_credit_sales.toString(),
+              tooltip: "Number of sales where payment is due later",
             },
             {
               label: "Credit Amount",
               value: formatCurrency(s.today_credit_amount),
               color: s.today_credit_amount > 0 ? "text-amber-600 dark:text-amber-400" : undefined,
+              tooltip: "Total value of sales given on credit",
             },
             {
               label: "Total Outstanding",
               value: formatCurrency(s.total_outstanding),
               color: s.total_outstanding > 0 ? "text-red-600 dark:text-red-400" : undefined,
+              tooltip: "All unpaid credit across all customers — money yet to be collected",
             },
             {
               label: "Average Bill Value",
               value: formatCurrency(s.average_bill_value),
+              tooltip: "Total sales divided by number of bills",
             },
           ]}
           isLoading={isLoading}
