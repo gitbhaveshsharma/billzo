@@ -23,6 +23,8 @@ export interface DashboardStatConfig {
   isCurrency?: boolean;
   /** Optional click handler */
   onClick?: () => void;
+  /** Short human-readable tooltip explaining what this metric means */
+  tooltip?: string;
 }
 
 /** Alert / warning card item */

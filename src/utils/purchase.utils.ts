@@ -819,6 +819,43 @@ export function computePurchaseStats(orders: PurchaseOrder[]): PurchaseDashboard
 }
 
 // ============================================================================
+// ID GENERATORS
+// ============================================================================
+
+/**
+ * Generate a unique SKU in the format: SKU-YYMMDD-HHMMSS-RRR
+ * Same fixed length (21 chars) every time. Safe to call in rapid succession
+ * because of the 3-char random base-36 suffix.
+ */
+export function generateSKU(): string {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(2);
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mi = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+    const rnd = Math.random().toString(36).slice(2, 5).toUpperCase();
+    return `SKU-${yy}${mm}${dd}-${hh}${mi}${ss}-${rnd}`;
+}
+
+/**
+ * Generate a unique Batch Number in the format: BAT-YYMMDD-HHMMSS-RRR
+ * Same fixed length (21 chars) every time.
+ */
+export function generateBatchNumber(): string {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(2);
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mi = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+    const rnd = Math.random().toString(36).slice(2, 5).toUpperCase();
+    return `BAT-${yy}${mm}${dd}-${hh}${mi}${ss}-${rnd}`;
+}
+
+// ============================================================================
 // INTERNAL HELPERS
 // ============================================================================
 

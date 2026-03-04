@@ -86,7 +86,15 @@ export function ConditionalLayout({ children, forceConfig }: ConditionalLayoutPr
         <LayoutHeader config={config} onOpenSearch={() => setSearchOpen(true)} />
 
         {/* Page Content */}
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main
+          className={
+            config.header.type === "pos"
+              ? "flex-1 overflow-hidden flex flex-col"
+              : "flex-1 p-4 md:p-6"
+          }
+        >
+          {children}
+        </main>
 
         {/* Footer */}
         {config.footer.enabled && <LayoutFooter />}

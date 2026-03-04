@@ -413,6 +413,16 @@ export const useSalesStore = create<SalesState>()(
                     const summaries = summaryResult.data ?? [];
                     const holds = holdResult.data ?? [];
 
+                    // Fetch payment breakdown + returns totals in parallel
+                    const saleIds = summaries.map((s) => s.id);
+                    const [paymentResult, returnsResult] = await Promise.all([
+                        salesService.getTodayPaymentBreakdown(storeId, saleIds),
+                        salesService.getTodayReturnsTotal(storeId, saleIds),
+                    ]);
+
+                    const payBreakdown = paymentResult.data ?? { cash: 0, card: 0, upi: 0, other: 0 };
+                    const returnsTotals = returnsResult.data ?? { total_returns_amount: 0, returns_count: 0 };
+
                     // Build basic stats from summaries
                     const completedSales = summaries.filter(
                         (s) =>
@@ -427,12 +437,8 @@ export const useSalesStore = create<SalesState>()(
                             (sum, s) => sum + s.total_amount,
                             0
                         ),
-                        today_returns_count: summaries.filter(
-                            (s) =>
-                                s.status === "PARTIAL_RETURN" ||
-                                s.status === "FULLY_RETURNED"
-                        ).length,
-                        today_returns_amount: 0,
+                        today_returns_count: returnsTotals.returns_count,
+                        today_returns_amount: returnsTotals.total_returns_amount,
                         today_discount_total: completedSales.reduce(
                             (sum, s) => sum + s.discount_total,
                             0
@@ -441,10 +447,10 @@ export const useSalesStore = create<SalesState>()(
                             (sum, s) => sum + s.tax_amount,
                             0
                         ),
-                        today_cash: 0,
-                        today_card: 0,
-                        today_upi: 0,
-                        today_other: 0,
+                        today_cash: payBreakdown.cash,
+                        today_card: payBreakdown.card,
+                        today_upi: payBreakdown.upi,
+                        today_other: payBreakdown.other,
                         today_credit_sales: summaries.filter(
                             (s) => s.is_credit_sale
                         ).length,

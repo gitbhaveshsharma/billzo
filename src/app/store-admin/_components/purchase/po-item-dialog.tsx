@@ -31,11 +31,11 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Info, AlertTriangle, ScanLine } from "lucide-react";
+import { Info, AlertTriangle, ScanLine, Wand2, Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 import { createPurchaseOrderItemSchema } from "@/validations/purchase.validation";
 import type { CreatePurchaseOrderItemFormData } from "@/validations/purchase.validation";
-import { calculateItemTotals, formatCurrency } from "@/utils/purchase.utils";
+import { calculateItemTotals, formatCurrency, generateSKU, generateBatchNumber } from "@/utils/purchase.utils";
 import { useProductStore } from "@/stores/product.store";
 import { useStoreAdmin } from "../../_context/store-admin-context";
 
@@ -131,7 +131,7 @@ export function POItemDialog({
     isInterState = false,
 }: POItemDialogProps) {
     const { storeId } = useStoreAdmin();
-    const { units, fetchUnits } = useProductStore();
+    const { units, fetchUnits, lookupByBarcode } = useProductStore();
 
     const {
         register,
@@ -166,27 +166,53 @@ export function POItemDialog({
 
     const activeUnits = units.filter((u) => u.is_active);
 
-    // ── Barcode scanner capture ──
-    // When the barcode input is focused, keystrokes from a keyboard-wedge scanner
-    // flow naturally into the input. We only intercept Enter so it doesn't
-    // submit the form, and we mark the field as "scan ready" visually.
+    // ── Barcode scanner capture + product lookup ──
+    // Keystrokes from a keyboard-wedge scanner flow naturally into the input.
+    // On Enter we look up the product in the DB and auto-fill all fields.
     const [barcodeScanReady, setBarcodeScanReady] = useState(false);
+    const [isLookingUp, setIsLookingUp] = useState(false);
+    const [barcodeFound, setBarcodeFound] = useState<boolean | null>(null);
     const barcodeInputRef = useRef<HTMLInputElement | null>(null);
 
     const handleBarcodeKeyDown = useCallback(
-        (e: React.KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === "Enter") {
-                e.preventDefault();   // don't submit the dialog form
-                e.stopPropagation();
-                const val = (e.currentTarget.value ?? "").trim();
-                if (val) {
-                    setValue("barcode", val, { shouldValidate: true });
-                    // blur after scan so the user can move on naturally
-                    barcodeInputRef.current?.blur();
+        async (e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            e.stopPropagation();
+            const val = (e.currentTarget.value ?? "").trim();
+            if (!val) return;
+
+            setValue("barcode", val, { shouldValidate: true });
+            barcodeInputRef.current?.blur();
+
+            // Lookup product using the already-implemented lookupByBarcode store action
+            if (!storeId) return;
+            setIsLookingUp(true);
+            setBarcodeFound(null);
+            const product = await lookupByBarcode(storeId, val);
+            setIsLookingUp(false);
+
+            if (product) {
+                setBarcodeFound(true);
+                setValue("product_id",      product.id);
+                setValue("product_name",    product.name,         { shouldValidate: true });
+                setValue("product_code",    product.product_code, { shouldValidate: true });
+                if (product.hsn_code)     setValue("hsn_code",         product.hsn_code);
+                setValue("gst_percentage",  product.gst_percentage);
+                setValue("cess_percentage", product.cess_percentage);
+                if (product.mrp)          setValue("mrp",              product.mrp);
+                if (product.unit_id) {
+                    const unit = units.find((u) => u.id === product.unit_id);
+                    setValue("unit_id",   product.unit_id);
+                    if (unit)            setValue("unit_code", unit.code);
                 }
+                if (product.purchase_price != null)
+                    setValue("unit_price", product.purchase_price, { shouldValidate: true });
+            } else {
+                setBarcodeFound(false);
             }
         },
-        [setValue]
+        [setValue, lookupByBarcode, storeId, units]
     );
 
     // Merge react-hook-form's ref with our local ref
@@ -280,10 +306,28 @@ export function POItemDialog({
 
   {/* Product Code - first column */}
   <div className="space-y-1.5">
-    <FieldLabel required tooltip="SKU or internal product code used for inventory lookup and barcode matching.">
+    <FieldLabel required tooltip="SKU or internal product code used for inventory lookup. Leave empty and click the wand to auto-generate a unique date-time SKU.">
       Product Code / SKU
     </FieldLabel>
-    <Input {...register("product_code")} placeholder="e.g. SKU-10023" />
+    <div className="flex gap-1.5">
+      <Input {...register("product_code")} placeholder="e.g. SKU-10023" className="flex-1" />
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="shrink-0 h-9 w-9"
+              onClick={() => setValue("product_code", generateSKU(), { shouldValidate: true })}
+            >
+              <Wand2 className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">Auto-generate unique SKU</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
     {errors.product_code && (
       <p className="text-xs text-red-500">{errors.product_code.message}</p>
     )}
@@ -291,7 +335,7 @@ export function POItemDialog({
 
   {/* Barcode - spans both columns for extra width */}
   <div className="col-span-2 space-y-1.5">
-    <FieldLabel tooltip="Barcode printed on the product (EAN-13, UPC, Code 128, QR, etc.). Used for fast POS lookup and scanner matching.">
+    <FieldLabel tooltip="Barcode printed on the product (EAN-13, UPC, Code 128, QR, etc.). Scan or type and press Enter to auto-fill all product details from the database.">
       Barcode
     </FieldLabel>
     <div className="relative">
@@ -301,19 +345,34 @@ export function POItemDialog({
           rhfBarcodeRef(el);
           barcodeInputRef.current = el;
         }}
-        placeholder="Click here, then scan…"
+        placeholder="Scan or type barcode + Enter to auto-fill product…"
         maxLength={50}
         onKeyDown={handleBarcodeKeyDown}
-        onFocus={() => setBarcodeScanReady(true)}
+        onFocus={() => { setBarcodeScanReady(true); setBarcodeFound(null); }}
         onBlur={() => setBarcodeScanReady(false)}
         className={barcodeScanReady
-          ? "pr-20 ring-2 ring-blue-500 border-blue-400 focus-visible:ring-blue-500"
-          : "pr-20"
+          ? "pr-32 ring-2 ring-blue-500 border-blue-400 focus-visible:ring-blue-500"
+          : "pr-32"
         }
       />
-      {/* Scanner status badge */}
-      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
-        {barcodeScanReady ? (
+      {/* Scanner / lookup status badge */}
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+        {isLookingUp ? (
+          <span className="flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0.5">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Looking up…
+          </span>
+        ) : barcodeFound === true ? (
+          <span className="flex items-center gap-1 text-[10px] font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded px-1.5 py-0.5">
+            <CheckCircle2 className="h-3 w-3" />
+            Product found
+          </span>
+        ) : barcodeFound === false ? (
+          <span className="flex items-center gap-1 text-[10px] font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded px-1.5 py-0.5">
+            <XCircle className="h-3 w-3" />
+            Not found
+          </span>
+        ) : barcodeScanReady ? (
           <span className="flex items-center gap-1 text-[10px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded px-1.5 py-0.5">
             <ScanLine className="h-3 w-3" />
             Scan ready
@@ -326,9 +385,19 @@ export function POItemDialog({
         )}
       </div>
     </div>
-    {barcodeScanReady && (
+    {barcodeScanReady && !isLookingUp && barcodeFound === null && (
       <p className="text-[11px] text-blue-600 dark:text-blue-400">
-        Scanner active — scan a barcode or type manually.
+        Scan or type a barcode and press Enter — product details will be auto-filled.
+      </p>
+    )}
+    {barcodeFound === false && (
+      <p className="text-[11px] text-amber-600 dark:text-amber-400">
+        No matching product found — fill in the details manually.
+      </p>
+    )}
+    {barcodeFound === true && (
+      <p className="text-[11px] text-green-600 dark:text-green-400">
+        Product details loaded — review and adjust if needed.
       </p>
     )}
     {errors.barcode && (
@@ -522,14 +591,33 @@ export function POItemDialog({
 
                             <div className="grid grid-cols-3 gap-4">
                                 <div className="space-y-1.5">
-                                    <FieldLabel tooltip="Batch or lot number from the manufacturer. Used for traceability, quality checks, and recall management.">
+                                    <FieldLabel tooltip="Batch or lot number from the manufacturer. Click the wand to auto-generate a unique date-time batch number.">
                                         Batch Number
                                     </FieldLabel>
-                                    <Input
-                                        {...register("batch_number")}
-                                        placeholder="e.g. BT-2024-09A"
-                                        maxLength={50}
-                                    />
+                                    <div className="flex gap-1.5">
+                                        <Input
+                                            {...register("batch_number")}
+                                            placeholder="e.g. BT-2024-09A"
+                                            maxLength={50}
+                                            className="flex-1"
+                                        />
+                                        <TooltipProvider delayDuration={200}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        className="shrink-0 h-9 w-9"
+                                                        onClick={() => setValue("batch_number", generateBatchNumber(), { shouldValidate: true })}
+                                                    >
+                                                        <Wand2 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="top" className="text-xs">Auto-generate Batch Number</TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    </div>
                                     {errors.batch_number && (
                                         <p className="text-xs text-red-500">{errors.batch_number.message}</p>
                                     )}

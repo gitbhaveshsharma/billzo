@@ -471,7 +471,10 @@ export const shiftsService = {
     },
 
     /**
-     * Compute dashboard stats from today's shifts (client-side aggregation)
+     * Compute dashboard stats from today's shifts (client-side aggregation).
+     * For OPEN/SUSPENDED shifts, the DB snapshot fields (cash_sales, etc.) are 0
+     * because they are only populated at close by the close_shift() RPC.
+     * We supplement open shifts with live data from sale_payments & sale_returns.
      */
     getDashboardStats: async (
         storeId: string
@@ -488,8 +491,100 @@ export const shiftsService = {
             if (error) return { data: null, error: error.message };
 
             const shifts = (data ?? []) as unknown as CashShift[];
-            const stats = computeShiftDashboardStats(shifts);
 
+            // Enrich open/suspended shifts with live sales data
+            const openShiftIds = shifts
+                .filter((s) => s.status === "OPEN" || s.status === "SUSPENDED")
+                .map((s) => s.id);
+
+            if (openShiftIds.length > 0) {
+                // Fetch live sales for open shifts
+                const { data: salesData } = await getClient()
+                    .from("sales")
+                    .select("id, shift_id, status, total_amount, paid_amount, due_amount, discount_total, tax_amount, is_credit_sale")
+                    .in("shift_id", openShiftIds)
+                    .eq("store_id", storeId)
+                    .in("status", ["COMPLETED", "CREDIT", "PARTIAL_PAID", "PARTIAL_RETURN", "FULLY_RETURNED"]);
+
+                const liveSales = (salesData ?? []) as Array<{
+                    id: string;
+                    shift_id: string;
+                    status: string;
+                    total_amount: number;
+                    paid_amount: number;
+                    due_amount: number;
+                    discount_total: number;
+                    tax_amount: number;
+                    is_credit_sale: boolean;
+                }>;
+
+                if (liveSales.length > 0) {
+                    const saleIds = liveSales.map((s) => s.id);
+
+                    // Fetch payment breakdown + return totals in parallel
+                    const [paymentsResult, returnsResult] = await Promise.all([
+                        getClient()
+                            .from("sale_payments")
+                            .select("sale_id, payment_method, amount")
+                            .in("sale_id", saleIds)
+                            .eq("store_id", storeId)
+                            .eq("status", "SUCCESS"),
+                        getClient()
+                            .from("sale_returns")
+                            .select("sale_id, total_returned")
+                            .in("sale_id", saleIds)
+                            .eq("store_id", storeId)
+                            .neq("status", "REJECTED"),
+                    ]);
+
+                    const payments = (paymentsResult.data ?? []) as Array<{
+                        sale_id: string;
+                        payment_method: string;
+                        amount: number;
+                    }>;
+                    const returnRecords = (returnsResult.data ?? []) as Array<{
+                        sale_id: string;
+                        total_returned: number;
+                    }>;
+
+                    // Group data per shift
+                    for (const shift of shifts) {
+                        if (shift.status !== "OPEN" && shift.status !== "SUSPENDED") continue;
+
+                        const shiftSales = liveSales.filter((s) => s.shift_id === shift.id);
+                        const shiftSaleIds = new Set(shiftSales.map((s) => s.id));
+                        const shiftPayments = payments.filter((p) => shiftSaleIds.has(p.sale_id));
+                        const shiftReturns = returnRecords.filter((r) => shiftSaleIds.has(r.sale_id));
+
+                        const completedSales = shiftSales.filter(
+                            (s) => s.status === "COMPLETED" || s.status === "CREDIT" || s.status === "PARTIAL_PAID"
+                        );
+
+                        shift.total_sales_count = completedSales.length;
+                        shift.total_sales_amount = completedSales.reduce((sum, s) => sum + s.total_amount, 0);
+                        shift.total_discount_given = completedSales.reduce((sum, s) => sum + s.discount_total, 0);
+                        shift.total_tax_collected = completedSales.reduce((sum, s) => sum + s.tax_amount, 0);
+                        shift.total_returns_count = shiftReturns.length;
+                        shift.total_returns_amount = shiftReturns.reduce((sum, r) => sum + r.total_returned, 0);
+
+                        // Payment breakdown
+                        shift.cash_sales = shiftPayments
+                            .filter((p) => p.payment_method === "CASH")
+                            .reduce((sum, p) => sum + p.amount, 0);
+                        shift.card_sales = shiftPayments
+                            .filter((p) => p.payment_method === "CARD_CREDIT" || p.payment_method === "CARD_DEBIT")
+                            .reduce((sum, p) => sum + p.amount, 0);
+                        shift.upi_sales = shiftPayments
+                            .filter((p) => p.payment_method === "UPI")
+                            .reduce((sum, p) => sum + p.amount, 0);
+                        shift.other_sales = shiftPayments
+                            .filter((p) => !["CASH", "CARD_CREDIT", "CARD_DEBIT", "UPI"].includes(p.payment_method))
+                            .reduce((sum, p) => sum + p.amount, 0);
+                    }
+                }
+            }
+
+            const stats = computeShiftDashboardStats(shifts);
             return { data: stats, error: null };
         } catch {
             return { data: null, error: "Failed to compute dashboard stats" };
@@ -780,6 +875,73 @@ export const shiftsService = {
             return { data: count ?? 0, error: null };
         } catch {
             return { data: null, error: "Failed to get shift count" };
+        }
+    },
+
+    /**
+     * Get live payment breakdown for a specific shift.
+     * Useful for OPEN/SUSPENDED shifts where the DB snapshot fields are 0.
+     */
+    getLiveShiftPaymentBreakdown: async (
+        storeId: string,
+        shiftId: string
+    ): Promise<ServiceResponse<{ cash: number; card: number; upi: number; other: number; salesCount: number; returnsCount: number; returnsAmount: number }>> => {
+        try {
+            // Fetch sales for this shift
+            const { data: salesData } = await getClient()
+                .from("sales")
+                .select("id, status")
+                .eq("shift_id", shiftId)
+                .eq("store_id", storeId)
+                .in("status", ["COMPLETED", "CREDIT", "PARTIAL_PAID", "PARTIAL_RETURN", "FULLY_RETURNED"]);
+
+            const sales = (salesData ?? []) as Array<{ id: string; status: string }>;
+            if (sales.length === 0) {
+                return { data: { cash: 0, card: 0, upi: 0, other: 0, salesCount: 0, returnsCount: 0, returnsAmount: 0 }, error: null };
+            }
+
+            const saleIds = sales.map((s) => s.id);
+            const completedCount = sales.filter(
+                (s) => s.status === "COMPLETED" || s.status === "CREDIT" || s.status === "PARTIAL_PAID"
+            ).length;
+
+            const [paymentsResult, returnsResult] = await Promise.all([
+                getClient()
+                    .from("sale_payments")
+                    .select("payment_method, amount")
+                    .in("sale_id", saleIds)
+                    .eq("store_id", storeId)
+                    .eq("status", "SUCCESS"),
+                getClient()
+                    .from("sale_returns")
+                    .select("total_returned")
+                    .in("sale_id", saleIds)
+                    .eq("store_id", storeId)
+                    .neq("status", "REJECTED"),
+            ]);
+
+            const payments = (paymentsResult.data ?? []) as Array<{ payment_method: string; amount: number }>;
+            const returnRecords = (returnsResult.data ?? []) as Array<{ total_returned: number }>;
+
+            const cash = payments.filter((p) => p.payment_method === "CASH").reduce((s, p) => s + p.amount, 0);
+            const card = payments.filter((p) => p.payment_method === "CARD_CREDIT" || p.payment_method === "CARD_DEBIT").reduce((s, p) => s + p.amount, 0);
+            const upi = payments.filter((p) => p.payment_method === "UPI").reduce((s, p) => s + p.amount, 0);
+            const other = payments.filter((p) => !["CASH", "CARD_CREDIT", "CARD_DEBIT", "UPI"].includes(p.payment_method)).reduce((s, p) => s + p.amount, 0);
+
+            return {
+                data: {
+                    cash,
+                    card,
+                    upi,
+                    other,
+                    salesCount: completedCount,
+                    returnsCount: returnRecords.length,
+                    returnsAmount: returnRecords.reduce((s, r) => s + r.total_returned, 0),
+                },
+                error: null,
+            };
+        } catch {
+            return { data: null, error: "Failed to get live shift payment breakdown" };
         }
     },
 };

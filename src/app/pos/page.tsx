@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -8,6 +9,7 @@ import {
     ShoppingCart,
     Trash2,
     Receipt,
+    Tag,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { usePosData } from "@/hooks/use-pos-data";
@@ -28,6 +30,7 @@ import {
     HoldBillsDrawer,
     HardwareStatusIndicator,
     PosRefreshButton,
+    PriceLookupDialog,
 } from "../store-admin/_components/sales";
 import { PostSaleActionsDialog } from "../store-admin/_components/sales/post-sale-actions-dialog";
 import { AddCustomerDialog } from "../store-admin/_components/customer";
@@ -66,6 +69,7 @@ export default function POSPage() {
     } = usePosData(storeId);
 
     const deductSoldStock = usePosCatalogStore((s) => s.deductSoldStock);
+    const lookupById = usePosCatalogStore((s) => s.lookupById);
     const cachedStoreInfo = usePosCatalogStore((s) => s.storeInfo);
     const setStoreInfoInCatalog = usePosCatalogStore((s) => s.setStoreInfo);
     const organization = useOrganizationStore((s) => s.organization);
@@ -127,6 +131,7 @@ export default function POSPage() {
     const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
     const [lastCompletedSale, setLastCompletedSale] = useState<EnrichedSale | null>(null);
     const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+    const [priceLookupOpen, setPriceLookupOpen] = useState(false);
 
     // ========================================================================
     // INITIAL DATA LOAD — Shift & hold bills only (catalog loaded by usePosData)
@@ -172,11 +177,42 @@ export default function POSPage() {
     }, [activeShift?.id, setCartShiftId]);
 
     // ========================================================================
+    // STOCK HELPERS
+    // ========================================================================
+
+    /** Returns current available stock for a given catalog item ID */
+    const getItemStock = useCallback(
+        (catalogId: string): number | undefined => {
+            const item = lookupById(catalogId);
+            return item?.stock;
+        },
+        [lookupById]
+    );
+
+    // ========================================================================
     // PRODUCT SELECTION
     // ========================================================================
 
     const handleProductSelect = useCallback(
         (item: SellableItem) => {
+            // ── Stock validation: check if enough stock to add 1 more ──
+            const catalogId = item.variant_id ?? item.product_id;
+            const currentStock = item.stock;
+            const alreadyInCart = cart
+                .filter((c) => (c.variant_id ?? c.product_id) === catalogId)
+                .reduce((sum, c) => sum + c.quantity, 0);
+
+            if (currentStock <= 0) {
+                toast.error(`"${item.name}" is out of stock`);
+                return;
+            }
+            if (alreadyInCart + 1 > currentStock) {
+                toast.error(
+                    `Only ${currentStock} ${item.unit_name ?? "units"} of "${item.name}" available (${alreadyInCart} already in cart)`
+                );
+                return;
+            }
+
             addToCart({
                 product_id: item.product_id,
                 variant_id: item.variant_id,
@@ -199,7 +235,7 @@ export default function POSPage() {
                 sort_order: cart.length,
             });
         },
-        [addToCart, cart.length]
+        [addToCart, cart, cart.length]
     );
 
     // ========================================================================
@@ -475,7 +511,7 @@ export default function POSPage() {
             const isFKey = e.key.startsWith("F") && e.key.length <= 3;
 
             // Don't intercept when dialog open (let dialog handle it)
-            if (paymentOpen || addCustomerOpen || receiptDialogOpen) return;
+            if (paymentOpen || addCustomerOpen || receiptDialogOpen || priceLookupOpen) return;
 
             if (!isFKey && isInput) return;
 
@@ -483,6 +519,10 @@ export default function POSPage() {
                 case "F2":
                     e.preventDefault();
                     if (cart.length > 0) handleHold();
+                    break;
+                case "F5":
+                    e.preventDefault();
+                    setPriceLookupOpen(true);
                     break;
                 case "F3":
                     e.preventDefault();
@@ -518,7 +558,7 @@ export default function POSPage() {
 
         document.addEventListener("keydown", handlePosKey);
         return () => document.removeEventListener("keydown", handlePosKey);
-    }, [cart.length, handleHold, handleCharge, clearCart, paymentOpen, addCustomerOpen, receiptDialogOpen, holdDrawerOpen]);
+    }, [cart.length, handleHold, handleCharge, clearCart, paymentOpen, addCustomerOpen, receiptDialogOpen, holdDrawerOpen, priceLookupOpen]);
 
     // ========================================================================
     // LOADING
@@ -547,7 +587,7 @@ export default function POSPage() {
             isLoading={shiftsLoading}
             onOpenShift={() => router.push("/pos/shifts")}
         >
-            <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] overflow-hidden">
+            <div className="flex flex-col lg:flex-row h-full overflow-hidden">
                 {/* LEFT PANEL — Product Search & Cart */}
                 <div className="flex-1 flex flex-col min-w-0 border-r">
                     {/* Product Search */}
@@ -566,11 +606,12 @@ export default function POSPage() {
                             onUpdateQuantity={updateCartQuantity}
                             onApplyDiscount={applyCartItemDiscount}
                             onRemoveItem={removeFromCart}
+                            getItemStock={getItemStock}
                         />
                     </div>
 
                     {/* Bottom Actions */}
-                    <div className="border-t p-3 flex items-center gap-2">
+                    <div className="border-t p-3 flex items-center gap-2 px-5">
                         <Button
                             variant="outline"
                             size="sm"
@@ -582,6 +623,7 @@ export default function POSPage() {
                             Hold
                             <kbd className="ml-0.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50 hidden sm:inline">F2</kbd>
                         </Button>
+                        
                         <Button
                             variant="outline"
                             size="sm"
@@ -600,7 +642,16 @@ export default function POSPage() {
                                 </Badge>
                             )}
                         </Button>
-
+<Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1 text-xs"
+                            onClick={() => setPriceLookupOpen(true)}
+                        >
+                            <Tag className="h-3.5 w-3.5" />
+                            Price   
+                            <kbd className="ml-0.5 text-[10px] font-mono text-muted-foreground border rounded px-1 bg-muted/50 hidden sm:inline">F5</kbd>
+                        </Button>
                         {/* Hardware Status */}
                         <HardwareStatusIndicator />
 
@@ -614,9 +665,9 @@ export default function POSPage() {
 
                         <div className="flex-1" />
                         <Button
-                            variant="ghost"
+                            variant="destructive"
                             size="sm"
-                            className="text-xs text-red-500 hover:text-red-700 gap-1"
+                            className="text-xs hover:bg-red-600 gap-1"
                             onClick={() => {
                                 if (cart.length === 0) return;
                                 clearCart();
@@ -661,9 +712,20 @@ export default function POSPage() {
                             }
                         />
                     </div>
-
-                    {/* Charge Button */}
+                    <div className="flex items-center justify-center mb-2 opacity-60 hover:opacity-100 transition-opacity">
+                            <Image
+                                src="/billzo-logo.png"
+                                alt="Billzo"
+                                width={172}
+                                height={122}
+                                className="h-full w-auto object-contain"
+                                priority
+                            />
+                        </div>
+                    {/*  Charge Button */}
                     <div className="p-3 border-t">
+                        {/* Branding strip */}
+                        
                         <Button
                             className="w-full h-12 text-base font-bold gap-2"
                             onClick={handleCharge}
@@ -708,6 +770,14 @@ export default function POSPage() {
                 onRecallLocal={handleRecallLocal}
                 onRemoveLocal={handleRemoveLocalHold}
                 onRecallServer={handleRecallServer}
+            />
+
+            {/* Price Lookup Dialog */}
+            <PriceLookupDialog
+                open={priceLookupOpen}
+                onOpenChange={setPriceLookupOpen}
+                storeId={storeId}
+                onAddProduct={handleProductSelect}
             />
 
             {/* Post-Sale Receipt Actions Dialog */}

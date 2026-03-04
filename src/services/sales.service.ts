@@ -31,7 +31,6 @@ import type {
 import {
     buildSaleItemPayload,
     calculateSaleTotals,
-    calculateReturnItemTotals,
 } from "@/utils/sales.utils";
 
 const getClient = () => createClient();
@@ -935,30 +934,32 @@ export const salesService = {
             let igstReturned = 0;
             let taxReturned = 0;
 
+            const round2 = (v: number) => Math.round(v * 100) / 100;
+
             const returnItemPayloads = data.items.map((ri) => {
                 const originalItem = saleItemsMap.get(ri.sale_item_id);
-                const totals = originalItem
-                    ? calculateReturnItemTotals(
-                          originalItem,
-                          ri.return_quantity,
-                          saleData.is_interstate
-                      )
-                    : {
-                          subtotal: ri.unit_price * ri.return_quantity,
-                          discount_amount: 0,
-                          taxable_amount: ri.unit_price * ri.return_quantity,
-                          cgst_amount: 0,
-                          sgst_amount: 0,
-                          igst_amount: 0,
-                          tax_amount: 0,
-                          total_amount: ri.unit_price * ri.return_quantity,
-                      };
 
-                subtotalReturned += totals.subtotal;
-                cgstReturned += totals.cgst_amount;
-                sgstReturned += totals.sgst_amount;
-                igstReturned += totals.igst_amount;
-                taxReturned += totals.tax_amount;
+                // Use stored DB amounts proportionally — never recalculate from
+                // gst_percentage because inclusive-GST items store gst_percentage=0
+                // even though tax_amount > 0.
+                const ratio = originalItem && originalItem.quantity > 0
+                    ? ri.return_quantity / Number(originalItem.quantity)
+                    : 0;
+
+                const subtotal       = round2(ri.unit_price * ri.return_quantity);
+                const discountAmount = round2((originalItem?.discount_total  ?? 0) * ratio);
+                const taxableAmount  = round2((originalItem?.taxable_amount  ?? subtotal) * ratio);
+                const cgstAmount     = round2((originalItem?.cgst_amount     ?? 0) * ratio);
+                const sgstAmount     = round2((originalItem?.sgst_amount     ?? 0) * ratio);
+                const igstAmount     = round2((originalItem?.igst_amount     ?? 0) * ratio);
+                const taxAmount      = round2((originalItem?.tax_amount      ?? 0) * ratio);
+                const totalAmount    = round2(taxableAmount + taxAmount);
+
+                subtotalReturned += subtotal;
+                cgstReturned     += cgstAmount;
+                sgstReturned     += sgstAmount;
+                igstReturned     += igstAmount;
+                taxReturned      += taxAmount;
 
                 return {
                     sale_item_id: ri.sale_item_id,
@@ -974,20 +975,27 @@ export const salesService = {
                     item_return_reason: ri.item_return_reason ?? null,
                     restock: ri.restock ?? true,
                     restock_condition: ri.restock_condition ?? "good",
-                    subtotal: totals.subtotal,
-                    discount_amount: totals.discount_amount,
-                    taxable_amount: totals.taxable_amount,
-                    cgst_amount: totals.cgst_amount,
-                    sgst_amount: totals.sgst_amount,
-                    igst_amount: totals.igst_amount,
-                    tax_amount: totals.tax_amount,
-                    total_amount: totals.total_amount,
+                    subtotal,
+                    discount_amount: discountAmount,
+                    taxable_amount: taxableAmount,
+                    cgst_amount: cgstAmount,
+                    sgst_amount: sgstAmount,
+                    igst_amount: igstAmount,
+                    tax_amount: taxAmount,
+                    total_amount: totalAmount,
                 };
             });
 
-            const totalReturned = subtotalReturned + taxReturned;
+            // If refund_tax is false (default), refund only the base subtotal.
+            // If refund_tax is true, refund subtotal + GST.
+            const refundTax = data.refund_tax ?? false;
+            const totalReturned = refundTax
+                ? subtotalReturned + taxReturned
+                : subtotalReturned;
 
             // Create return header
+            // NOTE: return_number is intentionally omitted — the DB trigger
+            // (generate_return_number_trigger) always generates it server-side.
             const { data: returnRecord, error: returnError } = await getClient()
                 .from("sale_returns")
                 .insert({
@@ -1001,10 +1009,10 @@ export const salesService = {
                     return_reason: data.return_reason,
                     return_notes: data.return_notes ?? null,
                     subtotal_returned: Math.round(subtotalReturned * 100) / 100,
-                    tax_returned: Math.round(taxReturned * 100) / 100,
-                    cgst_returned: Math.round(cgstReturned * 100) / 100,
-                    sgst_returned: Math.round(sgstReturned * 100) / 100,
-                    igst_returned: Math.round(igstReturned * 100) / 100,
+                    tax_returned: refundTax ? Math.round(taxReturned * 100) / 100 : 0,
+                    cgst_returned: refundTax ? Math.round(cgstReturned * 100) / 100 : 0,
+                    sgst_returned: refundTax ? Math.round(sgstReturned * 100) / 100 : 0,
+                    igst_returned: refundTax ? Math.round(igstReturned * 100) / 100 : 0,
                     total_returned: Math.round(totalReturned * 100) / 100,
                     refund_method: data.refund_method ?? null,
                     refund_amount: Math.round(totalReturned * 100) / 100,
@@ -1551,6 +1559,196 @@ export const salesService = {
             };
         } catch {
             return { data: null, error: "Failed to commit sale" };
+        }
+    },
+
+    // ========================================================================
+    // DASHBOARD HELPERS
+    // ========================================================================
+
+    /**
+     * Get today's payment totals broken down by method for a list of sale IDs.
+     * Returns { cash, card, upi, other }.
+     */
+    getTodayPaymentBreakdown: async (
+        storeId: string,
+        saleIds: string[]
+    ): Promise<ServiceResponse<{ cash: number; card: number; upi: number; other: number }>> => {
+        if (saleIds.length === 0) {
+            return { data: { cash: 0, card: 0, upi: 0, other: 0 }, error: null };
+        }
+        try {
+            const { data, error } = await getClient()
+                .from("sale_payments")
+                .select("payment_method, amount")
+                .in("sale_id", saleIds)
+                .eq("store_id", storeId)
+                .eq("status", "SUCCESS");
+
+            if (error) return { data: null, error: error.message };
+
+            const rows = (data ?? []) as Array<{ payment_method: string; amount: number }>;
+            const cash = rows
+                .filter((p) => p.payment_method === "CASH")
+                .reduce((s, p) => s + p.amount, 0);
+            const card = rows
+                .filter((p) => p.payment_method === "CARD_CREDIT" || p.payment_method === "CARD_DEBIT")
+                .reduce((s, p) => s + p.amount, 0);
+            const upi = rows
+                .filter((p) => p.payment_method === "UPI")
+                .reduce((s, p) => s + p.amount, 0);
+            const other = rows
+                .filter(
+                    (p) =>
+                        !["CASH", "CARD_CREDIT", "CARD_DEBIT", "UPI"].includes(
+                            p.payment_method
+                        )
+                )
+                .reduce((s, p) => s + p.amount, 0);
+
+            return { data: { cash, card, upi, other }, error: null };
+        } catch {
+            return { data: null, error: "Failed to fetch payment breakdown" };
+        }
+    },
+
+    /**
+     * Get total amount returned today for a list of sale IDs.
+     * Returns { total_returns_amount, returns_count }.
+     */
+    getTodayReturnsTotal: async (
+        storeId: string,
+        saleIds: string[]
+    ): Promise<ServiceResponse<{ total_returns_amount: number; returns_count: number }>> => {
+        if (saleIds.length === 0) {
+            return { data: { total_returns_amount: 0, returns_count: 0 }, error: null };
+        }
+        try {
+            const { data, error } = await getClient()
+                .from("sale_returns")
+                .select("total_returned, status")
+                .in("sale_id", saleIds)
+                .eq("store_id", storeId)
+                .neq("status", "REJECTED");
+
+            if (error) return { data: null, error: error.message };
+
+            const rows = (data ?? []) as Array<{ total_returned: number; status: string }>;
+            const total_returns_amount = rows.reduce((s, r) => s + r.total_returned, 0);
+            const returns_count = rows.length;
+
+            return { data: { total_returns_amount, returns_count }, error: null };
+        } catch {
+            return { data: null, error: "Failed to fetch returns total" };
+        }
+    },
+
+    // ========================================================================
+    // DATE-RANGE REPORT HELPERS
+    // ========================================================================
+
+    /**
+     * Get sales summaries within a date range.
+     * Used by admin report pages (not POS — POS stays today-only).
+     */
+    getSalesByDateRange: async (
+        storeId: string,
+        dateFrom: string,
+        dateTo: string
+    ): Promise<ServiceResponse<SaleSummaryView[]>> => {
+        try {
+            const { data, error } = await getClient()
+                .from("v_sales_summary")
+                .select("*")
+                .eq("store_id", storeId)
+                .gte("sale_date", dateFrom)
+                .lte("sale_date", dateTo)
+                .order("sale_date", { ascending: false })
+                .order("sale_time", { ascending: false });
+
+            if (error) return { data: null, error: error.message };
+            return {
+                data: (data ?? []) as unknown as SaleSummaryView[],
+                error: null,
+            };
+        } catch {
+            return { data: null, error: "Failed to fetch sales by date range" };
+        }
+    },
+
+    /**
+     * Get payment breakdown for a date range (not tied to specific sale IDs).
+     * Joins sale_payments → sales to apply the date filter.
+     */
+    getPaymentBreakdownByDateRange: async (
+        storeId: string,
+        dateFrom: string,
+        dateTo: string
+    ): Promise<ServiceResponse<{ cash: number; card: number; upi: number; other: number }>> => {
+        try {
+            const { data, error } = await getClient()
+                .from("sale_payments")
+                .select("payment_method, amount, sale:sales!inner(sale_date)")
+                .eq("store_id", storeId)
+                .eq("status", "SUCCESS")
+                .gte("sale.sale_date", dateFrom)
+                .lte("sale.sale_date", dateTo);
+
+            if (error) return { data: null, error: error.message };
+
+            type PaymentRow = { payment_method: string; amount: number };
+            const rows = (data ?? []) as unknown as PaymentRow[];
+
+            const cash = rows
+                .filter((p) => p.payment_method === "CASH")
+                .reduce((s, p) => s + p.amount, 0);
+            const card = rows
+                .filter((p) => p.payment_method === "CARD_CREDIT" || p.payment_method === "CARD_DEBIT")
+                .reduce((s, p) => s + p.amount, 0);
+            const upi = rows
+                .filter((p) => p.payment_method === "UPI")
+                .reduce((s, p) => s + p.amount, 0);
+            const other = rows
+                .filter(
+                    (p) =>
+                        !["CASH", "CARD_CREDIT", "CARD_DEBIT", "UPI"].includes(p.payment_method)
+                )
+                .reduce((s, p) => s + p.amount, 0);
+
+            return { data: { cash, card, upi, other }, error: null };
+        } catch {
+            return { data: null, error: "Failed to fetch payment breakdown by date range" };
+        }
+    },
+
+    /**
+     * Get returns totals for a date range.
+     * Uses the sale_date from the parent sale record.
+     */
+    getReturnsByDateRange: async (
+        storeId: string,
+        dateFrom: string,
+        dateTo: string
+    ): Promise<ServiceResponse<{ total_returns_amount: number; returns_count: number }>> => {
+        try {
+            const { data, error } = await getClient()
+                .from("sale_returns")
+                .select("total_returned, status, sale:sales!inner(sale_date)")
+                .eq("store_id", storeId)
+                .neq("status", "REJECTED")
+                .gte("sale.sale_date", dateFrom)
+                .lte("sale.sale_date", dateTo);
+
+            if (error) return { data: null, error: error.message };
+
+            type ReturnRow = { total_returned: number; status: string };
+            const rows = (data ?? []) as unknown as ReturnRow[];
+            const total_returns_amount = rows.reduce((s, r) => s + r.total_returned, 0);
+            const returns_count = rows.length;
+
+            return { data: { total_returns_amount, returns_count }, error: null };
+        } catch {
+            return { data: null, error: "Failed to fetch returns by date range" };
         }
     },
 };

@@ -144,7 +144,7 @@ export function ReceiveItemsDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+            <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <PackageCheck className="h-5 w-5" />
@@ -155,7 +155,7 @@ export function ReceiveItemsDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <ScrollArea className="flex-1" style={{ maxHeight: "calc(85vh - 180px)" }}>
+                <ScrollArea className="flex-1 min-h-0 overflow-x-hidden">
                     {isLoadingItems ? (
                         <div className="flex items-center justify-center py-8">
                             <p className="text-muted-foreground text-sm">Loading items...</p>

@@ -350,18 +350,32 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
             deductSoldStock: (
                 soldItems: Array<{ id: string; quantity: number }>
             ) => {
-                const { items, indexes } = get();
+                const { items, indexes, cacheMeta } = get();
                 deductStock(items, indexes, soldItems);
                 // Trigger re-render with new array reference
-                set({ items: [...items] });
+                const updatedItems = [...items];
+                set({ items: updatedItems });
+
+                // Persist updated stock to IndexedDB (no DB call)
+                const storeId = cacheMeta?.store_id;
+                if (storeId) {
+                    persistToCache(updatedItems, storeId).catch(() => {});
+                }
             },
 
             restoreReturnedStock: (
                 returnedItems: Array<{ id: string; quantity: number }>
             ) => {
-                const { indexes, items } = get();
+                const { indexes, items, cacheMeta } = get();
                 restoreStock(indexes, returnedItems);
-                set({ items: [...items] });
+                const updatedItems = [...items];
+                set({ items: updatedItems });
+
+                // Persist updated stock to IndexedDB (no DB call)
+                const storeId = cacheMeta?.store_id;
+                if (storeId) {
+                    persistToCache(updatedItems, storeId).catch(() => {});
+                }
             },
 
             // ==============================================================

@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSalesStore } from "@/stores/sales.store";
 import {
     ReturnsTable,
+    RefundStats,
     ProcessReturnDialog,
     ReturnApprovalDialog,
     SaleDetailSheet,
@@ -97,6 +98,7 @@ export default function POSRefundsPage() {
             return_reason: string;
             return_notes?: string;
             refund_method?: string;
+            refund_tax?: boolean;
             items: Array<{
                 sale_item_id: string;
                 product_id: string;
@@ -199,6 +201,9 @@ export default function POSRefundsPage() {
                     View and manage sale returns
                 </p>
             </div>
+
+            {/* Stats */}
+            <RefundStats returns={returns} isLoading={isLoading} />
 
             <ReturnsTable
                 returns={returns}

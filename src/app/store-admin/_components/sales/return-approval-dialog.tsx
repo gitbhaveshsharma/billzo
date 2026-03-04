@@ -72,16 +72,16 @@ export function ReturnApprovalDialog({
                 onOpenChange(v);
             }}
         >
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-lg">
                 <DialogHeader>
                     <DialogTitle>Approve/Reject Return</DialogTitle>
-                    <DialogDescription>
+                    <DialogDescription> 
                         {saleReturn
                             ? `Return #${saleReturn.return_number} · ${formatCurrency(saleReturn.total_returned)}`
                             : "Loading..."}
                     </DialogDescription>
                 </DialogHeader>
-
+                <div className="p-4">
                 {saleReturn && (
                     <div className="bg-muted/50 rounded-md p-3 text-xs space-y-1">
                         <p>
@@ -102,10 +102,10 @@ export function ReturnApprovalDialog({
                         </p>
                     </div>
                 )}
-
+                </div>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     {/* Approve / Reject toggle */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 p-4">
                         <Button
                             type="button"
                             variant={approved ? "default" : "outline"}
@@ -130,7 +130,7 @@ export function ReturnApprovalDialog({
 
                     {/* Rejection reason (only when rejecting) */}
                     {!approved && (
-                        <div className="space-y-1">
+                        <div className="space-y-1 p-4">
                             <Label htmlFor="reject-reason">Rejection Reason *</Label>
                             <Textarea
                                 id="reject-reason"
@@ -145,7 +145,6 @@ export function ReturnApprovalDialog({
                             )}
                         </div>
                     )}
-
                     <DialogFooter>
                         <Button
                             type="button"

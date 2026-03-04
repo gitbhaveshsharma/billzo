@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect } from "react";
 import {
     Clock,
     Calendar,
@@ -38,6 +38,12 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type {
     EnrichedSale,
     SaleItem,
@@ -86,14 +92,31 @@ function InfoRow({
     label,
     value,
     icon,
+    tooltip,
 }: {
     label: string;
     value: React.ReactNode;
     icon?: React.ReactNode;
+    tooltip?: string;
 }) {
     return (
         <div className="flex items-start gap-2 py-1.5">
-            {icon && <span className="text-muted-foreground mt-0.5">{icon}</span>}
+            {icon && (
+                <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="text-muted-foreground mt-0.5 cursor-default">
+                                {icon}
+                            </span>
+                        </TooltipTrigger>
+                        {tooltip && (
+                            <TooltipContent side="right" className="text-xs">
+                                {tooltip}
+                            </TooltipContent>
+                        )}
+                    </Tooltip>
+                </TooltipProvider>
+            )}
             <div className="min-w-0 flex-1">
                 <p className="text-muted-foreground text-xs">{label}</p>
                 <p className="text-sm font-medium truncate">{value || "—"}</p>
@@ -149,7 +172,10 @@ function ItemsTab({ items }: { items: SaleItem[] }) {
                 </TableHeader>
                 <TableBody>
                     {items.map((item) => (
-                        <TableRow key={item.id} className={item.is_void ? "opacity-50 line-through" : ""}>
+                        <TableRow
+                            key={item.id}
+                            className={item.is_void ? "opacity-50 line-through" : ""}
+                        >
                             <TableCell className="text-xs">
                                 <div>
                                     <p className="font-medium">{item.product_name}</p>
@@ -159,9 +185,19 @@ function ItemsTab({ items }: { items: SaleItem[] }) {
                             <TableCell className="text-xs text-right">
                                 {item.quantity}
                                 {item.returned_quantity > 0 && (
-                                    <span className="text-red-500 ml-1">
-                                        (-{item.returned_quantity})
-                                    </span>
+                                    <TooltipProvider delayDuration={300}>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className="text-red-500 ml-1 cursor-default">
+                                                    (-{item.returned_quantity})
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                                {item.returned_quantity} unit(s) have been returned
+                                                for this item
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
                                 )}
                             </TableCell>
                             <TableCell className="text-xs text-right">
@@ -185,7 +221,10 @@ function ItemsTab({ items }: { items: SaleItem[] }) {
                     ))}
                     {items.length === 0 && (
                         <TableRow>
-                            <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-6">
+                            <TableCell
+                                colSpan={6}
+                                className="text-center text-xs text-muted-foreground py-6"
+                            >
                                 No items
                             </TableCell>
                         </TableRow>
@@ -237,12 +276,12 @@ function PaymentsTab({ payments }: { payments: SalePayment[] }) {
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                                 {payment.upi_ref_number ||
-                                    payment.card_last_four
-                                    ? `****${payment.card_last_four}`
-                                    : payment.cheque_number ||
-                                      payment.bank_reference ||
-                                      payment.transaction_id ||
-                                      "—"}
+                                    (payment.card_last_four
+                                        ? `****${payment.card_last_four}`
+                                        : payment.cheque_number ||
+                                          payment.bank_reference ||
+                                          payment.transaction_id ||
+                                          "—")}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                                 {formatTime(payment.payment_at)}
@@ -251,7 +290,10 @@ function PaymentsTab({ payments }: { payments: SalePayment[] }) {
                     ))}
                     {payments.length === 0 && (
                         <TableRow>
-                            <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-6">
+                            <TableCell
+                                colSpan={5}
+                                className="text-center text-xs text-muted-foreground py-6"
+                            >
                                 No payments recorded
                             </TableCell>
                         </TableRow>
@@ -303,9 +345,7 @@ function ReturnsTab({ returns }: { returns: SaleReturn[] }) {
                 </div>
             ))}
             {returns.length === 0 && (
-                <p className="text-center text-xs text-muted-foreground py-6">
-                    No returns
-                </p>
+                <p className="text-center text-xs text-muted-foreground py-6">No returns</p>
             )}
         </div>
     );
@@ -337,13 +377,13 @@ export function SaleDetailSheet({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-[580px] sm:w-[640px] p-0">
+            <SheetContent className="sm:max-w-3xl p-0">
                 <SheetHeader className="p-4 pb-0">
                     <SheetTitle className="flex items-center gap-2">
                         <Receipt className="h-4 w-4" />
                         Sale Details
                     </SheetTitle>
-                    <SheetDescription>
+                    <SheetDescription className="text-muted-foreground text-sm">
                         {sale?.invoice_number || "Loading..."}
                     </SheetDescription>
                 </SheetHeader>
@@ -359,12 +399,36 @@ export function SaleDetailSheet({
                                     <h3 className="text-base font-semibold">
                                         {sale.invoice_number}
                                     </h3>
-                                    <Badge
-                                        variant="secondary"
-                                        className={getSaleStatusColor(sale.status)}
-                                    >
-                                        {getSaleStatusLabel(sale.status)}
-                                    </Badge>
+                                    <TooltipProvider delayDuration={300}>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Badge
+                                                    variant="secondary"
+                                                    className={`cursor-default ${getSaleStatusColor(sale.status)}`}
+                                                >
+                                                    {getSaleStatusLabel(sale.status)}
+                                                </Badge>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs max-w-[200px] text-center">
+                                                {sale.status === "COMPLETED" &&
+                                                    "This sale has been fully paid and completed."}
+                                                {sale.status === "DRAFT" &&
+                                                    "This sale is still being prepared and not yet finalized."}
+                                                {sale.status === "HOLD" &&
+                                                    "This sale is on hold and awaiting confirmation."}
+                                                {sale.status === "PARTIAL_PAID" &&
+                                                    "This sale has been partially paid. A balance is still due."}
+                                                {sale.status === "CANCELLED" &&
+                                                    "This sale has been cancelled and is no longer active."}
+                                                {sale.status === "CREDIT" &&
+                                                    "This is a credit sale — payment is due at a later date."}
+                                                {sale.status === "PARTIAL_RETURN" &&
+                                                    "Some items from this sale have been returned."}
+                                                {sale.status === "FULLY_RETURNED" &&
+                                                    "All items from this sale have been returned."}
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
                                 </div>
 
                                 {/* Sale Info */}
@@ -373,11 +437,13 @@ export function SaleDetailSheet({
                                         label="Date"
                                         value={formatDate(sale.sale_date)}
                                         icon={<Calendar className="h-3.5 w-3.5" />}
+                                        tooltip="The date this sale was created"
                                     />
                                     <InfoRow
                                         label="Time"
                                         value={formatTime(sale.sale_time)}
                                         icon={<Clock className="h-3.5 w-3.5" />}
+                                        tooltip="The time this sale was recorded"
                                     />
                                     <InfoRow
                                         label="Customer"
@@ -387,23 +453,31 @@ export function SaleDetailSheet({
                                                 : "Walk-in"
                                         }
                                         icon={<User className="h-3.5 w-3.5" />}
+                                        tooltip="Customer associated with this sale. Walk-in means no account was linked."
                                     />
                                     <InfoRow
                                         label="Cashier"
                                         value={sale.cashier_name || "—"}
                                         icon={<User className="h-3.5 w-3.5" />}
+                                        tooltip="The staff member who processed this sale"
                                     />
                                     {sale.customer_gstin && (
                                         <InfoRow
                                             label="GSTIN"
                                             value={sale.customer_gstin}
                                             icon={<FileText className="h-3.5 w-3.5" />}
+                                            tooltip="Customer's GST Identification Number used for tax invoicing"
                                         />
                                     )}
                                     <InfoRow
                                         label="GST Type"
                                         value={`${sale.gst_type} (${sale.is_interstate ? "Interstate" : "Intrastate"})`}
                                         icon={<Tag className="h-3.5 w-3.5" />}
+                                        tooltip={
+                                            sale.is_interstate
+                                                ? "Interstate sale — IGST applies since buyer and seller are in different states."
+                                                : "Intrastate sale — CGST + SGST apply since buyer and seller are in the same state."
+                                        }
                                     />
                                 </div>
 
@@ -429,7 +503,19 @@ export function SaleDetailSheet({
                                     </div>
                                     {sale.round_off !== 0 && (
                                         <div className="flex justify-between text-xs">
-                                            <span className="text-muted-foreground">Round Off</span>
+                                            <TooltipProvider delayDuration={300}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <span className="text-muted-foreground underline decoration-dotted cursor-default">
+                                                            Round Off
+                                                        </span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="text-xs">
+                                                        Small adjustment to round the total to the
+                                                        nearest whole number
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
                                             <span>{formatCurrency(sale.round_off)}</span>
                                         </div>
                                     )}
@@ -446,7 +532,18 @@ export function SaleDetailSheet({
                                     </div>
                                     {sale.due_amount > 0 && (
                                         <div className="flex justify-between text-xs">
-                                            <span className="text-muted-foreground">Due</span>
+                                            <TooltipProvider delayDuration={300}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <span className="text-muted-foreground underline decoration-dotted cursor-default">
+                                                            Due
+                                                        </span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="text-xs">
+                                                        Remaining unpaid balance on this sale
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
                                             <span className="text-red-500 font-medium">
                                                 {formatCurrency(sale.due_amount)}
                                             </span>
@@ -454,7 +551,19 @@ export function SaleDetailSheet({
                                     )}
                                     {sale.change_amount > 0 && (
                                         <div className="flex justify-between text-xs">
-                                            <span className="text-muted-foreground">Change</span>
+                                            <TooltipProvider delayDuration={300}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <span className="text-muted-foreground underline decoration-dotted cursor-default">
+                                                            Change
+                                                        </span>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="text-xs">
+                                                        Cash returned to the customer after
+                                                        overpayment
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
                                             <span>{formatCurrency(sale.change_amount)}</span>
                                         </div>
                                     )}
@@ -470,25 +579,75 @@ export function SaleDetailSheet({
                                             </p>
                                             {sale.cgst_amount > 0 && (
                                                 <div className="flex justify-between text-xs">
-                                                    <span>CGST</span>
+                                                    <TooltipProvider delayDuration={300}>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <span className="underline decoration-dotted cursor-default">
+                                                                    CGST
+                                                                </span>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="text-xs">
+                                                                Central Goods & Services Tax —
+                                                                collected by the central government
+                                                                on intrastate sales
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
                                                     <span>{formatCurrency(sale.cgst_amount)}</span>
                                                 </div>
                                             )}
                                             {sale.sgst_amount > 0 && (
                                                 <div className="flex justify-between text-xs">
-                                                    <span>SGST</span>
+                                                    <TooltipProvider delayDuration={300}>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <span className="underline decoration-dotted cursor-default">
+                                                                    SGST
+                                                                </span>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="text-xs">
+                                                                State Goods & Services Tax —
+                                                                collected by the state government
+                                                                on intrastate sales
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
                                                     <span>{formatCurrency(sale.sgst_amount)}</span>
                                                 </div>
                                             )}
                                             {sale.igst_amount > 0 && (
                                                 <div className="flex justify-between text-xs">
-                                                    <span>IGST</span>
+                                                    <TooltipProvider delayDuration={300}>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <span className="underline decoration-dotted cursor-default">
+                                                                    IGST
+                                                                </span>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="text-xs">
+                                                                Integrated Goods & Services Tax —
+                                                                applied on interstate sales
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
                                                     <span>{formatCurrency(sale.igst_amount)}</span>
                                                 </div>
                                             )}
                                             {sale.cess_amount > 0 && (
                                                 <div className="flex justify-between text-xs">
-                                                    <span>Cess</span>
+                                                    <TooltipProvider delayDuration={300}>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <span className="underline decoration-dotted cursor-default">
+                                                                    Cess
+                                                                </span>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent className="text-xs">
+                                                                Additional surcharge levied on
+                                                                certain goods over and above GST
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
                                                     <span>{formatCurrency(sale.cess_amount)}</span>
                                                 </div>
                                             )}
@@ -590,52 +749,92 @@ export function SaleDetailSheet({
                                 </Tabs>
 
                                 {/* Action Buttons */}
-                                <div className="flex flex-wrap gap-2 pt-2">
-                                    {onPrint && sale.status === "COMPLETED" && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-xs gap-1"
-                                            onClick={() => onPrint(sale.id)}
-                                        >
-                                            <Printer className="h-3 w-3" />
-                                            Print Receipt
-                                        </Button>
-                                    )}
-                                    {onAddPayment && canAddPayment(sale) && sale.due_amount > 0 && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-xs gap-1"
-                                            onClick={() => onAddPayment(sale)}
-                                        >
-                                            <Plus className="h-3 w-3" />
-                                            Record Payment
-                                        </Button>
-                                    )}
-                                    {onProcessReturn && canCreateReturn(sale) && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-xs gap-1"
-                                            onClick={() => onProcessReturn(sale)}
-                                        >
-                                            <RotateCcw className="h-3 w-3" />
-                                            Process Return
-                                        </Button>
-                                    )}
-                                    {onCancelSale && canCancelSale(sale) && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-xs gap-1 text-red-600 hover:text-red-700"
-                                            onClick={() => onCancelSale(sale)}
-                                        >
-                                            <Ban className="h-3 w-3" />
-                                            Cancel Sale
-                                        </Button>
-                                    )}
-                                </div>
+                                <TooltipProvider delayDuration={300}>
+                                    <div className="flex flex-wrap gap-2 pt-2">
+                                        {onPrint && sale.status === "COMPLETED" && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-xs gap-1"
+                                                        onClick={() => onPrint(sale.id)}
+                                                    >
+                                                        <Printer className="h-3 w-3" />
+                                                        Print Receipt
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent className="text-xs max-w-[180px] text-center">
+                                                    Print or download a receipt for this completed
+                                                    sale
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
+
+                                        {onAddPayment &&
+                                            canAddPayment(sale) &&
+                                            sale.due_amount > 0 && (
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="text-xs gap-1"
+                                                            onClick={() => onAddPayment(sale)}
+                                                        >
+                                                            <Plus className="h-3 w-3" />
+                                                            Record Payment
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent className="text-xs max-w-[200px] text-center">
+                                                        Record an additional payment to clear the
+                                                        outstanding balance of{" "}
+                                                        {formatCurrency(sale.due_amount)}
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            )}
+
+                                        {onProcessReturn && canCreateReturn(sale) && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-xs gap-1"
+                                                        onClick={() => onProcessReturn(sale)}
+                                                    >
+                                                        <RotateCcw className="h-3 w-3" />
+                                                        Process Return
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent className="text-xs max-w-[200px] text-center">
+                                                    Initiate a return for one or more items in this
+                                                    sale and issue a refund or credit note
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
+
+                                        {onCancelSale && canCancelSale(sale) && (
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="text-xs gap-1 text-red-600 hover:text-red-700"
+                                                        onClick={() => onCancelSale(sale)}
+                                                    >
+                                                        <Ban className="h-3 w-3" />
+                                                        Cancel Sale
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent className="text-xs max-w-[200px] text-center">
+                                                    Permanently cancel this sale. This action cannot
+                                                    be undone.
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        )}
+                                    </div>
+                                </TooltipProvider>
                             </>
                         )}
                     </div>

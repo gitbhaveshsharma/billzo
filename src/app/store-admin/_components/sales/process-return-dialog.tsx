@@ -1,12 +1,9 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import {
     RotateCcw,
     Package,
-    AlertTriangle,
     Check,
     Minus,
     Plus,
@@ -63,6 +60,7 @@ interface ProcessReturnDialogProps {
         return_reason: string;
         return_notes?: string;
         refund_method?: PaymentMethod;
+        refund_tax?: boolean;
         items: CreateSaleReturnItemRequest[];
     }) => void;
     isProcessing?: boolean;
@@ -230,6 +228,7 @@ export function ProcessReturnDialog({
     const [returnReason, setReturnReason] = useState("");
     const [returnNotes, setReturnNotes] = useState("");
     const [refundMethod, setRefundMethod] = useState<PaymentMethod | "">("CASH");
+    const [refundTax, setRefundTax] = useState(false);
     const [itemStates, setItemStates] = useState<Map<string, ReturnItemState>>(
         new Map()
     );
@@ -266,6 +265,7 @@ export function ProcessReturnDialog({
     // Re-init when sale changes
     useMemo(() => {
         if (open && sale) initializeItems();
+        if (open) setRefundTax(false);
     }, [open, sale, initializeItems]);
 
     // Update a single item
@@ -289,8 +289,8 @@ export function ProcessReturnDialog({
         [itemStates]
     );
 
-    // Total return amount
-    const totalReturnAmount = useMemo(
+    // Total base return amount (no tax)
+    const totalBaseAmount = useMemo(
         () =>
             selectedItems.reduce(
                 (sum, s) => sum + s.return_quantity * s.saleItem.unit_price,
@@ -298,6 +298,23 @@ export function ProcessReturnDialog({
             ),
         [selectedItems]
     );
+
+    // Total GST to refund (pro-rated by return_quantity)
+    const totalGstAmount = useMemo(
+        () =>
+            selectedItems.reduce((sum, s) => {
+                const item = s.saleItem;
+                const perUnitTax =
+                    item.quantity > 0 ? item.tax_amount / item.quantity : 0;
+                return sum + perUnitTax * s.return_quantity;
+            }, 0),
+        [selectedItems]
+    );
+
+    // Total refund amount shown to cashier
+    const totalReturnAmount = refundTax
+        ? totalBaseAmount + totalGstAmount
+        : totalBaseAmount;
 
     // Handle confirm
     const handleConfirm = useCallback(() => {
@@ -325,9 +342,10 @@ export function ProcessReturnDialog({
             return_reason: returnReason.trim(),
             return_notes: returnNotes.trim() || undefined,
             refund_method: refundMethod || undefined,
+            refund_tax: refundTax,
             items,
         });
-    }, [sale, selectedItems, returnReason, returnNotes, refundMethod, onConfirm]);
+    }, [sale, selectedItems, returnReason, returnNotes, refundMethod, refundTax, onConfirm]);
 
     const returnableItems = useMemo(
         () => Array.from(itemStates.entries()),
@@ -336,7 +354,7 @@ export function ProcessReturnDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg max-h-[90vh]">
+            <DialogContent className="max-w-3xl max-h-[95vh]">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <RotateCcw className="h-5 w-5" />
@@ -349,8 +367,8 @@ export function ProcessReturnDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <ScrollArea className="max-h-[55vh] pr-2">
-                    <div className="space-y-4">
+                    <ScrollArea className="max-h-[95vh] overflow-y-auto">
+                    <div className="space-y-4 p-4">
                         {/* Return reason */}
                         <div className="space-y-1">
                             <Label className="text-sm">Return Reason *</Label>
@@ -428,6 +446,26 @@ export function ProcessReturnDialog({
                             />
                         </div>
 
+                        {/* Refund GST Toggle */}
+                        <div className="flex flex-col gap-1.5 py-1">
+                            <div className="flex items-center gap-3">
+                                <Switch
+                                    id="refund-gst-switch"
+                                    checked={refundTax}
+                                    onCheckedChange={setRefundTax}
+                                />
+                                <Label
+                                    htmlFor="refund-gst-switch"
+                                    className="text-sm font-medium cursor-pointer"
+                                >
+                                    Refund GST (SGST + CGST)
+                                </Label>
+                            </div>
+                            <p className="text-xs text-muted-foreground ml-[52px]">
+                                Turn on to include GST in the refund amount.
+                            </p>
+                        </div>
+
                         {/* Summary */}
                         {selectedItems.length > 0 && (
                             <div className="bg-muted/50 rounded-md p-3 space-y-1 text-xs">
@@ -448,6 +486,16 @@ export function ProcessReturnDialog({
                                         )}
                                     </span>
                                 </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Base Amount</span>
+                                    <span>{formatCurrency(totalBaseAmount)}</span>
+                                </div>
+                                {refundTax && totalGstAmount > 0 && (
+                                    <div className="flex justify-between text-green-700 dark:text-green-400">
+                                        <span>GST Refund (CGST + SGST)</span>
+                                        <span>+{formatCurrency(totalGstAmount)}</span>
+                                    </div>
+                                )}
                                 <Separator />
                                 <div className="flex justify-between font-bold text-sm">
                                     <span>Refund Amount</span>

@@ -49,8 +49,10 @@ export default function PosDailyReportPage() {
     const {
         todaySummaries,
         returns,
+        dashboardStats,
         isLoading: salesLoading,
         fetchTodaySales,
+        fetchDashboardStats,
         fetchReturns,
         setReturnFilters,
     } = useSalesStore();
@@ -70,12 +72,13 @@ export default function PosDailyReportPage() {
 
         fetchActiveShift(storeId);
         fetchTodaySales(storeId);
+        fetchDashboardStats(storeId);
 
         // Fetch today's returns
         const today = new Date().toISOString().slice(0, 10);
         setReturnFilters({ date_from: today, date_to: today });
         fetchReturns(storeId);
-    }, [storeId, fetchActiveShift, fetchTodaySales, fetchReturns, setReturnFilters]);
+    }, [storeId, fetchActiveShift, fetchTodaySales, fetchDashboardStats, fetchReturns, setReturnFilters]);
 
     // ========================================================================
     // DERIVED DATA — filtered to this cashier
@@ -103,11 +106,11 @@ export default function PosDailyReportPage() {
         [myReturns]
     );
 
-    // Payment breakdown — from active shift (most accurate real-time data)
-    const cashAmount = activeShift?.cash_sales ?? 0;
-    const cardAmount = activeShift?.card_sales ?? 0;
-    const upiAmount = activeShift?.upi_sales ?? 0;
-    const otherAmount = activeShift?.other_sales ?? 0;
+    // Payment breakdown — use live data from dashboardStats (fetched from sale_payments)
+    const cashAmount = dashboardStats?.today_cash ?? 0;
+    const cardAmount = dashboardStats?.today_card ?? 0;
+    const upiAmount = dashboardStats?.today_upi ?? 0;
+    const otherAmount = dashboardStats?.today_other ?? 0;
 
     // ========================================================================
     // SHIFT HANDLERS

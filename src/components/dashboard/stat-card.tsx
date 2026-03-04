@@ -4,9 +4,16 @@ import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Info,
 } from "lucide-react";
 import type { DashboardStatConfig } from "./types";
 
@@ -26,6 +33,7 @@ export function StatCard({
   color,
   trend,
   subtitle,
+  tooltip,
   onClick,
   isLoading = false,
   className,
@@ -60,8 +68,20 @@ export function StatCard({
       <div className="p-5">
         <div className="flex items-start justify-between">
           <div className="space-y-2 min-w-0 flex-1">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
               {label}
+              {tooltip && (
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3 w-3 text-muted-foreground/60 hover:text-muted-foreground cursor-help shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-[220px] text-xs font-normal normal-case tracking-normal">
+                      {tooltip}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </p>
             <p className="text-2xl font-bold tracking-tight text-foreground truncate">
               {value}
