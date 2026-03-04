@@ -724,6 +724,8 @@ export interface CreateSaleReturnRequest {
     return_notes?: string;
     shift_id?: string;
     refund_method?: PaymentMethod;
+    /** When true, GST (CGST+SGST or IGST) is included in the refund amount. Default: false */
+    refund_tax?: boolean;
     items: CreateSaleReturnItemRequest[];
 }
 

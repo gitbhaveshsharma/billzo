@@ -191,6 +191,7 @@ export default function POSOrdersPage() {
             return_reason: string;
             return_notes?: string;
             refund_method?: string;
+            refund_tax?: boolean;
             items: Array<{
                 sale_item_id: string;
                 product_id: string;

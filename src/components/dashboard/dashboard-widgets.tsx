@@ -125,7 +125,7 @@ export function TopProductsTable({
           <div className="divide-y divide-border">
             {products.map((product, i) => (
               <div
-                key={product.product_code}
+                key={`${product.product_code}-${i}`}
                 className="flex items-center gap-3 px-6 py-3 hover:bg-muted/50 transition-colors"
               >
                 <span className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-xs font-bold text-muted-foreground shrink-0">

@@ -14,6 +14,7 @@ export { CancelSaleDialog } from "./cancel-sale-dialog";
 export { ProcessReturnDialog } from "./process-return-dialog";
 export { ReturnApprovalDialog } from "./return-approval-dialog";
 export { ReturnsTable } from "./returns-table";
+export { RefundStats } from "./refund-stats";
 export { ReceiptView } from "./receipt-view";
 export { ProductSearchBar } from "./product-search-bar";
 export { CartPanel } from "./cart-panel";
