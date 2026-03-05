@@ -333,7 +333,26 @@ export async function middleware(request: NextRequest) {
 
   if (isOnboardingPage) {
     // ✅ FIX: Completed users should never be on onboarding pages
+    //    EXCEPT: if store is pending and user is already on /pending-approval,
+    //    allow them to stay — otherwise we loop between dashboard (which
+    //    redirects pending stores here) and this block (which pushes them back).
     if (onboarding.is_onboarding_complete) {
+      const isPendingApprovalPage = pathname === redirects.pendingStore;
+      const storePending = onboarding.store_status === "pending";
+
+      if (storePending && isPendingApprovalPage) {
+        log("info", "Store pending — allowing /pending-approval", {
+          path: pathname,
+          userId: user.id,
+        });
+        const pendingResponse = stamp(getResponse(), {
+          "X-Middleware-Result": "pending-approval-allowed",
+          "X-User-Id": user.id,
+        });
+        cacheResponse(user.id, pathname, pendingResponse);
+        return pendingResponse;
+      }
+
       const target = onboarding.redirect_to || redirects.afterAuth;
       log("info", "Onboarding complete → redirect away from onboarding page", {
         path: pathname,

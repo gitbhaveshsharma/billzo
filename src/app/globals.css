@@ -84,7 +84,7 @@
   --success-foreground: hsl(0 0% 100%);
   --warning: hsl(38 92% 48%);
   --warning-foreground: hsl(38 50% 15%);
-  --info: hsl(199 89% 44%);
+  --info: hsl(216, 97%, 45%);
   --info-foreground: hsl(0 0% 100%);
 
   --border: hsl(216 28% 88%);

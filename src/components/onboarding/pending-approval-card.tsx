@@ -53,50 +53,50 @@ export function PendingApprovalCard() {
     useEffect(() => {
         const fetchStore = async () => {
             if (!isInitialized) {
-                console.log("⏳ [PENDING APPROVAL] Waiting for auth to initialize...");
+                // console.log("⏳ [PENDING APPROVAL] Waiting for auth to initialize...");
                 return;
             }
 
             if (store) {
-                console.log("⏳ [PENDING APPROVAL] Store already loaded", {
-                    storeId: store.id,
-                    storeName: store.name,
-                    status: store.status,
-                });
+                // console.log("⏳ [PENDING APPROVAL] Store already loaded", {
+                //     storeId: store.id,
+                //     storeName: store.name,
+                //     status: store.status,
+                // });
                 return;
             }
 
             const storeId = appUser?.storeId;
             if (!storeId) {
-                console.log("⏳ [PENDING APPROVAL] No storeId found, redirecting to create-store");
+                // console.log("⏳ [PENDING APPROVAL] No storeId found, redirecting to create-store");
                 toast.error("No store found. Please create a store.");
                 router.push(APP_CONFIG.routes.createStore);
                 return;
             }
 
-            console.log("⏳ [PENDING APPROVAL] Fetching store from database", { storeId });
+            // console.log("⏳ [PENDING APPROVAL] Fetching store from database", { storeId });
             setIsFetchingStore(true);
 
             try {
                 const { data, error } = await storeService.getById(storeId);
                 
                 if (error || !data) {
-                    console.error("❌ [PENDING APPROVAL] Failed to fetch store:", error);
+                    // console.error("❌ [PENDING APPROVAL] Failed to fetch store:", error);
                     toast.error("Failed to load store data");
                     router.push(APP_CONFIG.routes.createStore);
                     return;
                 }
 
-                console.log("✅ [PENDING APPROVAL] Store fetched successfully", {
-                    storeId: data.id,
-                    storeName: data.name,
-                    status: data.status,
-                });
+                // console.log("✅ [PENDING APPROVAL] Store fetched successfully", {
+                //     storeId: data.id,
+                //     storeName: data.name,
+                //     status: data.status,
+                // });
                 
                 setStore(data);
                 setStatus(data.status as ApprovalStatus);
             } catch (err) {
-                console.error("❌ [PENDING APPROVAL] Exception while fetching store:", err);
+                // console.error("❌ [PENDING APPROVAL] Exception while fetching store:", err);
                 toast.error("Failed to load store data");
                 router.push(APP_CONFIG.routes.createStore);
             } finally {
@@ -109,7 +109,7 @@ export function PendingApprovalCard() {
 
     const checkApprovalStatus = useCallback(async () => {
         if (!store?.id) {
-            console.log("⏳ [PENDING APPROVAL] No store ID available for polling");
+            // console.log("⏳ [PENDING APPROVAL] No store ID available for polling");
             return;
         }
 

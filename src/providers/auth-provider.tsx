@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             await authService.logout();
             logout();
-            console.log("User logged out");
+            // // console.log("User logged out");
             logAuthEvent("info", "User logged out");
         } catch (error) {
             logAuthEvent("error", "Logout failed", { error });
@@ -83,16 +83,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Get initial session
         const initSession = async () => {
             try {
-                console.log("🔄 [AuthProvider] Initializing session...");
+                // console.log("🔄 [AuthProvider] Initializing session...");
                 const {
                     data: { session },
                 } = await supabase.auth.getSession();
 
-                console.log("🔄 [AuthProvider] Session result:", {
-                    hasSession: !!session,
-                    hasUser: !!session?.user,
-                    userId: session?.user?.id,
-                });
+                // console.log("🔄 [AuthProvider] Session result:", {
+                //     hasSession: !!session,
+                //     hasUser: !!session?.user,
+                //     userId: session?.user?.id,
+                // });
 
                 if (!mounted) return;
 
@@ -101,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     setUser(session.user);
                     setSession(session);
 
-                    console.log("✅ [AuthProvider] Session restored from cookies");
+                    // console.log("✅ [AuthProvider] Session restored from cookies");
 
                     // Load profile in background
                     queueMicrotask(async () => {
@@ -109,12 +109,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         await loadAppUser();
                     });
                 } else {
-                    console.log("❌ [AuthProvider] No session found in cookies");
+                    // console.log("❌ [AuthProvider] No session found in cookies");
                     setUser(null);
                     setAppUser(null);
                 }
             } catch (error) {
-                console.error("❌ [AuthProvider] Error in initSession:", error);
+                // console.error("❌ [AuthProvider] Error in initSession:", error);
                 logAuthEvent("error", "Error in initSession", { error });
                 if (mounted) {
                     setUser(null);
