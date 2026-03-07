@@ -24,6 +24,8 @@ import {
     getAvatarColor,
     getRoleBadgeColor,
     getUserStatusBadge,
+    getEmploymentStatusBadgeColor,
+    getEmploymentStatusDisplayName,
     formatRelativeTime,
     formatDate,
 } from "@/utils/store-users.utils";
@@ -253,20 +255,35 @@ function EmployeeRow({
 
             {/* Status */}
             <TableCell>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Badge className={cn("text-xs cursor-default", status.color)} variant="outline">
-                            {status.text}
-                        </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        {user.is_banned
-                            ? `Banned: ${user.banned_reason || "No reason provided"}`
-                            : user.is_active
-                                ? "User is active and can log in"
-                                : "User is deactivated"}
-                    </TooltipContent>
-                </Tooltip>
+                <div className="flex flex-col gap-1">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Badge className={cn("text-xs cursor-default w-fit", status.color)} variant="outline">
+                                {status.text}
+                            </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            {user.is_banned
+                                ? `Banned: ${user.banned_reason || "No reason provided"}`
+                                : user.is_active
+                                    ? "User is active and can log in"
+                                    : "User is deactivated"}
+                        </TooltipContent>
+                    </Tooltip>
+                    {user.employment_status && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Badge
+                                    className={cn("text-xs cursor-default w-fit", getEmploymentStatusBadgeColor(user.employment_status))}
+                                    variant="outline"
+                                >
+                                    {getEmploymentStatusDisplayName(user.employment_status)}
+                                </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>Employment status</TooltipContent>
+                        </Tooltip>
+                    )}
+                </div>
             </TableCell>
 
             {/* Department (hidden on mobile) */}
