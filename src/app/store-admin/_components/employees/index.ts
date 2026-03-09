@@ -13,3 +13,5 @@ export {
     DeleteEmployeeDialog,
     BulkActionDialog,
 } from "./employee-action-dialogs";
+export { ManagePermissionsDialog } from "./manage-permissions-dialog";
+export { RolesPermissionsView } from "./roles-permissions";

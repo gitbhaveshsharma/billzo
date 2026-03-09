@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { useStoreAdmin } from "../../_context/store-admin-context";
 import { useInventoryStore } from "@/stores/inventory.store";
@@ -122,6 +123,41 @@ export default function StockPage() {
     const [detailPriceHistory, setDetailPriceHistory] = useState<PriceHistory[]>([]);
     const [isLoadingDetailTx, setIsLoadingDetailTx] = useState(false);
     const [isLoadingDetailPH, setIsLoadingDetailPH] = useState(false);
+
+    // ========================================================================
+    // URL FILTER PARAM — apply ?filter=... on first mount
+    // ========================================================================
+
+    const searchParams = useSearchParams();
+    const urlFilterApplied = useRef(false);
+
+    useEffect(() => {
+        if (urlFilterApplied.current) return;
+        const filter = searchParams.get("filter");
+        if (!filter) return;
+        urlFilterApplied.current = true;
+
+        const filterMap: Record<string, Partial<InventoryFilters>> = {
+            "out-of-stock": { out_of_stock_only: true },
+            "low-stock":    { low_stock_only: true },
+            "overstock":    { overstock_only: true },
+            // expiring/expired — no direct filter field; switch to Alerts tab
+            "expiring":     {},
+            "expired":      {},
+        };
+
+        if (filter === "expiring" || filter === "expired") {
+            setActiveTab("alerts");
+            return;
+        }
+
+        const mapped = filterMap[filter];
+        if (mapped) {
+            setInventoryFilters(mapped);
+        }
+    // Run once on mount; searchParams reference is stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // ========================================================================
     // DATA FETCHING

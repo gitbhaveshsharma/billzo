@@ -17,6 +17,7 @@ import {
     ResetAccessDialog,
     DeleteEmployeeDialog,
     BulkActionDialog,
+    ManagePermissionsDialog,
     type EmployeeAction,
 } from "../_components/employees";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
@@ -86,6 +87,7 @@ export default function EmployeesPage() {
     const [detailSheetOpen, setDetailSheetOpen] = useState(false);
     const [banDialogOpen, setBanDialogOpen] = useState(false);
     const [changeRoleDialogOpen, setChangeRoleDialogOpen] = useState(false);
+    const [managePermsDialogOpen, setManagePermsDialogOpen] = useState(false);
     const [resetAccessDialogOpen, setResetAccessDialogOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false);
@@ -145,6 +147,9 @@ export default function EmployeesPage() {
                     break;
                 case "edit-role":
                     setChangeRoleDialogOpen(true);
+                    break;
+                case "manage-permissions":
+                    setManagePermsDialogOpen(true);
                     break;
                 case "activate":
                     handleActivate(user);
@@ -489,6 +494,14 @@ export default function EmployeesPage() {
                 onOpenChange={setChangeRoleDialogOpen}
                 availableRoles={availableRoles}
                 onChangeRole={handleChangeRole}
+            />
+
+            {/* Manage Permissions */}
+            <ManagePermissionsDialog
+                user={selectedUser}
+                open={managePermsDialogOpen}
+                onOpenChange={setManagePermsDialogOpen}
+                onUpdateUser={handleUpdateUser}
             />
 
             {/* Reset Access */}

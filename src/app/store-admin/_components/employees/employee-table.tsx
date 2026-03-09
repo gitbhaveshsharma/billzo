@@ -50,6 +50,7 @@ export type EmployeeAction =
     | "view"
     | "edit"
     | "edit-role"
+    | "manage-permissions"
     | "activate"
     | "deactivate"
     | "ban"
