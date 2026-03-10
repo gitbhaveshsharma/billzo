@@ -776,6 +776,15 @@ export const storeUsersService = {
         try {
             const client = getClient();
 
+            // Guard: reject invalid employment_status before it hits the DB enum constraint
+            const VALID_EMP_STATUSES: EmploymentStatus[] = ["active", "probation", "notice_period", "terminated", "resigned", "absconded"];
+            if (updates.employment_status && !VALID_EMP_STATUSES.includes(updates.employment_status)) {
+                return {
+                    data: null,
+                    error: `Invalid employment_status "${updates.employment_status}". Valid values: ${VALID_EMP_STATUSES.join(", ")}`,
+                };
+            }
+
             const { data, error } = await client
                 .from("employees")
                 .update({
@@ -836,7 +845,9 @@ export const storeUsersService = {
                     email,
                     phone: data.phone || "",
                     employee_type: (data.employee_type as EmployeeType) || "full_time" as EmployeeType,
-                    employment_status: (data.employment_status as EmploymentStatus) || "probation" as EmploymentStatus,
+                    employment_status: (["active", "probation", "notice_period", "terminated", "resigned", "absconded"] as string[]).includes(data.employment_status ?? "")
+                        ? data.employment_status as EmploymentStatus
+                        : "probation" as EmploymentStatus,
                     joining_date: new Date().toISOString().slice(0, 10),
                     salary: data.salary,
                     pay_frequency: (data.pay_frequency as PayFrequency) || "monthly" as PayFrequency,
@@ -1143,7 +1154,7 @@ export const storeUsersService = {
                 total_users: suRows?.length ?? 0,
                 active_users: suRows?.filter((u) => u.is_active).length ?? 0,
                 banned_users: suRows?.filter((u) => u.is_banned).length ?? 0,
-                inactive_users: suRows?.filter((u) => !u.is_active).length ?? 0,
+                inactive_users: suRows?.filter((u) => !u.is_active && !u.is_banned).length ?? 0,
                 by_role: {} as Record<RoleName, number>,
                 by_department: {} as Record<string, number>,
                 by_employment_status: {} as Record<EmploymentStatus, number>,

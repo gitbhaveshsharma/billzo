@@ -13,6 +13,7 @@ import {
     Eye,
     Pencil,
     Shield,
+    ShieldPlus,
     UserCheck,
     UserX,
     Ban,
@@ -68,6 +69,11 @@ export function EmployeeRowActions({
                         <DropdownMenuItem onClick={() => onAction("edit-role")}>
                             <Shield className="mr-2 h-4 w-4" />
                             Change Role
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem onClick={() => onAction("manage-permissions")}>
+                            <ShieldPlus className="mr-2 h-4 w-4" />
+                            Manage Permissions
                         </DropdownMenuItem>
 
                         <DropdownMenuSeparator />

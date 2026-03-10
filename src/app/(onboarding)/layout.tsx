@@ -15,10 +15,10 @@ export default function OnboardingLayout({
     const user = useAuthStore((state) => state.user);
 
     useEffect(() => {
-        console.log("🎨 [ONBOARDING LAYOUT] Mounted", {
-            hasUser: !!user,
-            userEmail: user?.email,
-        });
+        // console.log("🎨 [ONBOARDING LAYOUT] Mounted", {
+        //     hasUser: !!user,
+        //     userEmail: user?.email,
+        // });
     }, [user]);
 
     return (

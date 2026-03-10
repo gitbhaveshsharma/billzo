@@ -216,7 +216,7 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
   {
     id: "admin-inventory",
     label: "Inventory",
-    href: "/store-admin/inventory",
+    href: "/store-admin/stock",
     icon: Package,
     shortcut: "Alt+I",
     roles: ["store_admin", "super_admin"],

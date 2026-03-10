@@ -89,7 +89,7 @@ export function StoreDashboard({
         icon: PackageX,
         action: {
           label: "View",
-          onClick: () => navigate(`${basePath}/inventory?filter=out-of-stock`),
+          onClick: () => navigate(`${basePath}/stock?filter=out-of-stock`),
         },
       });
     }
@@ -103,7 +103,7 @@ export function StoreDashboard({
         icon: ShieldAlert,
         action: {
           label: "Review",
-          onClick: () => navigate(`${basePath}/inventory?filter=expired`),
+          onClick: () => navigate(`${basePath}/stock?filter=expired`),
         },
       });
     }
@@ -117,7 +117,7 @@ export function StoreDashboard({
         icon: AlertTriangle,
         action: {
           label: "View",
-          onClick: () => navigate(`${basePath}/inventory?filter=low-stock`),
+          onClick: () => navigate(`${basePath}/stock?filter=low-stock`),
         },
       });
     }
@@ -452,7 +452,7 @@ export function StoreDashboard({
         label: "Inventory",
         description: "Manage stock",
         icon: Package,
-        href: `${basePath}/inventory`,
+        href: `${basePath}/stock`,
         color: "bg-violet-500",
       },
       {
@@ -626,7 +626,7 @@ export function StoreDashboard({
               items={lowStockAlerts}
               isLoading={data.isLoading}
               onViewAll={() =>
-                navigate(`${basePath}/inventory?filter=low-stock`)
+                navigate(`${basePath}/stock?filter=low-stock`)
               }
             />
 
@@ -782,7 +782,7 @@ export function StoreDashboard({
               isLoading={data.isLoading}
               maxItems={8}
               onViewAll={() =>
-                navigate(`${basePath}/inventory?filter=low-stock`)
+                navigate(`${basePath}/stock?filter=low-stock`)
               }
             />
 
@@ -793,7 +793,7 @@ export function StoreDashboard({
               isLoading={data.isLoading}
               maxItems={8}
               onViewAll={() =>
-                navigate(`${basePath}/inventory?filter=expiring`)
+                navigate(`${basePath}/stock?filter=expiring`)
               }
             />
           </div>
