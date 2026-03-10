@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { useStoreAdmin } from "../../_context/store-admin-context";
@@ -17,7 +17,6 @@ import {
     BatchesPanel,
     CreateBatchDialog,
     TransactionsPanel,
-    PriceHistoryPanel,
     StockCountDialog,
     AnalyticsPanel,
     InventoryDetailSheet,
@@ -34,7 +33,6 @@ import type {
     CreateProductBatchRequest,
     StockCountItem,
     InventoryFilters,
-    InventoryPagination,
     TransactionFilters,
     TransactionPagination,
     BatchFilters,
@@ -44,10 +42,10 @@ import type {
 } from "@/types/inventory.types";
 
 // ============================================================================
-// STOCK / INVENTORY PAGE
+// STOCK / INVENTORY PAGE — INNER CONTENT (uses useSearchParams)
 // ============================================================================
 
-export default function StockPage() {
+function StockPageContent() {
     const { storeId, isLoading: contextLoading } = useStoreAdmin();
 
     const {
@@ -58,7 +56,6 @@ export default function StockPage() {
         batches,
         alerts,
         unresolvedAlertCount,
-        priceHistory,
         valuationSummary,
         // Pagination/Filters
         inventoryFilters,
@@ -68,7 +65,6 @@ export default function StockPage() {
         transactionFilters,
         transactionPagination,
         totalTransactions,
-        totalTransactionPages,
         batchFilters,
         totalBatches,
         // UI state
@@ -102,7 +98,6 @@ export default function StockPage() {
         // Selection
         setSelectedItemIds,
         toggleItemSelection,
-        clearSelection,
     } = useInventoryStore();
 
     // ========================================================================
@@ -139,11 +134,11 @@ export default function StockPage() {
 
         const filterMap: Record<string, Partial<InventoryFilters>> = {
             "out-of-stock": { out_of_stock_only: true },
-            "low-stock":    { low_stock_only: true },
-            "overstock":    { overstock_only: true },
+            "low-stock": { low_stock_only: true },
+            "overstock": { overstock_only: true },
             // expiring/expired — no direct filter field; switch to Alerts tab
-            "expiring":     {},
-            "expired":      {},
+            "expiring": {},
+            "expired": {},
         };
 
         if (filter === "expiring" || filter === "expired") {
@@ -155,8 +150,8 @@ export default function StockPage() {
         if (mapped) {
             setInventoryFilters(mapped);
         }
-    // Run once on mount; searchParams reference is stable
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // Run once on mount; searchParams reference is stable
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // ========================================================================
@@ -442,7 +437,7 @@ export default function StockPage() {
 
     if (contextLoading) {
         return (
-            <div className="flex items-center justify-center min-h-[400px]">
+            <div className="flex items-center justify-center">
                 <LoadingSpinner size="lg" text="Loading..." />
             </div>
         );
@@ -667,5 +662,24 @@ export default function StockPage() {
                 }}
             />
         </div>
+    );
+}
+
+// ============================================================================
+// DEFAULT EXPORT — wraps content in Suspense to satisfy Next.js requirement
+// for useSearchParams() during static prerendering
+// ============================================================================
+
+export default function StockPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex items-center justify-center ">
+                    <LoadingSpinner size="lg" text="Loading..." />
+                </div>
+            }
+        >
+            <StockPageContent />
+        </Suspense>
     );
 }
