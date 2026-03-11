@@ -753,28 +753,6 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
     icon: ClipboardList,
     shortcut: "Alt+U",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-    children: [
-      {
-        id: "inv-po-new",
-        label: "New Order",
-        href: "/inventory/purchase-orders/new",
-        roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-        shortcut: "Alt+N",
-      },
-      {
-        id: "inv-po-active",
-        label: "Active Orders",
-        href: "/inventory/purchase-orders",
-        roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-        shortcut: "Alt+O",
-      },
-      {
-        id: "inv-po-receiving",
-        label: "Receiving",
-        href: "/inventory/purchase-orders/receiving",
-        roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-      },
-    ],
   },
   {
     id: "inv-suppliers",

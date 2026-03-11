@@ -4,3 +4,4 @@ export * from "./stat-card";
 export * from "./dashboard-charts";
 export * from "./dashboard-widgets";
 export { StoreDashboard } from "./store-dashboard";
+export { InventoryDashboard } from "./inventory-dashboard";

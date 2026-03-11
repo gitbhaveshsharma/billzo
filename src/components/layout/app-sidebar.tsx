@@ -65,7 +65,7 @@ export function AppSidebar({ items, pageTitle, pageSubtitle }: AppSidebarProps) 
       {/* Sidebar Header — Branding */}
       <SidebarHeader className="border-b px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Store className="h-4 w-4" />
           </div>
           <div className="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
@@ -100,13 +100,15 @@ export function AppSidebar({ items, pageTitle, pageSubtitle }: AppSidebarProps) 
                           isActive={isActive(item.href)}
                           tooltip={item.label}
                           className={cn(
-                            "transition-all duration-200",
+                            // ✅ FIX: h-auto + min-h + py allow the button to grow
+                            // for two-line labels instead of clipping them
+                            "transition-all duration-200 h-auto min-h-8 py-1.5 items-center",
                             isActive(item.href) && "bg-primary/10 font-medium"
                           )}
                         >
-                          <Link href={item.href}>
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.label}</span>
+                          <Link href={item.href} className="flex items-center gap-2 w-full">
+                            <item.icon className="h-4 w-4 shrink-0" />
+                            <span className="leading-snug">{item.label}</span>
                             {item.shortcut && (
                               <ShortcutBadge shortcut={item.shortcut} />
                             )}
@@ -160,7 +162,7 @@ export function AppSidebar({ items, pageTitle, pageSubtitle }: AppSidebarProps) 
               className="cursor-default hover:bg-transparent data-[state=open]:bg-transparent"
               tooltip={appUser?.fullName ?? "User"}
             >
-              <Avatar className="h-7 w-7">
+              <Avatar className="h-7 w-7 shrink-0">
                 <AvatarFallback className="text-xs bg-primary/10 text-primary">
                   {userInitials}
                 </AvatarFallback>
@@ -204,16 +206,18 @@ function CollapsibleNavItem({
             tooltip={item.label}
             isActive={isActiveParent}
             className={cn(
-              "transition-all duration-200",
+              // ✅ FIX: h-auto + min-h + py allow the trigger button to grow
+              // for two-line labels without clipping or overlapping
+              "transition-all duration-200 h-auto min-h-8 py-1.5 items-center",
               isActiveParent && "bg-primary/10 font-medium"
             )}
           >
-            <item.icon className="h-4 w-4" />
-            <span>{item.label}</span>
+            <item.icon className="h-4 w-4 shrink-0" />
+            <span className="leading-snug">{item.label}</span>
             {item.shortcut && (
               <ShortcutBadge shortcut={item.shortcut} />
             )}
-            <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+            <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
           </SidebarMenuButton>
         </CollapsibleTrigger>
         <CollapsibleContent>
@@ -224,13 +228,14 @@ function CollapsibleNavItem({
                   asChild
                   isActive={isActiveFn(child.href)}
                   className={cn(
-                    "transition-all duration-200",
-                    isActiveFn(child.href) && "bg-primary/10 font-medium  "
+                    // ✅ FIX: same treatment for sub-items
+                    "transition-all duration-200 h-auto min-h-7 py-1.5 items-center",
+                    isActiveFn(child.href) && "bg-primary/10 font-medium"
                   )}
                 >
-                  <Link href={child.href} className="flex items-center gap-2 ">
-                    {child.icon && <child.icon className="h-3.5 w-3.5" />}
-                    <span>{child.label}</span>
+                  <Link href={child.href} className="flex items-center gap-2 w-full">
+                    {child.icon && <child.icon className="h-3.5 w-3.5 shrink-0" />}
+                    <span className="leading-snug">{child.label}</span>
                     {child.shortcut && (
                       <ShortcutBadge shortcut={child.shortcut} />
                     )}
@@ -248,7 +253,6 @@ function CollapsibleNavItem({
 // ============================================================================
 // ShortcutBadge — displays keyboard shortcut hint next to sidebar labels
 // ============================================================================
-
 
 function ShortcutBadge({ shortcut }: { shortcut: string }) {
   return (
