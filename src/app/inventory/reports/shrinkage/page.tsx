@@ -63,7 +63,7 @@ export default function ShrinkageReportPage() {
 
     setTransactionFilters({ transaction_type: typeFilter });
     setTransactionPagination({ page: 1 });
-    fetchTransactions(storeId, true);
+    fetchTransactions(storeId);
   }, [storeId, activeTab, setTransactionFilters, setTransactionPagination, fetchTransactions]);
 
   // ── Filtered data (shrinkage only) ────────────────────────────────────
@@ -124,7 +124,7 @@ export default function ShrinkageReportPage() {
     (partial: Partial<TransactionFilters>) => {
       setTransactionFilters(partial);
       setTransactionPagination({ page: 1 });
-      if (storeId) fetchTransactions(storeId, true);
+      if (storeId) fetchTransactions(storeId);
     },
     [storeId, setTransactionFilters, setTransactionPagination, fetchTransactions]
   );
@@ -132,7 +132,7 @@ export default function ShrinkageReportPage() {
   const handlePaginationChange = useCallback(
     (partial: Partial<TransactionPagination>) => {
       setTransactionPagination(partial);
-      if (storeId) fetchTransactions(storeId, true);
+      if (storeId) fetchTransactions(storeId);
     },
     [storeId, setTransactionPagination, fetchTransactions]
   );

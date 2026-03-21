@@ -400,7 +400,7 @@ function StockPageContent() {
   // ========================================================================
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
+    <div className="space-y-6 p-4 sm:p-6 lg:p-8 w-full min-w-0 max-w-full overflow-x-hidden">
       {/* Page Header */}
       <div>
         <div className="flex items-center gap-2">
@@ -419,7 +419,7 @@ function StockPageContent() {
       />
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
         <TabsList className="flex flex-wrap h-auto gap-1">
           <TabsTrigger value="stock">Stock List</TabsTrigger>
           <TabsTrigger value="transactions">Transactions</TabsTrigger>
@@ -473,7 +473,7 @@ function StockPageContent() {
         </TabsContent>
 
         {/* Transactions Tab */}
-        <TabsContent value="transactions" className="mt-4">
+        <TabsContent value="transactions" className="mt-4 w-full min-w-0 max-w-full">
           <TransactionsPanel
             transactions={transactions}
             total={totalTransactions}

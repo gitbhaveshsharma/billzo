@@ -5,7 +5,6 @@ import toast from "react-hot-toast";
 import {
     Sheet,
     SheetContent,
-    SheetDescription,
     SheetHeader,
     SheetTitle,
 } from "@/components/ui/sheet";
@@ -418,7 +417,7 @@ export function SupplierDetailSheet({
                                     <Star className="h-4 w-4 fill-amber-400 text-amber-400 flex-shrink-0" />
                                 )}
                             </SheetTitle>
-                            <SheetDescription className="flex items-center gap-2 mt-1">
+                            <div className="text-muted-foreground text-sm flex items-center gap-2 mt-1">
                                 <span>#{supplier.supplier_code}</span>
                                 <Badge className={cn("text-[10px]", typeBadgeColor)} variant="outline">
                                     {getSupplierTypeLabel(supplier.type)}
@@ -426,7 +425,7 @@ export function SupplierDetailSheet({
                                 <Badge className={cn("text-[10px]", status.color)} variant="outline">
                                     {status.label}
                                 </Badge>
-                            </SheetDescription>
+                            </div>
                         </div>
                     </div>
                 </SheetHeader>

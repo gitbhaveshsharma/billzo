@@ -17,11 +17,18 @@ import {
   InventoryToolbar,
   InventoryPagination as InventoryPaginationComponent,
   StockAdjustmentDialog,
+  StockTransferDialog,
+  EditInventoryDialog,
+  InventoryDetailSheet,
   type InventoryAction,
 } from "@/app/store-admin/_components/stock";
 import { InfoTooltip } from "@/components/shared/info-tooltip";
 import type {
   CreateStockAdjustmentRequest,
+  CreateStockTransferRequest,
+  UpdateInventoryRecordRequest,
+  InventoryTransaction,
+  PriceHistory,
   EnrichedInventoryRecord,
   InventoryFilters,
 } from "@/types/inventory.types";
@@ -43,15 +50,26 @@ export default function StockAdjustmentPage() {
     isLoading,
     isSaving,
     fetchInventory,
+    fetchProductTransactions,
+    fetchPriceHistory,
     setInventoryFilters,
     setInventoryPagination,
     createStockAdjustment,
+    createStockTransfer,
+    updateInventoryRecord,
     toggleItemSelection,
     setSelectedItemIds,
   } = useInventoryStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<EnrichedInventoryRecord | null>(null);
+  const [detailTransactions, setDetailTransactions] = useState<InventoryTransaction[]>([]);
+  const [detailPriceHistory, setDetailPriceHistory] = useState<PriceHistory[]>([]);
+  const [isLoadingDetailTx, setIsLoadingDetailTx] = useState(false);
+  const [isLoadingDetailPH, setIsLoadingDetailPH] = useState(false);
 
   // ========================================================================
   // DATA FETCHING
@@ -91,12 +109,56 @@ export default function StockAdjustmentPage() {
 
   const handleAction = useCallback(
     (action: InventoryAction, item: EnrichedInventoryRecord) => {
-      if (action === "adjust") {
-        setSelectedItem(item);
-        setDialogOpen(true);
+      setSelectedItem(item);
+      switch (action) {
+        case "view":
+        case "history":
+          void openDetailSheet(item);
+          break;
+        case "edit":
+          setEditDialogOpen(true);
+          break;
+        case "adjust":
+          setDialogOpen(true);
+          break;
+        case "transfer":
+          setTransferDialogOpen(true);
+          break;
       }
     },
-    [],
+    [storeId, fetchProductTransactions, fetchPriceHistory],
+  );
+
+  const openDetailSheet = useCallback(
+    async (item: EnrichedInventoryRecord) => {
+      setSelectedItem(item);
+      setDetailSheetOpen(true);
+      setDetailTransactions([]);
+      setDetailPriceHistory([]);
+
+      if (!storeId) return;
+
+      setIsLoadingDetailTx(true);
+      try {
+        const txs = await fetchProductTransactions(storeId, item.product_id);
+        setDetailTransactions(txs);
+      } catch {
+        // Non-blocking in detail sheet
+      } finally {
+        setIsLoadingDetailTx(false);
+      }
+
+      setIsLoadingDetailPH(true);
+      try {
+        const ph = await fetchPriceHistory(storeId, item.product_id, item.variant_id ?? undefined);
+        setDetailPriceHistory(ph);
+      } catch {
+        // Non-blocking in detail sheet
+      } finally {
+        setIsLoadingDetailPH(false);
+      }
+    },
+    [storeId, fetchProductTransactions, fetchPriceHistory],
   );
 
   const handleAdjustment = useCallback(
@@ -117,6 +179,46 @@ export default function StockAdjustmentPage() {
       }
     },
     [storeId, createStockAdjustment, fetchInventory],
+  );
+
+  const handleTransfer = useCallback(
+    async (data: CreateStockTransferRequest): Promise<boolean> => {
+      if (!storeId) return false;
+      try {
+        const result = await createStockTransfer(storeId, data);
+        if (result) {
+          toast.success("Stock transfer completed");
+          fetchInventory(storeId, true);
+          return true;
+        }
+        toast.error("Failed to complete transfer");
+        return false;
+      } catch {
+        toast.error("Failed to complete transfer");
+        return false;
+      }
+    },
+    [storeId, createStockTransfer, fetchInventory],
+  );
+
+  const handleUpdateRecord = useCallback(
+    async (inventoryId: string, data: UpdateInventoryRecordRequest): Promise<boolean> => {
+      if (!storeId) return false;
+      try {
+        const success = await updateInventoryRecord(storeId, inventoryId, data);
+        if (success) {
+          toast.success("Inventory settings updated");
+          fetchInventory(storeId, true);
+          return true;
+        }
+        toast.error("Failed to update inventory settings");
+        return false;
+      } catch {
+        toast.error("Failed to update inventory settings");
+        return false;
+      }
+    },
+    [storeId, updateInventoryRecord, fetchInventory],
   );
 
   // ========================================================================
@@ -158,8 +260,13 @@ export default function StockAdjustmentPage() {
                 setDialogOpen(true);
               }
             }}
-            onTransfer={() => {}}
-            onStockCount={() => {}}
+            onTransfer={() => {
+              setSelectedItem(null);
+              setTransferDialogOpen(true);
+            }}
+            onStockCount={() => {
+              // No stock count dialog in this page
+            }}
             isLoading={isLoading}
           />
 
@@ -194,6 +301,56 @@ export default function StockAdjustmentPage() {
         item={selectedItem}
         onSubmit={handleAdjustment}
         isSaving={isSaving}
+      />
+
+      <StockTransferDialog
+        open={transferDialogOpen}
+        onOpenChange={(open) => {
+          setTransferDialogOpen(open);
+          if (!open) setSelectedItem(null);
+        }}
+        item={selectedItem}
+        onSubmit={handleTransfer}
+        isSaving={isSaving}
+      />
+
+      <EditInventoryDialog
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) setSelectedItem(null);
+        }}
+        item={selectedItem}
+        onSubmit={handleUpdateRecord}
+        isSaving={isSaving}
+      />
+
+      <InventoryDetailSheet
+        open={detailSheetOpen}
+        onOpenChange={(open) => {
+          setDetailSheetOpen(open);
+          if (!open) {
+            setDetailTransactions([]);
+            setDetailPriceHistory([]);
+          }
+        }}
+        item={selectedItem}
+        recentTransactions={detailTransactions}
+        priceHistory={detailPriceHistory}
+        isLoadingTransactions={isLoadingDetailTx}
+        isLoadingPriceHistory={isLoadingDetailPH}
+        onAdjust={() => {
+          setDetailSheetOpen(false);
+          setDialogOpen(true);
+        }}
+        onTransfer={() => {
+          setDetailSheetOpen(false);
+          setTransferDialogOpen(true);
+        }}
+        onEdit={() => {
+          setDetailSheetOpen(false);
+          setEditDialogOpen(true);
+        }}
       />
     </div>
   );
