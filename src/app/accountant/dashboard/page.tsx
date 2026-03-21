@@ -375,11 +375,7 @@ export default function AccountantDashboardPage() {
 
       {/* Alerts */}
       {alerts.length > 0 && (
-        <div className="space-y-2">
-          {alerts.map((a) => (
-            <AlertBanner key={a.id} alert={a} />
-          ))}
-        </div>
+        <AlertBanner alerts={alerts} />
       )}
 
       {/* Revenue & Financial KPIs */}
@@ -402,7 +398,7 @@ export default function AccountantDashboardPage() {
           formatter={formatCurrency}
           isLoading={isLoading}
         />
-        <QuickActions actions={quickActions} />
+        <QuickActions actions={quickActions} onNavigate={(href) => router.push(href)} />
       </div>
 
       {/* Purchase Overview */}
