@@ -933,6 +933,7 @@ export function CreatePODialog({
             <POItemDialog
                 open={itemDialogOpen}
                 onOpenChange={setItemDialogOpen}
+                storeId={storeId}
                 editItem={editingItem}
                 editIndex={editingIndex}
                 onSave={handleItemSave}

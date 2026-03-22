@@ -738,12 +738,12 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
         roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
         shortcut: "Alt+Shift+L",
       },
-      {
-        id: "inv-stock-transfer",
-        label: "Stock Transfer",
-        href: "/inventory/stock/transfer",
-        roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-      },
+      // {
+      //   id: "inv-stock-transfer",
+      //   label: "Stock Transfer",
+      //   href: "/inventory/stock/transfer",
+      //   roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+      // },
     ],
   },
   {
@@ -753,28 +753,6 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
     icon: ClipboardList,
     shortcut: "Alt+U",
     roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-    children: [
-      {
-        id: "inv-po-new",
-        label: "New Order",
-        href: "/inventory/purchase-orders/new",
-        roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-        shortcut: "Alt+N",
-      },
-      {
-        id: "inv-po-active",
-        label: "Active Orders",
-        href: "/inventory/purchase-orders",
-        roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-        shortcut: "Alt+O",
-      },
-      {
-        id: "inv-po-receiving",
-        label: "Receiving",
-        href: "/inventory/purchase-orders/receiving",
-        roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-      },
-    ],
   },
   {
     id: "inv-suppliers",
@@ -809,29 +787,29 @@ const INVENTORY_SIDEBAR_ITEMS: SidebarItem[] = [
       },
     ],
   },
-  {
-    id: "inv-audits",
-    label: "Audits & Adjustments",
-    href: "/inventory/audits",
-    icon: PackageSearch,
-    shortcut: "Alt+A",
-    roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-    children: [
-      {
-        id: "inv-audits-count",
-        label: "Physical Count",
-        href: "/inventory/audits/count",
-        roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-        shortcut: "Alt+Shift+A",
-      },
-      {
-        id: "inv-audits-adjust",
-        label: "Stock Adjustment",
-        href: "/inventory/audits/adjust",
-        roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
-      },
-    ],
-  },
+  // {
+  //   id: "inv-audits",
+  //   label: "Audits & Adjustments",
+  //   href: "/inventory/audits",
+  //   icon: PackageSearch,
+  //   shortcut: "Alt+A",
+  //   roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+  //   children: [
+  //     {
+  //       id: "inv-audits-count",
+  //       label: "Physical Count",
+  //       href: "/inventory/audits/count",
+  //       roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+  //       shortcut: "Alt+Shift+A",
+  //     },
+  //     {
+  //       id: "inv-audits-adjust",
+  //       label: "Stock Adjustment",
+  //       href: "/inventory/audits/adjust",
+  //       roles: ["inventory_manager", "manager", "store_admin", "super_admin"],
+  //     },
+  //   ],
+  // },
 ];
 
 // ============================================================================

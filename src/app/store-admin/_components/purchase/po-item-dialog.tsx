@@ -37,7 +37,6 @@ import { createPurchaseOrderItemSchema } from "@/validations/purchase.validation
 import type { CreatePurchaseOrderItemFormData } from "@/validations/purchase.validation";
 import { calculateItemTotals, formatCurrency, generateSKU, generateBatchNumber } from "@/utils/purchase.utils";
 import { useProductStore } from "@/stores/product.store";
-import { useStoreAdmin } from "../../_context/store-admin-context";
 
 // ============================================================================
 // TYPES
@@ -51,6 +50,7 @@ export interface POItemDialogItem extends CreatePurchaseOrderItemFormData {
 interface POItemDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    storeId: string;
     /** If provided, dialog is in edit mode */
     editItem?: POItemDialogItem | null;
     editIndex?: number | null;
@@ -125,12 +125,12 @@ const DEFAULT_VALUES: CreatePurchaseOrderItemFormData = {
 export function POItemDialog({
     open,
     onOpenChange,
+    storeId,
     editItem,
     editIndex,
     onSave,
     isInterState = false,
 }: POItemDialogProps) {
-    const { storeId } = useStoreAdmin();
     const { units, fetchUnits, lookupByBarcode } = useProductStore();
 
     const {

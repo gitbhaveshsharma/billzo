@@ -96,10 +96,10 @@ export function TransactionsPanel({
     );
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 w-full min-w-0 max-w-full">
             {/* Toolbar */}
-            <div className="flex flex-wrap items-center gap-3">
-                <div className="relative flex-1 max-w-xs">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto]">
+                <div className="relative min-w-0">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                         className="pl-8"
@@ -117,7 +117,7 @@ export function TransactionsPanel({
                         })
                     }
                 >
-                    <SelectTrigger className="w-44">
+                    <SelectTrigger className="w-full">
                         <SelectValue placeholder="Transaction Type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -130,11 +130,11 @@ export function TransactionsPanel({
                     </SelectContent>
                 </Select>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                     <Filter className="h-4 w-4 text-muted-foreground" />
                     <Input
                         type="date"
-                        className="w-36"
+                        className="w-full sm:w-40"
                         value={filters.date_from ?? ""}
                         onChange={(e) =>
                             onFiltersChange({ date_from: e.target.value || undefined })
@@ -144,7 +144,7 @@ export function TransactionsPanel({
                     <span className="text-muted-foreground text-sm">to</span>
                     <Input
                         type="date"
-                        className="w-36"
+                        className="w-full sm:w-40"
                         value={filters.date_to ?? ""}
                         onChange={(e) =>
                             onFiltersChange({ date_to: e.target.value || undefined })
@@ -154,148 +154,152 @@ export function TransactionsPanel({
                 </div>
             </div>
 
-            {/* Table */}
-            <div className="rounded-md border">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Product</TableHead>
-                            <TableHead className="text-right">Qty</TableHead>
-                            <TableHead className="text-right">Previous</TableHead>
-                            <TableHead className="text-right">New</TableHead>
-                            <TableHead className="text-right">Cost</TableHead>
-                            <TableHead>Reference</TableHead>
-                            <TableHead>Batch</TableHead>
-                            <TableHead>Location</TableHead>
-                            <TableHead>Reason</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading ? (
-                            <TransactionTableSkeleton />
-                        ) : transactions.length === 0 ? (
+            {/* Table — scrolls horizontally instead of overflowing the page */}
+            <div className="rounded-md border max-w-full overflow-hidden">
+                <div className="w-full max-w-full overflow-x-auto overscroll-x-contain">
+                    <Table className="min-w-[900px]">
+                        <TableHeader>
                             <TableRow>
-                                <TableCell colSpan={11}>
-                                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                                        <ArrowDownUp className="h-10 w-10 mb-2" />
-                                        <p className="font-medium">No transactions found</p>
-                                        <p className="text-sm">
-                                            Adjust the filters to see transaction history.
-                                        </p>
-                                    </div>
-                                </TableCell>
+                                <TableHead className="whitespace-nowrap">Date</TableHead>
+                                <TableHead className="whitespace-nowrap">Type</TableHead>
+                                <TableHead className="whitespace-nowrap">Product</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">Qty</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">Previous</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">New</TableHead>
+                                <TableHead className="text-right whitespace-nowrap">Cost</TableHead>
+                                <TableHead className="whitespace-nowrap">Reference</TableHead>
+                                <TableHead className="whitespace-nowrap">Batch</TableHead>
+                                <TableHead className="whitespace-nowrap">Location</TableHead>
+                                <TableHead className="whitespace-nowrap">Reason</TableHead>
                             </TableRow>
-                        ) : (
-                            transactions.map((tx) => {
-                                const sign = getTransactionSign(tx.transaction_type);
-                                return (
-                                    <TableRow key={tx.id}>
-                                        <TableCell className="text-sm whitespace-nowrap">
-                                            <div>
-                                                <p>{formatDate(tx.transaction_date)}</p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    {formatRelativeTime(tx.transaction_date)}
-                                                </p>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge
-                                                variant="outline"
-                                                className={getTransactionTypeColor(tx.transaction_type)}
-                                            >
-                                                {getTransactionTypeLabel(tx.transaction_type)}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <Package className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                <div className="min-w-0">
-                                                    <p className="font-medium truncate max-w-[150px]">
-                                                        {tx.product?.name ?? "Unknown"}
-                                                    </p>
-                                                    {tx.variant && (
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {tx.variant.variant_code}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono">
-                                            <span
-                                                className={
-                                                    sign === "+"
-                                                        ? "text-green-600"
-                                                        : sign === "-"
-                                                        ? "text-red-600"
-                                                        : "text-blue-600"
-                                                }
-                                            >
-                                                {sign}
-                                                {formatQuantity(Math.abs(tx.quantity))}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono text-muted-foreground">
-                                            {tx.previous_quantity != null
-                                                ? formatQuantity(tx.previous_quantity)
-                                                : "-"}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono">
-                                            {tx.new_quantity != null
-                                                ? formatQuantity(tx.new_quantity)
-                                                : "-"}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono">
-                                            {tx.total_cost != null
-                                                ? formatCurrency(tx.total_cost)
-                                                : "-"}
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                            {tx.reference_number ? (
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
+                                <TransactionTableSkeleton />
+                            ) : transactions.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={11}>
+                                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                                            <ArrowDownUp className="h-10 w-10 mb-2" />
+                                            <p className="font-medium">No transactions found</p>
+                                            <p className="text-sm">
+                                                Adjust the filters to see transaction history.
+                                            </p>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                transactions.map((tx) => {
+                                    const sign = getTransactionSign(tx.transaction_type);
+                                    return (
+                                        <TableRow key={tx.id}>
+                                            <TableCell className="text-sm whitespace-nowrap">
                                                 <div>
-                                                    <p className="font-mono text-xs">
-                                                        {tx.reference_number}
+                                                    <p>{formatDate(tx.transaction_date)}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {formatRelativeTime(tx.transaction_date)}
                                                     </p>
-                                                    {tx.reference_type && (
-                                                        <p className="text-xs text-muted-foreground capitalize">
-                                                            {tx.reference_type.toLowerCase().replace(/_/g, " ")}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge
+                                                    variant="outline"
+                                                    className={getTransactionTypeColor(tx.transaction_type)}
+                                                >
+                                                    {getTransactionTypeLabel(tx.transaction_type)}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                    <div className="min-w-0">
+                                                        <p className="font-medium truncate max-w-[150px]">
+                                                            {tx.product?.name ?? "Unknown"}
                                                         </p>
-                                                    )}
+                                                        {tx.variant && (
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {tx.variant.variant_code}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            ) : (
-                                                "-"
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-sm font-mono">
-                                            {tx.batch_number ?? "-"}
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                            {tx.from_location && tx.to_location ? (
-                                                <div className="text-xs">
-                                                    <p>{tx.from_location}</p>
-                                                    <p className="text-muted-foreground">
-                                                        → {tx.to_location}
-                                                    </p>
-                                                </div>
-                                            ) : tx.to_location ? (
-                                                tx.to_location
-                                            ) : tx.from_location ? (
-                                                tx.from_location
-                                            ) : (
-                                                "-"
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground max-w-[120px] truncate">
-                                            {tx.reason ?? "-"}
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })
-                        )}
-                    </TableBody>
-                </Table>
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono whitespace-nowrap">
+                                                <span
+                                                    className={
+                                                        sign === "+"
+                                                            ? "text-green-600"
+                                                            : sign === "-"
+                                                            ? "text-red-600"
+                                                            : "text-blue-600"
+                                                    }
+                                                >
+                                                    {sign}
+                                                    {formatQuantity(Math.abs(tx.quantity))}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono text-muted-foreground whitespace-nowrap">
+                                                {tx.previous_quantity != null
+                                                    ? formatQuantity(tx.previous_quantity)
+                                                    : "-"}
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono whitespace-nowrap">
+                                                {tx.new_quantity != null
+                                                    ? formatQuantity(tx.new_quantity)
+                                                    : "-"}
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono whitespace-nowrap">
+                                                {tx.total_cost != null
+                                                    ? formatCurrency(tx.total_cost)
+                                                    : "-"}
+                                            </TableCell>
+                                            <TableCell className="text-sm whitespace-nowrap">
+                                                {tx.reference_number ? (
+                                                    <div className="max-w-[220px]">
+                                                        <p className="font-mono text-xs truncate">
+                                                            {tx.reference_number}
+                                                        </p>
+                                                        {tx.reference_type && (
+                                                            <p className="text-xs text-muted-foreground capitalize truncate">
+                                                                {tx.reference_type.toLowerCase().replace(/_/g, " ")}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    "-"
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-sm font-mono whitespace-nowrap max-w-[180px]">
+                                                <span className="block truncate">
+                                                    {tx.batch_number ?? "-"}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="text-sm whitespace-nowrap">
+                                                {tx.from_location && tx.to_location ? (
+                                                    <div className="text-xs">
+                                                        <p>{tx.from_location}</p>
+                                                        <p className="text-muted-foreground">
+                                                            → {tx.to_location}
+                                                        </p>
+                                                    </div>
+                                                ) : tx.to_location ? (
+                                                    tx.to_location
+                                                ) : tx.from_location ? (
+                                                    tx.from_location
+                                                ) : (
+                                                    "-"
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-sm text-muted-foreground max-w-[120px] truncate">
+                                                {tx.reason ?? "-"}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </div>
 
             {/* Pagination */}

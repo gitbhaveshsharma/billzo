@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LayoutShell } from "@/components/layout/layout-shell";
+import { AccountantLayoutClient } from "./accountant-layout-client";
 
 export const metadata: Metadata = {
     title: "Accountant Dashboard",
@@ -11,5 +11,5 @@ export default function AccountantLayout({
 }: {
     children: React.ReactNode;
 }) {
-    return <LayoutShell>{children}</LayoutShell>;
+    return <AccountantLayoutClient>{children}</AccountantLayoutClient>;
 }

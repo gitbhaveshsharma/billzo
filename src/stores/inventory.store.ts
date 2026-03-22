@@ -28,6 +28,23 @@ import type {
     InventoryValuationSummary,
 } from "@/types/inventory.types";
 
+type TransactionListCacheEntry = {
+    data: EnrichedInventoryTransaction[];
+    total: number;
+    totalPages: number;
+    fetchedAt: number;
+};
+
+const inFlightTransactionListRequests = new Map<string, Promise<ReturnType<typeof inventoryService.getTransactions> extends Promise<infer T> ? T : never>>();
+
+function getTransactionListCacheKey(
+    storeId: string,
+    filters: TransactionFilters,
+    pagination: TransactionPagination
+) {
+    return `${storeId}::${JSON.stringify(filters)}::${JSON.stringify(pagination)}`;
+}
+
 // ============================================================================
 // STATE INTERFACE
 // ============================================================================
@@ -86,6 +103,7 @@ interface InventoryState {
     lastFetch: number | null;
     cacheTimeout: number;
     transactionCache: Map<string, { data: EnrichedInventoryTransaction[]; fetchedAt: number }>;
+    transactionListCache: Map<string, TransactionListCacheEntry>;
     batchCache: Map<string, { data: EnrichedProductBatch[]; fetchedAt: number }>;
     priceHistoryCache: Map<string, { data: PriceHistory[]; fetchedAt: number }>;
 
@@ -147,6 +165,7 @@ interface InventoryState {
     // Actions - Cache
     invalidateCache: () => void;
     clearTransactionCache: (productId?: string) => void;
+    clearTransactionListCache: () => void;
     clearBatchCache: (productId?: string) => void;
     clearPriceHistoryCache: (productId?: string) => void;
 
@@ -212,6 +231,7 @@ const initialState = {
     lastFetch: null as number | null,
     cacheTimeout: 5 * 60 * 1000, // 5 minutes
     transactionCache: new Map() as Map<string, { data: EnrichedInventoryTransaction[]; fetchedAt: number }>,
+    transactionListCache: new Map() as Map<string, TransactionListCacheEntry>,
     batchCache: new Map() as Map<string, { data: EnrichedProductBatch[]; fetchedAt: number }>,
     priceHistoryCache: new Map() as Map<string, { data: PriceHistory[]; fetchedAt: number }>,
 };
@@ -429,6 +449,7 @@ export const useInventoryStore = create<InventoryState>()(
                         // Invalidate caches to reflect new stock levels
                         get().invalidateCache();
                         get().clearTransactionCache(data.product_id);
+                        get().clearTransactionListCache();
 
                         // Re-fetch inventory to get updated quantities
                         await get().fetchInventory(storeId, true);
@@ -462,6 +483,7 @@ export const useInventoryStore = create<InventoryState>()(
                     if (result.data) {
                         get().invalidateCache();
                         get().clearTransactionCache(data.product_id);
+                        get().clearTransactionListCache();
 
                         await get().fetchInventory(storeId, true);
 
@@ -493,6 +515,7 @@ export const useInventoryStore = create<InventoryState>()(
 
                     // Refresh inventory after stock count
                     get().invalidateCache();
+                    get().clearTransactionListCache();
                     await get().fetchInventory(storeId, true);
 
                     set({ error: null, isSaving: false });
@@ -512,6 +535,27 @@ export const useInventoryStore = create<InventoryState>()(
 
             fetchTransactions: async (storeId: string, forceRefresh = false) => {
                 const state = get();
+                const cacheKey = getTransactionListCacheKey(
+                    storeId,
+                    state.transactionFilters,
+                    state.transactionPagination
+                );
+                const cached = state.transactionListCache.get(cacheKey);
+
+                if (!forceRefresh && cached) {
+                    const elapsed = Date.now() - cached.fetchedAt;
+                    if (elapsed < state.cacheTimeout) {
+                        set({
+                            transactions: cached.data,
+                            totalTransactions: cached.total,
+                            totalTransactionPages: cached.totalPages,
+                            error: null,
+                            isLoading: false,
+                            isRefreshing: false,
+                        });
+                        return;
+                    }
+                }
 
                 set({
                     isLoading: !state.transactions.length,
@@ -519,11 +563,18 @@ export const useInventoryStore = create<InventoryState>()(
                 });
 
                 try {
-                    const result = await inventoryService.getTransactions(
-                        storeId,
-                        state.transactionFilters,
-                        state.transactionPagination
-                    );
+                    let request = inFlightTransactionListRequests.get(cacheKey);
+                    if (!request || forceRefresh) {
+                        request = inventoryService.getTransactions(
+                            storeId,
+                            state.transactionFilters,
+                            state.transactionPagination
+                        );
+                        inFlightTransactionListRequests.set(cacheKey, request);
+                    }
+
+                    const result = await request;
+                    inFlightTransactionListRequests.delete(cacheKey);
 
                     if (result.error) {
                         set({ error: result.error, isLoading: false, isRefreshing: false });
@@ -531,16 +582,42 @@ export const useInventoryStore = create<InventoryState>()(
                     }
 
                     if (result.data) {
-                        set({
-                            transactions: result.data.transactions,
-                            totalTransactions: result.data.total,
-                            totalTransactionPages: result.data.total_pages,
-                            error: null,
-                            isLoading: false,
-                            isRefreshing: false,
+                        set((current) => {
+                            const nextListCache = new Map(current.transactionListCache);
+                            nextListCache.set(cacheKey, {
+                                data: result.data!.transactions,
+                                total: result.data!.total,
+                                totalPages: result.data!.total_pages,
+                                fetchedAt: Date.now(),
+                            });
+
+                            const latestKey = getTransactionListCacheKey(
+                                storeId,
+                                current.transactionFilters,
+                                current.transactionPagination
+                            );
+
+                            if (latestKey !== cacheKey) {
+                                return {
+                                    transactionListCache: nextListCache,
+                                    isLoading: false,
+                                    isRefreshing: false,
+                                };
+                            }
+
+                            return {
+                                transactionListCache: nextListCache,
+                                transactions: result.data!.transactions,
+                                totalTransactions: result.data!.total,
+                                totalTransactionPages: result.data!.total_pages,
+                                error: null,
+                                isLoading: false,
+                                isRefreshing: false,
+                            };
                         });
                     }
                 } catch (err) {
+                    inFlightTransactionListRequests.delete(cacheKey);
                     set({
                         error: err instanceof Error ? err.message : "Failed to fetch transactions",
                         isLoading: false,
@@ -1115,6 +1192,11 @@ export const useInventoryStore = create<InventoryState>()(
                 });
             },
 
+            clearTransactionListCache: () => {
+                inFlightTransactionListRequests.clear();
+                set({ transactionListCache: new Map() });
+            },
+
             clearBatchCache: (productId?: string) => {
                 set((state) => {
                     const newCache = new Map(state.batchCache);
@@ -1144,9 +1226,11 @@ export const useInventoryStore = create<InventoryState>()(
             // ================================================================
 
             reset: () => {
+                inFlightTransactionListRequests.clear();
                 set({
                     ...initialState,
                     transactionCache: new Map(),
+                    transactionListCache: new Map(),
                     batchCache: new Map(),
                     priceHistoryCache: new Map(),
                 });
