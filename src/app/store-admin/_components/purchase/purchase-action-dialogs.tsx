@@ -162,7 +162,7 @@ export function DeletePODialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-2">
+                <div className="space-y-2 p-4">
                     <Label>
                         Type <strong>DELETE</strong> to confirm
                     </Label>

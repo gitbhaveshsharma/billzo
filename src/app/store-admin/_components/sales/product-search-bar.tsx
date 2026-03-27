@@ -301,8 +301,8 @@ export function ProductSearchBar({
     );
 
     return (
-        <div ref={containerRef} className={cn("relative", className)} data-pos-scanner>
-            <div className="relative">
+        <div ref={containerRef} className={cn("relative w-full min-w-0", className)} data-pos-scanner>
+            <div className="relative w-full min-w-0">
                 <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                     ref={inputRef}
@@ -313,7 +313,7 @@ export function ProductSearchBar({
                         if (filteredProducts.length > 0) setIsOpen(true);
                     }}
                     placeholder="Scan barcode or search product..."
-                    className="pl-9 pr-9"
+                    className="w-full min-w-0 pl-9 pr-9"
                     autoFocus={autoFocus}
                     autoComplete="off"
                     spellCheck={false}
@@ -326,7 +326,7 @@ export function ProductSearchBar({
             </div>
 
             {isOpen && (
-                <Card className="absolute z-50 top-full left-0 right-0 mt-1 shadow-lg max-h-[320px] overflow-y-auto">
+                <Card className="absolute top-full left-0 right-0 z-50 mt-1 max-h-[320px] overflow-y-auto shadow-lg">
                     <div className="p-1">
                         {productsLoading && filteredProducts.length === 0 && (
                             <div className="space-y-2 p-2">

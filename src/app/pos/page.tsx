@@ -587,11 +587,11 @@ export default function POSPage() {
             isLoading={shiftsLoading}
             onOpenShift={() => router.push("/pos/shifts")}
         >
-            <div className="flex flex-col lg:flex-row h-full overflow-hidden">
+            <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden xl:flex-row">
                 {/* LEFT PANEL — Product Search & Cart */}
-                <div className="flex-1 flex flex-col min-w-0 border-r">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col border-r">
                     {/* Product Search */}
-                    <div className="p-3 border-b">
+                    <div className="shrink-0 border-b p-3">
                         <ProductSearchBar
                             storeId={storeId}
                             onAddProduct={handleProductSelect}
@@ -611,7 +611,7 @@ export default function POSPage() {
                     </div>
 
                     {/* Bottom Actions */}
-                    <div className="border-t p-3 flex items-center gap-2 px-5">
+                    <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-t p-3 px-5">
                         <Button
                             variant="outline"
                             size="sm"
@@ -683,7 +683,7 @@ export default function POSPage() {
                 </div>
 
                 {/* RIGHT PANEL — Customer, Totals, Charge */}
-                <div className="w-full lg:w-[340px] xl:w-[380px] flex flex-col border-t lg:border-t-0">
+                <div className="flex w-full shrink-0 flex-col border-t xl:w-[340px] xl:border-t-0 xl:border-l 2xl:w-[380px]">
                     {/* Customer Section */}
                     <div className="p-3 border-b">
                         <CustomerSection
