@@ -18,12 +18,18 @@ Shortcuts are **suppressed** when:
 
 ## Shortcut Reference
 
-### Navigation
+### System Tools
 
 | Shortcut | Action | Roles |
 |----------|--------|-------|
 | `Ctrl+K` | Open search palette | All |
 | `Ctrl+B` | Toggle sidebar | All |
+| `Alt+Q` | Open OCR Text Extractor | All |
+
+### Navigation
+
+| Shortcut | Action | Roles |
+|----------|--------|-------|
 | `Alt+D` | Dashboard (role-specific) | All |
 
 ### Sales & POS

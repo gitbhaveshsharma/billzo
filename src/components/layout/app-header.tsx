@@ -51,7 +51,7 @@ export function AppHeader({ config, onOpenSearch }: AppHeaderProps) {
   const { appUser, logout } = useAuth();
   const isMobile = useIsMobile();
   const pathname = usePathname();
-  const { toggleSidebar, state, openMobile, setOpenMobile } = useSidebar();
+  const { toggleSidebar, openMobile, setOpenMobile } = useSidebar();
   const breadcrumbs = config.showBreadcrumbs ? getBreadcrumbs(pathname) : [];
 
   const isCompact = config.type === "pos" || (isMobile && config.type !== "dashboard");
@@ -76,13 +76,9 @@ export function AppHeader({ config, onOpenSearch }: AppHeaderProps) {
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 flex items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 transition-height duration-200 ",
+        "sticky top-0 z-20 flex w-full min-w-0 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-4",
         isCompact ? "h-12" : "h-14"
       )}
-      style={{
-        width: "100%",
-        left: 0,
-      }}
     >
       {/* Sidebar Toggle */}
       {config.showSidebarToggle && (
@@ -104,16 +100,16 @@ export function AppHeader({ config, onOpenSearch }: AppHeaderProps) {
 
       {/* Breadcrumbs (desktop only) */}
       {config.showBreadcrumbs && !isMobile && breadcrumbs.length > 0 && (
-        <nav className="flex items-center gap-1 text-sm text-muted-foreground">
+        <nav className="flex min-w-0 items-center gap-1 overflow-hidden text-sm text-muted-foreground">
           {breadcrumbs.map((crumb, i) => (
-            <div key={crumb.href} className="flex items-center gap-1">
+            <div key={crumb.href} className="flex min-w-0 items-center gap-1">
               {i > 0 && <ChevronRight className="h-3 w-3" />}
               {crumb.isLast ? (
-                <span className="font-medium text-foreground">{crumb.label}</span>
+                <span className="truncate font-medium text-foreground">{crumb.label}</span>
               ) : (
                 <Link
                   href={crumb.href}
-                  className="hover:text-foreground transition-colors"
+                  className="truncate transition-colors hover:text-foreground"
                 >
                   {crumb.label}
                 </Link>
@@ -134,7 +130,7 @@ export function AppHeader({ config, onOpenSearch }: AppHeaderProps) {
       {!isMobile && <div className="flex-1" />}
 
       {/* Right Actions */}
-      <div className="flex items-center gap-1">
+      <div className="ml-auto flex shrink-0 items-center gap-1">
         {/* Search trigger */}
         {config.showSearch && (
           <Button

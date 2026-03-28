@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { Providers } from "@/providers/providers";
+import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -15,9 +16,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StorePOS – Multi-tenant SaaS POS System",
+  applicationName: "Billzo",
+  title: "Billzo – Multi-tenant SaaS POS System",
   description:
-    "Manage your stores, employees, and sales with StorePOS – a modern cloud-based point-of-sale platform.",
+    "Manage your stores, employees, and sales with Billzo – a modern cloud-based point-of-sale platform.",
+  manifest: "/favicon_io/site.webmanifest",
+  themeColor: "#0e2231",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Billzo",
+  },
   icons: {
     icon: [
       { url: "/favicon_io/favicon-32x32.png", sizes: "32x32", type: "image/png" },
@@ -39,6 +48,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <Providers>
+          <ServiceWorkerRegister />
           {children}
           <Toaster
   position="top-center"

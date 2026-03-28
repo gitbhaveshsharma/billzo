@@ -168,6 +168,7 @@ export function AddSupplierDialog({
                                     <Input
                                         id="supplier_code"
                                         placeholder="e.g., SUP-001"
+                                        uppercase
                                         {...register("supplier_code")}
                                     />
                                     {errors.supplier_code && (
@@ -231,6 +232,7 @@ export function AddSupplierDialog({
                                     <Input
                                         id="gstin"
                                         placeholder="22AAAAA0000A1Z5"
+                                        uppercase
                                         {...register("gstin")}
                                     />
                                     {errors.gstin && (
@@ -242,6 +244,7 @@ export function AddSupplierDialog({
                                     <Input
                                         id="pan_number"
                                         placeholder="AAAAA0000A"
+                                        uppercase
                                         {...register("pan_number")}
                                     />
                                     {errors.pan_number && (
@@ -257,6 +260,7 @@ export function AddSupplierDialog({
                                     <Input
                                         id="tan_number"
                                         placeholder="ABCD12345E"
+                                        uppercase
                                         {...register("tan_number")}
                                     />
                                     {errors.tan_number && (
@@ -268,6 +272,7 @@ export function AddSupplierDialog({
                                     <Input
                                         id="msme_number"
                                         placeholder="UDYAM-XX-00-0000000"
+                                        uppercase
                                         {...register("msme_number")}
                                     />
                                     {errors.msme_number && (
@@ -495,6 +500,7 @@ export function AddSupplierDialog({
                                         <Input
                                             id="ifsc_code"
                                             placeholder="SBIN0000001"
+                                            uppercase
                                             {...register("ifsc_code")}
                                         />
                                         {errors.ifsc_code && (

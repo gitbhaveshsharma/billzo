@@ -177,6 +177,7 @@ export function EditSupplierDialog({
                                         <Input
                                             id="edit_supplier_code"
                                             placeholder="e.g., SUP-001"
+                                            uppercase
                                             {...register("supplier_code")}
                                         />
                                         {errors.supplier_code && (
@@ -232,12 +233,12 @@ export function EditSupplierDialog({
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="edit_gstin">GSTIN</Label>
-                                        <Input id="edit_gstin" placeholder="22AAAAA0000A1Z5" {...register("gstin")} />
+                                        <Input id="edit_gstin" placeholder="22AAAAA0000A1Z5" uppercase {...register("gstin")} />
                                         {errors.gstin && <p className="text-xs text-destructive">{errors.gstin.message}</p>}
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="edit_pan_number">PAN Number</Label>
-                                        <Input id="edit_pan_number" placeholder="AAAAA0000A" {...register("pan_number")} />
+                                        <Input id="edit_pan_number" placeholder="AAAAA0000A" uppercase {...register("pan_number")} />
                                         {errors.pan_number && <p className="text-xs text-destructive">{errors.pan_number.message}</p>}
                                     </div>
                                 </div>
@@ -245,12 +246,12 @@ export function EditSupplierDialog({
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="edit_tan_number">TAN Number</Label>
-                                        <Input id="edit_tan_number" placeholder="ABCD12345E" {...register("tan_number")} />
+                                        <Input id="edit_tan_number" placeholder="ABCD12345E" uppercase {...register("tan_number")} />
                                         {errors.tan_number && <p className="text-xs text-destructive">{errors.tan_number.message}</p>}
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="edit_msme_number">MSME Number</Label>
-                                        <Input id="edit_msme_number" placeholder="UDYAM-XX-00-0000000" {...register("msme_number")} />
+                                        <Input id="edit_msme_number" placeholder="UDYAM-XX-00-0000000" uppercase {...register("msme_number")} />
                                         {errors.msme_number && <p className="text-xs text-destructive">{errors.msme_number.message}</p>}
                                     </div>
                                 </div>
@@ -381,7 +382,7 @@ export function EditSupplierDialog({
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label htmlFor="edit_ifsc_code">IFSC Code</Label>
-                                            <Input id="edit_ifsc_code" placeholder="SBIN0000001" {...register("ifsc_code")} />
+                                            <Input id="edit_ifsc_code" placeholder="SBIN0000001" uppercase {...register("ifsc_code")} />
                                             {errors.ifsc_code && <p className="text-xs text-destructive">{errors.ifsc_code.message}</p>}
                                         </div>
                                         <div className="space-y-2">
