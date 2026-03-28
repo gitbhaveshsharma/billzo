@@ -1,7 +1,7 @@
 {
-	"name": "StorePOS",
-	"short_name": "StorePOS",
-	"description": "StorePOS - multi-tenant cloud POS for billing and store operations",
+	"name": "Billzo",
+	"short_name": "Billzo",
+	"description": "Billzo - Multi-tenant SaaS POS System for billing and store operations",
 	"start_url": "/",
 	"scope": "/",
 	"display": "standalone",
