@@ -259,14 +259,14 @@ export function EditCustomerDialog({
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="edit_gstin">GSTIN</Label>
-                                    <Input id="edit_gstin" {...register("gstin")} />
+                                    <Input id="edit_gstin" uppercase {...register("gstin")} />
                                     {errors.gstin && (
                                         <p className="text-xs text-destructive">{errors.gstin.message}</p>
                                     )}
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="edit_pan_number">PAN Number</Label>
-                                    <Input id="edit_pan_number" {...register("pan_number")} />
+                                    <Input id="edit_pan_number" uppercase {...register("pan_number")} />
                                     {errors.pan_number && (
                                         <p className="text-xs text-destructive">{errors.pan_number.message}</p>
                                     )}

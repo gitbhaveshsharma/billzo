@@ -566,7 +566,7 @@ export function EditEmployeeDialog({
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="edit-ifsc">IFSC Code</Label>
-                                            <Input id="edit-ifsc" placeholder="e.g. SBIN0001234" className="uppercase" {...register("ifsc_code")} />
+                                            <Input id="edit-ifsc" placeholder="e.g. SBIN0001234" uppercase {...register("ifsc_code")} />
                                             {errors.ifsc_code && (
                                                 <p className="text-xs text-destructive">{errors.ifsc_code.message}</p>
                                             )}
@@ -586,7 +586,7 @@ export function EditEmployeeDialog({
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="edit-pan">PAN Number</Label>
-                                                <Input id="edit-pan" placeholder="e.g. ABCDE1234F" maxLength={10} className="uppercase" {...register("pan_number")} />
+                                                <Input id="edit-pan" placeholder="e.g. ABCDE1234F" maxLength={10} uppercase {...register("pan_number")} />
                                                 {errors.pan_number && (
                                                     <p className="text-xs text-destructive">{errors.pan_number.message}</p>
                                                 )}

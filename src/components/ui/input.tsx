@@ -15,8 +15,15 @@ const toSentenceCase = (value: string): string => {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
 }
 
+// Transforms text to uppercase
+const toUpperCase = (value: string): string => {
+  if (!value) return value
+  return value.toUpperCase()
+}
+
 interface InputProps extends React.ComponentProps<"input"> {
   autoCapitalize?: "sentence" | "none"
+  uppercase?: boolean
 }
 
 function Input({ 
@@ -24,19 +31,24 @@ function Input({
   type = "text", 
   onChange,
   autoCapitalize = "sentence",
+  uppercase = false,
   ...props 
 }: InputProps) {
   
   // Determine if capitalization should be applied
-  const shouldCapitalize = autoCapitalize === "sentence" && !NON_TEXT_TYPES.has(type)
+  const shouldCapitalize = autoCapitalize === "sentence" && !NON_TEXT_TYPES.has(type) && !uppercase
+  const shouldUppercase = uppercase && !NON_TEXT_TYPES.has(type)
 
   const handleChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (shouldCapitalize) {
+    if (shouldUppercase) {
+      const transformed = toUpperCase(e.target.value)
+      e.target.value = transformed
+    } else if (shouldCapitalize) {
       const transformed = toSentenceCase(e.target.value)
       e.target.value = transformed
     }
     onChange?.(e)
-  }, [onChange, shouldCapitalize])
+  }, [onChange, shouldCapitalize, shouldUppercase])
 
   return (
     <input

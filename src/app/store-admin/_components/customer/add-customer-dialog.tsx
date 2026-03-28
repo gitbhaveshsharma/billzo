@@ -300,6 +300,7 @@ export function AddCustomerDialog({
                                     <Input
                                         id="gstin"
                                         placeholder="27AAAPL1234C1Z5"
+                                        uppercase
                                         {...register("gstin")}
                                     />
                                     {errors.gstin && (
@@ -311,6 +312,7 @@ export function AddCustomerDialog({
                                     <Input
                                         id="pan_number"
                                         placeholder="ABCDE1234F"
+                                        uppercase
                                         {...register("pan_number")}
                                     />
                                     {errors.pan_number && (
