@@ -5,10 +5,12 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useOcrSheet } from "@/hooks/use-ocr-sheet";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppHeader } from "./app-header";
 import { AppSidebar } from "./app-sidebar";
 import { SearchDialog } from "./search/search-dialog";
+import { OcrSheet } from "@/components/shared/ocr-extractor";
 import {
   getLayoutConfig,
   resolvePageType,
@@ -27,6 +29,9 @@ export function ConditionalLayout({ children, forceConfig }: ConditionalLayoutPr
   const { appUser } = useAuth();
   const isMobile = useIsMobile();
   const [searchOpen, setSearchOpen] = useState(false);
+  
+  // Global OCR sheet (Alt+Q)
+  const ocrSheet = useOcrSheet();
 
   // Resolve the page type from the current route
   const pageType = resolvePageType(pathname);
@@ -56,11 +61,21 @@ export function ConditionalLayout({ children, forceConfig }: ConditionalLayoutPr
 
   // Global keyboard shortcuts (Alt+key navigation with toast feedback)
   // Pass filtered sidebar items so shortcuts resolve to the correct role-specific route
-  useKeyboardShortcuts({ disabled: searchOpen, sidebarItems: filteredSidebarItems });
+  // Disable shortcuts when search or OCR sheet is open
+  useKeyboardShortcuts({ 
+    disabled: searchOpen || ocrSheet.isOpen, 
+    sidebarItems: filteredSidebarItems 
+  });
 
   // If no resolvable config, render children without layout chrome
   if (!config) {
-    return <>{children}</>;
+    return (
+      <>
+        {children}
+        {/* Global OCR Sheet - available even without layout */}
+        <OcrSheet open={ocrSheet.isOpen} onOpenChange={ocrSheet.setOpen} />
+      </>
+    );
   }
 
   // Handle mobile sidebar visibility
@@ -102,6 +117,9 @@ export function ConditionalLayout({ children, forceConfig }: ConditionalLayoutPr
 
       {/* Global Search Dialog (Ctrl+K) */}
       <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      
+      {/* Global OCR Sheet (Alt+Q) */}
+      <OcrSheet open={ocrSheet.isOpen} onOpenChange={ocrSheet.setOpen} />
     </SidebarProvider>
   );
 }
