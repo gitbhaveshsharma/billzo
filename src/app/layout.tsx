@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { Providers } from "@/providers/providers";
@@ -15,13 +15,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#0e2231",
+};
+
 export const metadata: Metadata = {
   applicationName: "Billzo",
   title: "Billzo – Multi-tenant SaaS POS System",
   description:
     "Manage your stores, employees, and sales with Billzo – a modern cloud-based point-of-sale platform.",
   manifest: "/favicon_io/site.webmanifest",
-  themeColor: "#0e2231",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

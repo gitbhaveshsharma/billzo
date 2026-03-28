@@ -193,7 +193,7 @@ function ProductCard({ item, isHighlighted, onHover, onAddProduct, onClose }: Pr
                         <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-[11px] text-muted-foreground font-mono">{item.sku}</span>
                             {item.barcode && (
-                                <Badge variant="outline" className="text-[9px] font-mono px-1.5 gap-0.5">
+                                <Badge variant="outline" className="text-[9px] font-mono px-1.5 gap-0.5 text-purple-700 border-purple-300 bg-purple-50 dark:text-purple-300 dark:border-purple-700 dark:bg-purple-950">
                                     <Barcode className="h-2.5 w-2.5" />
                                     {item.barcode}
                                     {barcodeLabel && (
