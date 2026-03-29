@@ -32,20 +32,11 @@ export function useOcrSheet(): UseOcrSheetReturn {
     // Register Alt+Q keyboard shortcut
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Check for Alt+Q
+            // Check for Alt+Q (works even when focus is inside form fields/modals)
             if (e.altKey && e.key.toLowerCase() === "q") {
-                // Don't trigger when typing in inputs/textareas
-                const target = e.target as HTMLElement | null;
-                if (target) {
-                    const tag = target.tagName.toLowerCase();
-                    if (
-                        tag === "input" ||
-                        tag === "textarea" ||
-                        tag === "select" ||
-                        target.isContentEditable
-                    ) {
-                        return;
-                    }
+                // Ignore auto-repeat so one key hold doesn't rapidly toggle
+                if (e.repeat) {
+                    return;
                 }
 
                 e.preventDefault();
@@ -54,8 +45,9 @@ export function useOcrSheet(): UseOcrSheetReturn {
             }
         };
 
-        document.addEventListener("keydown", handleKeyDown);
-        return () => document.removeEventListener("keydown", handleKeyDown);
+        // Capture phase lets this run even if a modal stops bubbling events.
+        document.addEventListener("keydown", handleKeyDown, true);
+        return () => document.removeEventListener("keydown", handleKeyDown, true);
     }, [toggle]);
 
     return {

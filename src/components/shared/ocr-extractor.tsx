@@ -208,7 +208,7 @@ export function OcrSheet({ open, onOpenChange }: OcrSheetProps) {
     );
 
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
+        <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
             {/*
              * Layout strategy
              * ───────────────
@@ -223,7 +223,7 @@ export function OcrSheet({ open, onOpenChange }: OcrSheetProps) {
              */}
             <SheetContent
                 side="right"
-                className="w-full sm:max-w-xl flex flex-col h-full p-0 gap-0 overflow-hidden"
+                className="z-[80] w-full sm:max-w-xl flex flex-col h-full p-0 gap-0 overflow-hidden"
             >
                 {/* ── Fixed header ── */}
                 <SheetHeader className="px-6 pt-6 pb-4 shrink-0">
