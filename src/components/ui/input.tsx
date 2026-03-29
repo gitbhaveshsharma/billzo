@@ -9,10 +9,10 @@ const NON_TEXT_TYPES = new Set([
   "color", "file", "hidden", "range", "search"
 ])
 
-// Transforms text to sentence case (first letter uppercase, rest lowercase)
+// Transforms text to sentence case without altering user-entered casing beyond first char
 const toSentenceCase = (value: string): string => {
   if (!value) return value
-  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 // Transforms text to uppercase
@@ -30,7 +30,7 @@ function Input({
   className, 
   type = "text", 
   onChange,
-  autoCapitalize = "sentence",
+  autoCapitalize = "none",
   uppercase = false,
   ...props 
 }: InputProps) {
@@ -42,10 +42,14 @@ function Input({
   const handleChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (shouldUppercase) {
       const transformed = toUpperCase(e.target.value)
-      e.target.value = transformed
+      if (transformed !== e.target.value) {
+        e.target.value = transformed
+      }
     } else if (shouldCapitalize) {
       const transformed = toSentenceCase(e.target.value)
-      e.target.value = transformed
+      if (transformed !== e.target.value) {
+        e.target.value = transformed
+      }
     }
     onChange?.(e)
   }, [onChange, shouldCapitalize, shouldUppercase])
@@ -54,6 +58,7 @@ function Input({
     <input
       type={type}
       data-slot="input"
+      autoCapitalize={autoCapitalize === "sentence" ? "sentences" : "off"}
       onChange={handleChange}
       className={cn(
         "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-white px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
