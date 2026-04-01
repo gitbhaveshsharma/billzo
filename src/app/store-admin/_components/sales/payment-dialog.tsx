@@ -517,9 +517,17 @@ export function PaymentDialog({
         function handleKeyDown(e: KeyboardEvent) {
             const target = e.target as HTMLElement | null;
             const tag = target?.tagName.toLowerCase() ?? "";
+            const isInteractiveTarget = Boolean(
+                target?.closest(
+                    "button, [role='button'], [role='tab'], [role='menuitem'], a[href], [data-radix-collection-item]"
+                )
+            );
 
             // Enter → Confirm payment (unless focused on an input field)
             if (e.key === "Enter" && tag !== "input" && tag !== "textarea" && tag !== "select") {
+                // Preserve native Enter behavior for focused controls selected via arrow navigation.
+                if (isInteractiveTarget) return;
+
                 e.preventDefault();
                 // Only allow confirm when valid
                 const canConfirm = !isProcessing && (entries.length > 0 || isCreditSale) && (isCreditSale || isFullyPaid);

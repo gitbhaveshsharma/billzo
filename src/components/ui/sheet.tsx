@@ -6,6 +6,73 @@ import { Dialog as SheetPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+const SHEET_FOCUSABLE_SELECTOR = [
+  "input",
+  "textarea",
+  "select",
+  "button",
+  "a[href]",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",")
+
+const getFocusableInContainer = (container: HTMLElement) => {
+  return Array.from(container.querySelectorAll<HTMLElement>(SHEET_FOCUSABLE_SELECTOR)).filter(
+    (el) => {
+      if (el.hidden) return false
+      if (el.getAttribute("aria-hidden") === "true") return false
+      if (el.getAttribute("aria-disabled") === "true") return false
+      if ("disabled" in el && (el as HTMLInputElement).disabled) return false
+      return el.offsetParent !== null
+    }
+  )
+}
+
+const handleDirectionalFocusNavigation = (
+  e: React.KeyboardEvent<HTMLDivElement>
+) => {
+  if (e.defaultPrevented) return
+  if (e.altKey || e.ctrlKey || e.metaKey) return
+  if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) return
+
+  const target = e.target as HTMLElement | null
+  if (!target) return
+
+  if (target.closest("[role='listbox'], [data-radix-select-content], [data-radix-dropdown-menu-content]")) {
+    return
+  }
+
+  const tag = target.tagName.toLowerCase()
+  if (tag === "textarea" || tag === "select" || target.isContentEditable) return
+  if (tag === "input") return
+
+  if (e.key === "ArrowDown" && target.getAttribute("role") === "tab") {
+    const panelId = target.getAttribute("aria-controls")
+    if (panelId) {
+      const panel = document.getElementById(panelId)
+      if (panel) {
+        const firstFocusable = panel.querySelector<HTMLElement>(SHEET_FOCUSABLE_SELECTOR)
+        if (firstFocusable) {
+          firstFocusable.focus()
+          e.preventDefault()
+          return
+        }
+      }
+    }
+  }
+
+  const container = e.currentTarget
+  const focusable = getFocusableInContainer(container)
+  const currentIndex = focusable.indexOf(target)
+  if (currentIndex === -1) return
+
+  const movePrev = e.key === "ArrowUp" || e.key === "ArrowLeft"
+  const nextTarget = focusable[currentIndex + (movePrev ? -1 : 1)]
+  if (!nextTarget) return
+
+  nextTarget.focus()
+  e.preventDefault()
+}
+
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
 }
@@ -49,6 +116,7 @@ function SheetContent({
   children,
   side = "right",
   showCloseButton = true,
+  onKeyDown,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left"
@@ -59,16 +127,20 @@ function SheetContent({
       <SheetOverlay />
       <SheetPrimitive.Content
         data-slot="sheet-content"
+        onKeyDown={(e) => {
+          onKeyDown?.(e)
+          handleDirectionalFocusNavigation(e)
+        }}
         className={cn(
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
           side === "right" &&
-            "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
+          "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
           side === "left" &&
-            "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
+          "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
           side === "top" &&
-            "data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b",
+          "data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b",
           side === "bottom" &&
-            "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
+          "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
           className
         )}
         {...props}
