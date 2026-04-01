@@ -61,6 +61,15 @@ import { useSupplierStore } from "@/stores/supplier.store";
 import { usePurchaseStore } from "@/stores/purchase.store";
 import { POItemDialog, type POItemDialogItem } from "./po-item-dialog";
 
+const DIALOG_FOCUSABLE_SELECTOR = [
+    "input",
+    "textarea",
+    "select",
+    "button",
+    "a[href]",
+    "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -427,10 +436,75 @@ export function CreatePODialog({
         [watchedTags, setValue]
     );
 
+    const handleDialogArrowNavigation = useCallback(
+        (e: React.KeyboardEvent<HTMLDivElement>) => {
+            if (e.defaultPrevented) return;
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+            if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) return;
+
+            const target = e.target as HTMLElement | null;
+            if (!target) return;
+
+            if (target.closest("[role='listbox'], [data-radix-select-content], [data-radix-dropdown-menu-content]")) {
+                return;
+            }
+
+            const isTextarea = target.tagName.toLowerCase() === "textarea";
+            const isSelect = target.tagName.toLowerCase() === "select";
+            const isContentEditable = target.isContentEditable;
+            if (isTextarea || isSelect || isContentEditable) return;
+
+            // From a focused tab trigger, ArrowDown should enter the active tab panel.
+            if (e.key === "ArrowDown" && target.getAttribute("role") === "tab") {
+                const panelId = target.getAttribute("aria-controls");
+                if (panelId) {
+                    const panel = document.getElementById(panelId);
+                    if (panel) {
+                        const firstFocusable = panel.querySelector<HTMLElement>(DIALOG_FOCUSABLE_SELECTOR);
+                        if (firstFocusable) {
+                            firstFocusable.focus();
+                            e.preventDefault();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            const isInput = target.tagName.toLowerCase() === "input";
+            if (isInput) return;
+
+            const container = e.currentTarget;
+            const focusable = Array.from(container.querySelectorAll<HTMLElement>(DIALOG_FOCUSABLE_SELECTOR)).filter(
+                (el) => {
+                    if (el.hidden) return false;
+                    if (el.getAttribute("aria-hidden") === "true") return false;
+                    if (el.getAttribute("aria-disabled") === "true") return false;
+                    if ("disabled" in el && (el as HTMLInputElement).disabled) return false;
+                    return el.offsetParent !== null;
+                }
+            );
+
+            const currentIndex = focusable.indexOf(target);
+            if (currentIndex === -1) return;
+
+            const movePrev = e.key === "ArrowUp" || e.key === "ArrowLeft";
+            const nextIndex = currentIndex + (movePrev ? -1 : 1);
+            const nextTarget = focusable[nextIndex];
+            if (!nextTarget) return;
+
+            nextTarget.focus();
+            e.preventDefault();
+        },
+        []
+    );
+
     return (
         <>
             <Dialog open={open} onOpenChange={handleClose}>
-                <DialogContent className="max-w-4xl max-h-[95vh] flex flex-col">
+                <DialogContent
+                    className="max-w-4xl max-h-[95vh] flex flex-col"
+                    onKeyDown={handleDialogArrowNavigation}
+                >
                     <DialogHeader>
                         <DialogTitle>
                             {editOrder ? "Edit Purchase Order" : "Create Purchase Order"}
@@ -839,7 +913,7 @@ export function CreatePODialog({
                                                 </>
                                             )}
                                             {poTotals.cessTotal > 0 && (
-                                                <div className= "flex justify-between text-muted-foreground">
+                                                <div className="flex justify-between text-muted-foreground">
                                                     <span>Cess</span>
                                                     <span className="text-foreground">{formatCurrency(poTotals.cessTotal)}</span>
                                                 </div>
