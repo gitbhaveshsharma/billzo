@@ -352,9 +352,9 @@ export function CartPanel({
     );
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
+            <div className="sticky top-0 z-10 flex min-w-0 items-center justify-between gap-2 border-b bg-background/95 px-3 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <span className="text-xs font-medium text-muted-foreground">
                     {items.length} item{items.length !== 1 ? "s" : ""}
                 </span>
@@ -364,8 +364,8 @@ export function CartPanel({
             </div>
 
             {/* Items */}
-            <ScrollArea className="flex-1 overflow-x-auto">
-                <div className="flex flex-col gap-0.5 p-4 ml-2">
+            <ScrollArea className="min-h-0 flex-1 overflow-hidden">
+                <div className="ml-2 flex flex-col gap-0.5 p-4">
                     {items.map((item, index) => {
                         // Resolve max stock from catalog lookup
                         const catalogId = item.variant_id ?? item.product_id;

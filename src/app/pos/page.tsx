@@ -45,7 +45,13 @@ import type {
     EnrichedSale,
 } from "@/types/sales.types";
 import type { SellableItem } from "@/types/pos.types";
-import { formatCurrency } from "@/utils/sales.utils";
+import {
+    formatCurrency,
+    getDefaultQuantityIncrement,
+    roundQuantity,
+    humanReadableQty,
+    isLowQuantityWarning,
+} from "@/utils/sales.utils";
 
 // ============================================================================
 // POS PAGE — MAIN CASHIER BILLING SCREEN
@@ -195,21 +201,33 @@ export default function POSPage() {
 
     const handleProductSelect = useCallback(
         (item: SellableItem) => {
-            // ── Stock validation: check if enough stock to add 1 more ──
+            // ── Stock validation: check if enough stock to add default quantity ──
             const catalogId = item.variant_id ?? item.product_id;
-            const currentStock = item.stock;
+            const currentStock = roundQuantity(item.stock, item.unit_name);
             const alreadyInCart = cart
                 .filter((c) => (c.variant_id ?? c.product_id) === catalogId)
                 .reduce((sum, c) => sum + c.quantity, 0);
+            const defaultQty = getDefaultQuantityIncrement(item.unit_name);
 
             if (currentStock <= 0) {
                 toast.error(`"${item.name}" is out of stock`);
                 return;
             }
-            if (alreadyInCart + 1 > currentStock) {
-                toast.error(
-                    `Only ${currentStock} ${item.unit_name ?? "units"} of "${item.name}" available (${alreadyInCart} already in cart)`
-                );
+
+            const availableStock = roundQuantity(currentStock - alreadyInCart, item.unit_name);
+
+            // Check if we can add the default quantity
+            if (availableStock < defaultQty) {
+                // Show warning for low quantity on decimal units
+                if (isLowQuantityWarning(availableStock, item.unit_name)) {
+                    toast.error(
+                        `Only ${humanReadableQty(availableStock, item.unit_name)} of "${item.name}" available - quantity too low to sell`
+                    );
+                } else {
+                    toast.error(
+                        `Only ${humanReadableQty(availableStock, item.unit_name)} of "${item.name}" available (${humanReadableQty(alreadyInCart, item.unit_name)} already in cart)`
+                    );
+                }
                 return;
             }
 
@@ -227,7 +245,7 @@ export default function POSPage() {
                 unit_cost: item.cost,
                 gst_percentage: item.gst_percentage,
                 cess_percentage: item.cess_percentage,
-                quantity: 1,
+                quantity: defaultQty,
                 discount_type: "PERCENTAGE",
                 discount_percentage: 0,
                 discount_amount: 0,
@@ -589,7 +607,7 @@ export default function POSPage() {
         >
             <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden xl:flex-row">
                 {/* LEFT PANEL — Product Search & Cart */}
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col border-r">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r">
                     {/* Product Search */}
                     <div className="shrink-0 border-b p-3">
                         <ProductSearchBar
@@ -599,7 +617,7 @@ export default function POSPage() {
                     </div>
 
                     {/* Cart Items */}
-                    <div className="flex-1 overflow-hidden">
+                    <div className="min-h-0 flex-1 overflow-hidden">
                         <CartPanel
                             items={cart}
                             isInterstate={cartIsInterstate}
@@ -683,7 +701,7 @@ export default function POSPage() {
                 </div>
 
                 {/* RIGHT PANEL — Customer, Totals, Charge */}
-                <div className="flex w-full shrink-0 flex-col border-t xl:w-[340px] xl:border-t-0 xl:border-l 2xl:w-[380px]">
+                <div className="flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-t xl:w-[340px] xl:border-t-0 xl:border-l 2xl:w-[380px]">
                     {/* Customer Section */}
                     <div className="p-3 border-b">
                         <CustomerSection
@@ -702,7 +720,7 @@ export default function POSPage() {
                     </div>
 
                     {/* Totals */}
-                    <div className="flex-1 overflow-auto p-3">
+                    <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
                         <CartTotalsPanel
                             totals={cartTotals}
                             isInterstate={cartIsInterstate}

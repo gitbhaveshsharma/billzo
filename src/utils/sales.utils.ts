@@ -390,6 +390,47 @@ export function parseQtyInput(value: string, unitName?: string | null): number {
 }
 
 /**
+ * Get the default quantity increment for adding to cart based on unit type.
+ * - Quantity units (pcs, box, pack, etc.): 1
+ * - Weight/Volume/Length units (kg, L, m, etc.): uses the unit's configured minimum
+ */
+export function getDefaultQuantityIncrement(unitName?: string | null): number {
+    const cfg = getUnitInputConfig(unitName);
+    return cfg.min;
+}
+
+/**
+ * Threshold below which a warning should be shown for decimal units.
+ * For units that allow decimals (weight, volume, length), warn if quantity < 0.1
+ */
+const LOW_QUANTITY_THRESHOLD = 0.1;
+
+/**
+ * Check if the available quantity is below the minimum threshold for decimal units.
+ * Returns true if quantity < 0.1 for weight/volume/length units.
+ * Always returns false for quantity units (pcs, box, etc.) since they use whole numbers.
+ */
+export function isLowQuantityWarning(quantity: number, unitName?: string | null): boolean {
+    const cfg = getUnitInputConfig(unitName);
+    // Only warn for decimal-allowing units when quantity is below threshold
+    if (cfg.allowDecimal && quantity > 0 && quantity < LOW_QUANTITY_THRESHOLD) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Round a quantity to appropriate decimal places based on unit type.
+ * Prevents floating point precision issues (e.g., 0.9500000000000002 → 0.95)
+ */
+export function roundQuantity(quantity: number, unitName?: string | null): number {
+    const cfg = getUnitInputConfig(unitName);
+    if (!cfg.allowDecimal) return Math.round(quantity);
+    const factor = Math.pow(10, cfg.decimalPlaces);
+    return Math.round(quantity * factor) / factor;
+}
+
+/**
  * Format a date string into localized display format
  * @example formatDate("2025-06-15") → "15 Jun 2025"
  */

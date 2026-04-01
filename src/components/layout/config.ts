@@ -308,7 +308,7 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
   {
     id: "admin-settings",
     label: "Store Settings",
-    href: "/store-admin/settings",
+    href: "/store-admin/settings/general",
     icon: Settings,
     shortcut: "Alt+,",
     roles: ["store_admin", "super_admin"],
@@ -317,7 +317,7 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
       {
         id: "admin-settings-general",
         label: "General",
-        href: "/store-admin/settings",
+        href: "/store-admin/settings/general",
         roles: ["store_admin", "super_admin"],
       },
       {
@@ -329,7 +329,7 @@ const STORE_ADMIN_SIDEBAR_ITEMS: SidebarItem[] = [
       {
         id: "admin-settings-ip",
         label: "IP Whitelist",
-        href: "/store-admin/settings/ip-whitelist",
+        href: "/store-admin/settings/ip",
         roles: ["store_admin", "super_admin"],
       },
       {

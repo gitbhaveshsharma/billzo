@@ -104,7 +104,7 @@ export function ConditionalLayout({ children, forceConfig }: ConditionalLayoutPr
         <main
           className={
             config.header.type === "pos"
-              ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+              ? "flex h-[calc(100svh-3rem)] min-h-0 min-w-0 flex-col overflow-hidden"
               : "flex-1 p-4 md:p-6"
           }
         >
