@@ -26,6 +26,7 @@ import {
     formatCurrency,
     formatQuantity,
     formatRelativeTime,
+    getInventoryUnitLabel,
 } from "@/utils/inventory.utils";
 import { InventoryRowActions, type InventoryAction } from "./inventory-row-actions";
 
@@ -135,6 +136,7 @@ function InventoryRow({
         item.reorder_point,
         item.maximum_stock
     );
+    const unitLabel = getInventoryUnitLabel(item);
 
     return (
         <TableRow
@@ -165,13 +167,13 @@ function InventoryRow({
                 {item.location ?? "—"}
             </TableCell>
             <TableCell className="text-right font-medium">
-                {formatQuantity(item.quantity_on_hand)}
+                {formatQuantity(item.quantity_on_hand)} <span className="text-muted-foreground text-xs">{unitLabel}</span>
             </TableCell>
             <TableCell className="text-right text-muted-foreground text-sm">
-                {formatQuantity(item.quantity_committed)}
+                {formatQuantity(item.quantity_committed)} <span className="text-xs">{unitLabel}</span>
             </TableCell>
             <TableCell className="text-right font-medium">
-                {formatQuantity(item.quantity_available)}
+                {formatQuantity(item.quantity_available)} <span className="text-muted-foreground text-xs">{unitLabel}</span>
             </TableCell>
             <TableCell>
                 <Badge variant="secondary" className={getStockLevelColor(stockStatus)}>

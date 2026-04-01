@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { createStockTransferSchema } from "@/validations/inventory.validation";
 import type { CreateStockTransferRequest, EnrichedInventoryRecord } from "@/types/inventory.types";
-import { formatQuantity } from "@/utils/inventory.utils";
+import { formatQuantity, getInventoryUnitLabel } from "@/utils/inventory.utils";
 
 // ============================================================================
 // TYPES
@@ -46,6 +46,9 @@ export function StockTransferDialog({
     const [reason, setReason] = useState("");
     const [notes, setNotes] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Get unit label from the item
+    const unitLabel = useMemo(() => getInventoryUnitLabel(item), [item]);
 
     useEffect(() => {
         if (open && item) {
@@ -99,7 +102,7 @@ export function StockTransferDialog({
                             <>
                                 Transfer stock for <strong>{item.product?.name}</strong>
                                 {item.variant?.name && ` (${item.variant.name})`}
-                                . Available: <strong>{formatQuantity(item.quantity_available)}</strong>
+                                . Available: <strong>{formatQuantity(item.quantity_available)} {unitLabel}</strong>
                             </>
                         )}
                     </DialogDescription>
@@ -107,14 +110,14 @@ export function StockTransferDialog({
 
                 <div className="space-y-4 p-4">
                     <div className="space-y-2">
-                        <Label>Quantity to Transfer *</Label>
+                        <Label>Quantity to Transfer ({unitLabel}) *</Label>
                         <Input
                             type="number"
                             min="0.001"
                             step="0.001"
                             value={transferQuantity}
                             onChange={(e) => setTransferQuantity(e.target.value)}
-                            placeholder="Enter quantity"
+                            placeholder={`Enter quantity (${unitLabel})`}
                         />
                         {errors.quantity && (
                             <p className="text-sm text-red-500">{errors.quantity}</p>

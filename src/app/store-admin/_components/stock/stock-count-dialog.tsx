@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { stockCountSchema } from "@/validations/inventory.validation";
+import { getInventoryUnitLabel } from "@/utils/inventory.utils";
 import type { StockCountItem, EnrichedInventoryRecord } from "@/types/inventory.types";
 
 // ============================================================================
@@ -38,6 +39,7 @@ interface CountEntry {
     notes: string;
     productName: string;
     currentQuantity: number;
+    unitLabel: string;
 }
 
 // ============================================================================
@@ -73,6 +75,7 @@ export function StockCountDialog({
             notes: "",
             productName: "",
             currentQuantity: 0,
+            unitLabel: "units",
         };
     }
 
@@ -89,6 +92,7 @@ export function StockCountDialog({
                 variant_id: item.variant_id ?? undefined,
                 productName: item.product?.name ?? "Unknown Product",
                 currentQuantity: item.quantity_on_hand,
+                unitLabel: getInventoryUnitLabel(item),
             };
             return updated;
         });
@@ -192,13 +196,13 @@ export function StockCountDialog({
                                         {inventoryItems.map((item) => (
                                             <option key={item.id} value={item.id}>
                                                 {item.product?.name ?? item.product_id} (On hand:{" "}
-                                                {item.quantity_on_hand})
+                                                {item.quantity_on_hand} {getInventoryUnitLabel(item)})
                                             </option>
                                         ))}
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Counted Quantity *</Label>
+                                    <Label>Counted Quantity ({entry.unitLabel}) *</Label>
                                     <Input
                                         type="number"
                                         min="0"
@@ -207,11 +211,11 @@ export function StockCountDialog({
                                         onChange={(e) =>
                                             handleQuantityChange(index, e.target.value)
                                         }
-                                        placeholder="Physical count"
+                                        placeholder={`Physical count (${entry.unitLabel})`}
                                     />
                                     {entry.inventory_id && entry.counted_quantity && (
                                         <p className="text-xs text-muted-foreground">
-                                            System: {entry.currentQuantity} | Diff:{" "}
+                                            System: {entry.currentQuantity} {entry.unitLabel} | Diff:{" "}
                                             <span
                                                 className={
                                                     Number(entry.counted_quantity) -
@@ -229,7 +233,7 @@ export function StockCountDialog({
                                                 {(
                                                     Number(entry.counted_quantity) -
                                                     entry.currentQuantity
-                                                ).toFixed(2)}
+                                                ).toFixed(2)} {entry.unitLabel}
                                             </span>
                                         </p>
                                     )}

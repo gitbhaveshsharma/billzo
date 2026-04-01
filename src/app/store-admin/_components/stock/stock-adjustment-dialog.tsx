@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +23,7 @@ import {
 import { createStockAdjustmentSchema } from "@/validations/inventory.validation";
 import type { CreateStockAdjustmentRequest, EnrichedInventoryRecord } from "@/types/inventory.types";
 import { TRANSACTION_TYPES } from "@/types/inventory.types";
-import { getTransactionTypeLabel, formatQuantity } from "@/utils/inventory.utils";
+import { getTransactionTypeLabel, formatQuantity, getInventoryUnitLabel } from "@/utils/inventory.utils";
 
 // ============================================================================
 // TYPES
@@ -56,6 +56,9 @@ export function StockAdjustmentDialog({
     const [reason, setReason] = useState("");
     const [notes, setNotes] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Get unit label from the item
+    const unitLabel = useMemo(() => getInventoryUnitLabel(item), [item]);
 
     // Reset form on open
     useEffect(() => {
@@ -110,7 +113,7 @@ export function StockAdjustmentDialog({
                             <>
                                 Adjust stock for <strong>{item.product?.name}</strong>
                                 {item.variant?.name && ` (${item.variant.name})`}
-                                . Current stock: <strong>{formatQuantity(item.quantity_on_hand)}</strong>
+                                . Current stock: <strong>{formatQuantity(item.quantity_on_hand)} {unitLabel}</strong>
                             </>
                         )}
                     </DialogDescription>
@@ -140,14 +143,14 @@ export function StockAdjustmentDialog({
                     {/* ADJUSTMENT: New Quantity */}
                     {adjustmentType === "ADJUSTMENT" && (
                         <div className="space-y-2">
-                            <Label>New Quantity *</Label>
+                            <Label>New Quantity ({unitLabel}) *</Label>
                             <Input
                                 type="number"
                                 min="0"
                                 step="0.001"
                                 value={newQuantity}
                                 onChange={(e) => setNewQuantity(e.target.value)}
-                                placeholder="Enter new quantity"
+                                placeholder={`Enter new quantity (${unitLabel})`}
                             />
                             {errors.new_quantity && (
                                 <p className="text-sm text-red-500">{errors.new_quantity}</p>
@@ -158,14 +161,14 @@ export function StockAdjustmentDialog({
                     {/* DAMAGE/EXPIRY: Quantity to remove */}
                     {adjustmentType !== "ADJUSTMENT" && (
                         <div className="space-y-2">
-                            <Label>Quantity to Remove *</Label>
+                            <Label>Quantity to Remove ({unitLabel}) *</Label>
                             <Input
                                 type="number"
                                 min="0.001"
                                 step="0.001"
                                 value={quantity}
                                 onChange={(e) => setQuantity(e.target.value)}
-                                placeholder="Enter quantity"
+                                placeholder={`Enter quantity (${unitLabel})`}
                             />
                             {errors.quantity && (
                                 <p className="text-sm text-red-500">{errors.quantity}</p>

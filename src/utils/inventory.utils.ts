@@ -204,6 +204,25 @@ export function formatQuantityWithUnit(
 }
 
 /**
+ * Get the display label for a unit (prefers symbol over code over name)
+ */
+export function getUnitDisplayLabel(
+    unit?: { name?: string; code?: string; symbol?: string | null } | null
+): string {
+    if (!unit) return "units";
+    return unit.symbol ?? unit.code ?? unit.name ?? "units";
+}
+
+/**
+ * Get unit label from enriched inventory record
+ */
+export function getInventoryUnitLabel(
+    item: EnrichedInventoryRecord | null | undefined
+): string {
+    return getUnitDisplayLabel(item?.unit);
+}
+
+/**
  * Format date for display
  */
 export function formatDate(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
     Package,
     MapPin,
@@ -49,6 +49,7 @@ import {
     formatQuantity,
     formatDate,
     formatRelativeTime,
+    getInventoryUnitLabel,
 } from "@/utils/inventory.utils";
 import type {
     EnrichedInventoryRecord,
@@ -96,6 +97,7 @@ export function InventoryDetailSheet({
         item.reorder_point,
         item.maximum_stock
     );
+    const unitLabel = getInventoryUnitLabel(item);
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
@@ -144,19 +146,19 @@ export function InventoryDetailSheet({
                             </h4>
                             <div className="grid grid-cols-2 gap-3">
                                 <DetailField
-                                    label="On Hand"
+                                    label={`On Hand (${unitLabel})`}
                                     tooltip="Total physical units currently in your store or warehouse. Includes both available stock and reserved stock."
                                     value={formatQuantity(item.quantity_on_hand)}
                                     mono
                                 />
                                 <DetailField
-                                    label="Reserved"
+                                    label={`Reserved (${unitLabel})`}
                                     tooltip="Units committed to pending sales orders or transfers but not yet dispatched. You cannot sell these until the order is cancelled or fulfilled."
                                     value={formatQuantity(item.quantity_committed)}
                                     mono
                                 />
                                 <DetailField
-                                    label="Available"
+                                    label={`Available (${unitLabel})`}
                                     tooltip="On Hand minus Reserved. This is the quantity you can freely sell or allocate right now."
                                     value={formatQuantity(item.quantity_available)}
                                     mono
@@ -229,13 +231,13 @@ export function InventoryDetailSheet({
                                     icon={<MapPin className="h-3 w-3" />}
                                 />
                                 <DetailField
-                                    label="Reorder Point"
+                                    label={`Reorder Point (${unitLabel})`}
                                     tooltip="When On Hand drops to or below this number, the system raises a Low Stock alert and suggests creating a purchase order."
                                     value={formatQuantity(item.reorder_point)}
                                     mono
                                 />
                                 <DetailField
-                                    label="Maximum Stock"
+                                    label={`Maximum Stock (${unitLabel})`}
                                     tooltip="Upper inventory limit. If On Hand exceeds this, an overstock alert is raised. Helps prevent over-purchasing and frees up cash."
                                     value={
                                         item.maximum_stock != null

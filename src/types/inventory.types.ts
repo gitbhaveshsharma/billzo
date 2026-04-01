@@ -278,6 +278,12 @@ export interface EnrichedInventoryRecord extends InventoryRecord {
         barcode: string | null;
         attributes: Record<string, unknown>;
     } | null;
+    unit?: {
+        id: string;
+        name: string;
+        code: string;
+        symbol: string | null;
+    } | null;
 }
 
 export interface EnrichedInventoryTransaction extends InventoryTransaction {

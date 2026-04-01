@@ -34,6 +34,7 @@ import {
     formatQuantity,
     formatDate,
     formatRelativeTime,
+    formatQuantityWithUnit,
 } from "@/utils/inventory.utils";
 import {
     TRANSACTION_TYPES,

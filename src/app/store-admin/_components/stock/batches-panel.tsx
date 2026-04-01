@@ -42,6 +42,7 @@ import {
     getExpiryStatusLabel,
     getExpiryStatusColor,
     getDaysUntilExpiry,
+    formatQuantityWithUnit,
 } from "@/utils/inventory.utils";
 import type {
     EnrichedProductBatch,

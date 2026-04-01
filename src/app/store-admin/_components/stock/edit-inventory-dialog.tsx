@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
 import { updateInventoryRecordSchema } from "@/validations/inventory.validation";
+import { getInventoryUnitLabel } from "@/utils/inventory.utils";
 import type { UpdateInventoryRecordRequest, EnrichedInventoryRecord } from "@/types/inventory.types";
 
 // ============================================================================
@@ -83,6 +84,9 @@ export function EditInventoryDialog({
     const [location, setLocation] = useState("");
     const [warehouse, setWarehouse] = useState("");
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Get the unit label from the item's unit data
+    const unitLabel = useMemo(() => getInventoryUnitLabel(item), [item]);
 
     useEffect(() => {
         if (open && item) {
@@ -148,7 +152,7 @@ export function EditInventoryDialog({
                 <div className="space-y-4 p-4">
                     <div className="grid grid-cols-2 gap-3">
                         <FieldWithTooltip
-                            label="Reorder Point"
+                            label={`Reorder Point (${unitLabel})`}
                             tooltip={tooltips.reorderPoint}
                             error={errors.reorder_point}
                         >
@@ -158,12 +162,12 @@ export function EditInventoryDialog({
                                 step="1"
                                 value={reorderPoint}
                                 onChange={(e) => setReorderPoint(e.target.value)}
-                                placeholder="e.g., 10"
+                                placeholder={`e.g., 10 ${unitLabel}`}
                             />
                         </FieldWithTooltip>
 
                         <FieldWithTooltip
-                            label="Maximum Stock"
+                            label={`Maximum Stock (${unitLabel})`}
                             tooltip={tooltips.maximumStock}
                             error={errors.maximum_stock}
                         >
@@ -173,7 +177,7 @@ export function EditInventoryDialog({
                                 step="1"
                                 value={maximumStock}
                                 onChange={(e) => setMaximumStock(e.target.value)}
-                                placeholder="e.g., 100"
+                                placeholder={`e.g., 100 ${unitLabel}`}
                             />
                         </FieldWithTooltip>
                     </div>
@@ -208,10 +212,10 @@ export function EditInventoryDialog({
                             <p className="font-medium mb-1">📋 POS Inventory Summary</p>
                             <ul className="space-y-1 text-muted-foreground">
                                 {reorderPoint && (
-                                    <li>• Auto-reorder when stock reaches {reorderPoint} units</li>
+                                    <li>• Auto-reorder when stock reaches {reorderPoint} {unitLabel}</li>
                                 )}
                                 {maximumStock && (
-                                    <li>• Maximum storage capacity: {maximumStock} units</li>
+                                    <li>• Maximum storage capacity: {maximumStock} {unitLabel}</li>
                                 )}
                                 {warehouse && (
                                     <li>• Storage facility: {warehouse}</li>

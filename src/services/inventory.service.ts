@@ -67,7 +67,8 @@ export const inventoryService = {
                         id, name, product_code, barcode, hsn_code, category_id,
                         brand, mrp, selling_price, purchase_price,
                         minimum_stock, reorder_level, is_batch_tracked,
-                        primary_image, unit_id
+                        primary_image, unit_id,
+                        units_of_measure:unit_id (id, name, code, symbol)
                     ),
                     product_variants:variant_id (
                         id, variant_code, name, barcode, attributes
@@ -126,11 +127,17 @@ export const inventoryService = {
             const enrichedItems = ((data ?? []) as unknown[]).map((row) => {
                 const r = row as Record<string, unknown>;
                 const record = { ...r } as unknown as EnrichedInventoryRecord;
-                record.product = r.products as EnrichedInventoryRecord["product"];
+                const productData = r.products as Record<string, unknown> | null;
+                record.product = productData as EnrichedInventoryRecord["product"];
                 record.variant = r.product_variants as EnrichedInventoryRecord["variant"];
+                // Extract unit from nested product join
+                record.unit = productData?.units_of_measure as EnrichedInventoryRecord["unit"];
                 // Clean up joined fields
                 delete (record as unknown as Record<string, unknown>).products;
                 delete (record as unknown as Record<string, unknown>).product_variants;
+                if (record.product) {
+                    delete (record.product as unknown as Record<string, unknown>).units_of_measure;
+                }
                 return record;
             });
 
@@ -203,7 +210,8 @@ export const inventoryService = {
                         id, name, product_code, barcode, hsn_code, category_id,
                         brand, mrp, selling_price, purchase_price,
                         minimum_stock, reorder_level, is_batch_tracked,
-                        primary_image, unit_id
+                        primary_image, unit_id,
+                        units_of_measure:unit_id (id, name, code, symbol)
                     ),
                     product_variants:variant_id (
                         id, variant_code, name, barcode, attributes
@@ -219,10 +227,15 @@ export const inventoryService = {
 
             const r = data as Record<string, unknown>;
             const record = { ...r } as unknown as EnrichedInventoryRecord;
-            record.product = r.products as EnrichedInventoryRecord["product"];
+            const productData = r.products as Record<string, unknown> | null;
+            record.product = productData as EnrichedInventoryRecord["product"];
             record.variant = r.product_variants as EnrichedInventoryRecord["variant"];
+            record.unit = productData?.units_of_measure as EnrichedInventoryRecord["unit"];
             delete (record as unknown as Record<string, unknown>).products;
             delete (record as unknown as Record<string, unknown>).product_variants;
+            if (record.product) {
+                delete (record.product as unknown as Record<string, unknown>).units_of_measure;
+            }
 
             return { data: record, error: null };
         } catch {
@@ -248,7 +261,8 @@ export const inventoryService = {
                         id, name, product_code, barcode, hsn_code, category_id,
                         brand, mrp, selling_price, purchase_price,
                         minimum_stock, reorder_level, is_batch_tracked,
-                        primary_image, unit_id
+                        primary_image, unit_id,
+                        units_of_measure:unit_id (id, name, code, symbol)
                     ),
                     product_variants:variant_id (
                         id, variant_code, name, barcode, attributes
@@ -271,10 +285,15 @@ export const inventoryService = {
 
             const r = data as Record<string, unknown>;
             const record = { ...r } as unknown as EnrichedInventoryRecord;
-            record.product = r.products as EnrichedInventoryRecord["product"];
+            const productData = r.products as Record<string, unknown> | null;
+            record.product = productData as EnrichedInventoryRecord["product"];
             record.variant = r.product_variants as EnrichedInventoryRecord["variant"];
+            record.unit = productData?.units_of_measure as EnrichedInventoryRecord["unit"];
             delete (record as unknown as Record<string, unknown>).products;
             delete (record as unknown as Record<string, unknown>).product_variants;
+            if (record.product) {
+                delete (record.product as unknown as Record<string, unknown>).units_of_measure;
+            }
 
             return { data: record, error: null };
         } catch {
@@ -324,7 +343,8 @@ export const inventoryService = {
                     *,
                     products:product_id (
                         id, name, product_code, barcode, brand,
-                        minimum_stock, reorder_level, primary_image, unit_id
+                        minimum_stock, reorder_level, primary_image, unit_id,
+                        units_of_measure:unit_id (id, name, code, symbol)
                     ),
                     product_variants:variant_id (
                         id, variant_code, name, barcode, attributes
@@ -342,10 +362,15 @@ export const inventoryService = {
             const records = ((data ?? []) as unknown[]).map((row) => {
                 const r = row as Record<string, unknown>;
                 const record = { ...r } as unknown as EnrichedInventoryRecord;
-                record.product = r.products as EnrichedInventoryRecord["product"];
+                const productData = r.products as Record<string, unknown> | null;
+                record.product = productData as EnrichedInventoryRecord["product"];
                 record.variant = r.product_variants as EnrichedInventoryRecord["variant"];
+                record.unit = productData?.units_of_measure as EnrichedInventoryRecord["unit"];
                 delete (record as unknown as Record<string, unknown>).products;
                 delete (record as unknown as Record<string, unknown>).product_variants;
+                if (record.product) {
+                    delete (record.product as unknown as Record<string, unknown>).units_of_measure;
+                }
                 return record;
             });
 
@@ -374,7 +399,8 @@ export const inventoryService = {
                     *,
                     products:product_id (
                         id, name, product_code, barcode, brand,
-                        primary_image, unit_id
+                        primary_image, unit_id,
+                        units_of_measure:unit_id (id, name, code, symbol)
                     ),
                     product_variants:variant_id (
                         id, variant_code, name, barcode, attributes
@@ -392,10 +418,15 @@ export const inventoryService = {
             const records = ((data ?? []) as unknown[]).map((row) => {
                 const r = row as Record<string, unknown>;
                 const record = { ...r } as unknown as EnrichedInventoryRecord;
-                record.product = r.products as EnrichedInventoryRecord["product"];
+                const productData = r.products as Record<string, unknown> | null;
+                record.product = productData as EnrichedInventoryRecord["product"];
                 record.variant = r.product_variants as EnrichedInventoryRecord["variant"];
+                record.unit = productData?.units_of_measure as EnrichedInventoryRecord["unit"];
                 delete (record as unknown as Record<string, unknown>).products;
                 delete (record as unknown as Record<string, unknown>).product_variants;
+                if (record.product) {
+                    delete (record.product as unknown as Record<string, unknown>).units_of_measure;
+                }
                 return record;
             });
 
