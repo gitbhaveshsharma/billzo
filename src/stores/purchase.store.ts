@@ -18,6 +18,7 @@ import type {
     PurchaseDashboardStats,
     SupplierPurchaseSummary,
     CancelPurchaseOrderRequest,
+    ActiveProductOffer,
 } from "@/types/purchase.types";
 
 // ============================================================================
@@ -50,6 +51,7 @@ interface PurchaseState {
     cacheTimeout: number;
     itemsCache: Map<string, { data: PurchaseOrderItem[]; fetchedAt: number }>;
     paymentsCache: Map<string, { data: PurchasePayment[]; fetchedAt: number }>;
+    offersCache: Map<string, { data: ActiveProductOffer[]; fetchedAt: number }>;
 
     // Actions - Fetching
     fetchOrders: (storeId: string, forceRefresh?: boolean) => Promise<void>;
@@ -58,6 +60,7 @@ interface PurchaseState {
     fetchRecentOrders: (storeId: string) => Promise<void>;
     fetchOverdueOrders: (storeId: string) => Promise<void>;
     fetchSupplierSummary: (storeId: string, supplierId: string) => Promise<SupplierPurchaseSummary | null>;
+    fetchActiveOffers: (storeId: string, forceRefresh?: boolean) => Promise<ActiveProductOffer[]>;
 
     // Actions - PO CRUD
     createOrder: (storeId: string, data: CreatePurchaseOrderRequest) => Promise<PurchaseOrder | null>;
@@ -93,6 +96,7 @@ interface PurchaseState {
     invalidateCache: () => void;
     clearItemsCache: (poId?: string) => void;
     clearPaymentsCache: (poId?: string) => void;
+    clearOffersCache: (storeId?: string) => void;
 
     // Actions - Reset
     reset: () => void;
@@ -126,6 +130,7 @@ const initialState = {
     cacheTimeout: 5 * 60 * 1000, // 5 minutes
     itemsCache: new Map() as Map<string, { data: PurchaseOrderItem[]; fetchedAt: number }>,
     paymentsCache: new Map() as Map<string, { data: PurchasePayment[]; fetchedAt: number }>,
+    offersCache: new Map() as Map<string, { data: ActiveProductOffer[]; fetchedAt: number }>,
 };
 
 // ============================================================================
@@ -269,6 +274,34 @@ export const usePurchaseStore = create<PurchaseState>()(
                     return result.data;
                 } catch {
                     return null;
+                }
+            },
+
+            fetchActiveOffers: async (storeId: string, forceRefresh = false) => {
+                const state = get();
+                const cached = state.offersCache.get(storeId);
+                if (!forceRefresh && cached) {
+                    const elapsed = Date.now() - cached.fetchedAt;
+                    if (elapsed < state.cacheTimeout) return cached.data;
+                }
+
+                try {
+                    const result = await purchaseService.getActiveOffers(storeId);
+                    if (result.error) {
+                        set({ error: result.error });
+                        return [];
+                    }
+
+                    const offers = result.data ?? [];
+                    const newCache = new Map(state.offersCache);
+                    newCache.set(storeId, { data: offers, fetchedAt: Date.now() });
+                    set({ offersCache: newCache });
+                    return offers;
+                } catch (err) {
+                    set({
+                        error: err instanceof Error ? err.message : "Failed to fetch offers",
+                    });
+                    return [];
                 }
             },
 
@@ -967,6 +1000,18 @@ export const usePurchaseStore = create<PurchaseState>()(
                 });
             },
 
+            clearOffersCache: (storeId?: string) => {
+                set((state) => {
+                    const newCache = new Map(state.offersCache);
+                    if (storeId) {
+                        newCache.delete(storeId);
+                    } else {
+                        newCache.clear();
+                    }
+                    return { offersCache: newCache };
+                });
+            },
+
             // ================================================================
             // RESET
             // ================================================================
@@ -976,6 +1021,7 @@ export const usePurchaseStore = create<PurchaseState>()(
                     ...initialState,
                     itemsCache: new Map(),
                     paymentsCache: new Map(),
+                    offersCache: new Map(),
                 });
             },
         }),

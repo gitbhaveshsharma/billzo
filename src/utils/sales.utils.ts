@@ -510,6 +510,95 @@ export const formatQuantity = (
 // ============================================================================
 
 /**
+ * GST calculation mode:
+ * - B2C (default): MRP inclusive — tax is INSIDE the price
+ * - B2B: Tax exclusive — tax is ADDED on top of price
+ */
+export type GstMode = "B2C" | "B2B";
+
+/**
+ * Calculate taxable amount based on GST mode:
+ * - B2C: Reverse-calculate from inclusive price: taxable = price / (1 + rate)
+ * - B2B: Price IS the taxable amount (tax added on top)
+ */
+export const calculateTaxableAmount = (
+    priceOrAmount: number,
+    gstPercentage: number,
+    cessPercentage: number,
+    mode: GstMode
+): number => {
+    if (mode === "B2B") {
+        // B2B: price is tax-exclusive, return as-is
+        return Math.round(priceOrAmount * 100) / 100;
+    }
+    // B2C: price is MRP (tax-inclusive), reverse-calculate taxable value
+    const totalTaxRate = (gstPercentage + cessPercentage) / 100;
+    const taxable = priceOrAmount / (1 + totalTaxRate);
+    return Math.round(taxable * 100) / 100;
+};
+
+/**
+ * Calculate GST amounts based on mode:
+ * - B2C: GST is included in price (extracted from MRP)
+ * - B2B: GST is added on top of price
+ */
+export const calculateGstFromPrice = (
+    priceOrAmount: number,
+    gstPercentage: number,
+    cessPercentage: number,
+    isInterstate: boolean,
+    mode: GstMode
+): {
+    taxable_amount: number;
+    cgst_amount: number;
+    sgst_amount: number;
+    igst_amount: number;
+    cess_amount: number;
+    tax_amount: number;
+    total_amount: number;
+} => {
+    const taxableAmount = calculateTaxableAmount(
+        priceOrAmount,
+        gstPercentage,
+        cessPercentage,
+        mode
+    );
+
+    const gstAmount = Math.round(taxableAmount * (gstPercentage / 100) * 100) / 100;
+    const cessAmount = Math.round(taxableAmount * (cessPercentage / 100) * 100) / 100;
+    const taxAmount = gstAmount + cessAmount;
+
+    let cgstAmount = 0;
+    let sgstAmount = 0;
+    let igstAmount = 0;
+
+    if (isInterstate) {
+        igstAmount = gstAmount;
+    } else {
+        cgstAmount = Math.round((gstAmount / 2) * 100) / 100;
+        sgstAmount = Math.round((gstAmount / 2) * 100) / 100;
+    }
+
+    // Total amount depends on mode:
+    // B2C: total = original price (tax already inside)
+    // B2B: total = taxable + tax
+    const totalAmount =
+        mode === "B2C"
+            ? Math.round(priceOrAmount * 100) / 100
+            : Math.round((taxableAmount + taxAmount) * 100) / 100;
+
+    return {
+        taxable_amount: taxableAmount,
+        cgst_amount: cgstAmount,
+        sgst_amount: sgstAmount,
+        igst_amount: igstAmount,
+        cess_amount: cessAmount,
+        tax_amount: taxAmount,
+        total_amount: totalAmount,
+    };
+};
+
+/**
  * Split GST percentage into CGST/SGST (intrastate) or IGST (interstate)
  */
 export const calculateGstSplit = (
@@ -602,6 +691,8 @@ export interface ItemCalculation {
 /**
  * Calculate all computed fields for a single sale item.
  * This mimics the calculations the DB expects to be pre-computed on insert.
+ * 
+ * @param gstMode - "B2C" (default): MRP inclusive, tax inside price; "B2B": tax added on top
  */
 export const calculateItemTotals = (
     item: {
@@ -614,7 +705,8 @@ export const calculateItemTotals = (
         gst_percentage: number;
         cess_percentage: number;
     },
-    isInterstate: boolean
+    isInterstate: boolean,
+    gstMode: GstMode = "B2C"
 ): ItemCalculation => {
     const subtotal = Math.round(item.unit_price * item.quantity * 100) / 100;
 
@@ -636,28 +728,28 @@ export const calculateItemTotals = (
                 100
         ) / 100;
 
-    const taxableAmount = Math.round((subtotal - discountTotal) * 100) / 100;
+    const priceAfterDiscountTotal = Math.round((subtotal - discountTotal) * 100) / 100;
 
-    // GST split
+    // GST calculation based on mode:
+    // B2C (MRP inclusive): price includes tax, back-calculate taxable amount
+    // B2B (tax exclusive): price is taxable, add tax on top
     const gstSplit = calculateGstSplit(item.gst_percentage, isInterstate);
-    const gstAmounts = calculateGstAmounts(
-        taxableAmount,
+    const gstCalc = calculateGstFromPrice(
+        priceAfterDiscountTotal,
         item.gst_percentage,
         item.cess_percentage,
-        isInterstate
+        isInterstate,
+        gstMode
     );
 
-    const totalAmount =
-        Math.round((taxableAmount + gstAmounts.tax_amount) * 100) / 100;
-
-    // Cost & profit
+    // Cost & profit (always based on taxable amount for accurate margin)
     let totalCost: number | null = null;
     let profitAmount: number | null = null;
     let profitPercentage: number | null = null;
 
     if (item.unit_cost != null) {
         totalCost = Math.round(item.unit_cost * item.quantity * 100) / 100;
-        profitAmount = Math.round((taxableAmount - totalCost) * 100) / 100;
+        profitAmount = Math.round((gstCalc.taxable_amount - totalCost) * 100) / 100;
         profitPercentage =
             totalCost > 0
                 ? Math.round((profitAmount / totalCost) * 10000) / 100
@@ -668,10 +760,14 @@ export const calculateItemTotals = (
         subtotal,
         discount_total: discountTotal,
         price_after_discount: priceAfterDiscount,
-        taxable_amount: taxableAmount,
+        taxable_amount: gstCalc.taxable_amount,
         ...gstSplit,
-        ...gstAmounts,
-        total_amount: totalAmount,
+        cgst_amount: gstCalc.cgst_amount,
+        sgst_amount: gstCalc.sgst_amount,
+        igst_amount: gstCalc.igst_amount,
+        cess_amount: gstCalc.cess_amount,
+        tax_amount: gstCalc.tax_amount,
+        total_amount: gstCalc.total_amount,
         total_cost: totalCost,
         profit_amount: profitAmount,
         profit_percentage: profitPercentage,
@@ -702,20 +798,25 @@ export interface SaleCalculation {
 /**
  * Calculate full sale totals from cart items and bill discount.
  * Used before creating a sale to pre-compute all header amounts.
+ * 
+ * @param gstMode - "B2C" (default): MRP inclusive, tax inside price; "B2B": tax added on top
  */
 export const calculateSaleTotals = (
     items: CartItem[],
     billDiscountPercentage: number,
     billDiscountAmount: number,
-    isInterstate: boolean
+    isInterstate: boolean,
+    gstMode: GstMode = "B2C"
 ): SaleCalculation => {
     // Sum up item-level totals
     let subtotal = 0;
     let itemDiscountTotal = 0;
+    let taxableAmount = 0;
     let cgst = 0;
     let sgst = 0;
     let igst = 0;
     let cess = 0;
+    let itemTotalAmount = 0;
 
     for (const item of items) {
         const calc = calculateItemTotals(
@@ -729,18 +830,22 @@ export const calculateSaleTotals = (
                 gst_percentage: item.gst_percentage,
                 cess_percentage: item.cess_percentage,
             },
-            isInterstate
+            isInterstate,
+            gstMode
         );
         subtotal += calc.subtotal;
         itemDiscountTotal += calc.discount_total;
+        taxableAmount += calc.taxable_amount;
         cgst += calc.cgst_amount;
         sgst += calc.sgst_amount;
         igst += calc.igst_amount;
         cess += calc.cess_amount;
+        itemTotalAmount += calc.total_amount;
     }
 
     subtotal = Math.round(subtotal * 100) / 100;
     itemDiscountTotal = Math.round(itemDiscountTotal * 100) / 100;
+    taxableAmount = Math.round(taxableAmount * 100) / 100;
 
     // Bill-level discount (applied on subtotal after item discounts)
     const afterItemDiscount = subtotal - itemDiscountTotal;
@@ -751,11 +856,45 @@ export const calculateSaleTotals = (
               ) / 100
             : Math.round(billDiscountAmount * 100) / 100;
 
-    const discountTotal =
-        Math.round((itemDiscountTotal + billDiscount) * 100) / 100;
-    const taxableAmount = Math.round((subtotal - discountTotal) * 100) / 100;
-    const taxAmount = Math.round((cgst + sgst + igst + cess) * 100) / 100;
-    const grossTotal = Math.round((taxableAmount + taxAmount) * 100) / 100;
+    // If there's a bill discount, we need to recalculate tax
+    let finalTaxableAmount = taxableAmount;
+    let finalCgst = cgst;
+    let finalSgst = sgst;
+    let finalIgst = igst;
+    let finalCess = cess;
+    let finalTaxAmount = Math.round((cgst + sgst + igst + cess) * 100) / 100;
+    let grossTotal = Math.round(itemTotalAmount * 100) / 100;
+
+    if (billDiscount > 0) {
+        // Apply bill discount proportionally
+        // For B2C: The bill discount reduces the final total (MRP), so we back-calculate new tax
+        // For B2B: The bill discount reduces taxable amount, then recalculate tax
+        const discountRatio = billDiscount / afterItemDiscount;
+
+        if (gstMode === "B2C") {
+            // B2C: Discount is on MRP, proportionally reduce all amounts
+            finalTaxableAmount = Math.round(taxableAmount * (1 - discountRatio) * 100) / 100;
+            finalCgst = Math.round(cgst * (1 - discountRatio) * 100) / 100;
+            finalSgst = Math.round(sgst * (1 - discountRatio) * 100) / 100;
+            finalIgst = Math.round(igst * (1 - discountRatio) * 100) / 100;
+            finalCess = Math.round(cess * (1 - discountRatio) * 100) / 100;
+            finalTaxAmount = Math.round((finalCgst + finalSgst + finalIgst + finalCess) * 100) / 100;
+            grossTotal = Math.round((itemTotalAmount - billDiscount) * 100) / 100;
+        } else {
+            // B2B: Discount reduces taxable, then recalculate tax on reduced taxable
+            finalTaxableAmount = Math.round((taxableAmount - billDiscount) * 100) / 100;
+            // Recalculate tax proportionally
+            const taxRatio = finalTaxableAmount / taxableAmount;
+            finalCgst = Math.round(cgst * taxRatio * 100) / 100;
+            finalSgst = Math.round(sgst * taxRatio * 100) / 100;
+            finalIgst = Math.round(igst * taxRatio * 100) / 100;
+            finalCess = Math.round(cess * taxRatio * 100) / 100;
+            finalTaxAmount = Math.round((finalCgst + finalSgst + finalIgst + finalCess) * 100) / 100;
+            grossTotal = Math.round((finalTaxableAmount + finalTaxAmount) * 100) / 100;
+        }
+    }
+
+    const discountTotal = Math.round((itemDiscountTotal + billDiscount) * 100) / 100;
     const roundOff = calculateRoundOff(grossTotal);
     const totalAmount = Math.round((grossTotal + roundOff) * 100) / 100;
 
@@ -764,12 +903,12 @@ export const calculateSaleTotals = (
         item_discount_total: itemDiscountTotal,
         bill_discount_amount: billDiscount,
         discount_total: discountTotal,
-        taxable_amount: taxableAmount,
-        cgst_amount: Math.round(cgst * 100) / 100,
-        sgst_amount: Math.round(sgst * 100) / 100,
-        igst_amount: Math.round(igst * 100) / 100,
-        cess_amount: Math.round(cess * 100) / 100,
-        tax_amount: taxAmount,
+        taxable_amount: finalTaxableAmount,
+        cgst_amount: Math.round(finalCgst * 100) / 100,
+        sgst_amount: Math.round(finalSgst * 100) / 100,
+        igst_amount: Math.round(finalIgst * 100) / 100,
+        cess_amount: Math.round(finalCess * 100) / 100,
+        tax_amount: finalTaxAmount,
         gross_total: grossTotal,
         round_off: roundOff,
         total_amount: totalAmount,
@@ -1020,18 +1159,22 @@ export const applyCartItemDiscount = (
 
 /**
  * Calculate totals for the entire cart (used for display).
+ * 
+ * @param gstMode - "B2C" (default): MRP inclusive, tax inside price; "B2B": tax added on top
  */
 export const calculateCartTotals = (
     cart: CartItem[],
     billDiscountPercentage: number,
     billDiscountAmount: number,
-    isInterstate: boolean
+    isInterstate: boolean,
+    gstMode: GstMode = "B2C"
 ): SaleCalculation =>
     calculateSaleTotals(
         cart,
         billDiscountPercentage,
         billDiscountAmount,
-        isInterstate
+        isInterstate,
+        gstMode
     );
 
 /**
@@ -1531,6 +1674,7 @@ export const buildReceiptData = (
         credit_due_date: string | null;
         notes: string | null;
     };
+    gstType: "B2C" | "B2B" | "export";
 } => ({
     store: {
         name: storeName,
@@ -1594,4 +1738,5 @@ export const buildReceiptData = (
         credit_due_date: sale.credit_due_date,
         notes: sale.notes,
     },
+    gstType: sale.gst_type,
 });

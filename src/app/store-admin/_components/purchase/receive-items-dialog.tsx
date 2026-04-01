@@ -22,7 +22,12 @@ import {
 } from "@/components/ui/dialog";
 
 import type { PurchaseOrderItem, ReceiveItemRequest } from "@/types/purchase.types";
-import { formatQuantity, getPOItemStatusLabel, getPOItemStatusColor } from "@/utils/purchase.utils";
+import {
+    formatQuantity,
+    getPOItemStatusLabel,
+    getPOItemStatusColor,
+    formatOfferSummary,
+} from "@/utils/purchase.utils";
 import { usePurchaseStore } from "@/stores/purchase.store";
 
 // ============================================================================
@@ -186,6 +191,11 @@ export function ReceiveItemsDialog({
                                                 {row.item.product_code}
                                                 {row.item.hsn_code ? ` | HSN: ${row.item.hsn_code}` : ""}
                                             </p>
+                                            {row.item.offer_applied && (
+                                                <p className="text-[11px] text-green-700 dark:text-green-300">
+                                                    {formatOfferSummary(row.item.offer_details, row.item.free_quantity) ?? "Supplier offer applied"}
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="text-right">
                                             <Badge
@@ -197,6 +207,11 @@ export function ReceiveItemsDialog({
                                             <p className="text-xs text-muted-foreground mt-0.5">
                                                 Pending: {formatQuantity(row.item.pending_quantity, row.item.unit_code)}
                                             </p>
+                                            {row.item.free_quantity > 0 && (
+                                                <p className="text-xs text-green-700 dark:text-green-300">
+                                                    Free: {formatQuantity(row.item.free_quantity, row.item.unit_code)}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 

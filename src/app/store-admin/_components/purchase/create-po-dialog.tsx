@@ -49,8 +49,16 @@ import { Info } from "lucide-react";
 import { createPurchaseOrderSchema } from "@/validations/purchase.validation";
 import type { CreatePurchaseOrderFormData } from "@/validations/purchase.validation";
 import type { EnrichedPurchaseOrder, CreatePurchaseOrderRequest } from "@/types/purchase.types";
-import { calculateItemTotals, calculatePOTotals, formatCurrency } from "@/utils/purchase.utils";
+import {
+    calculateItemTotals,
+    calculatePOTotals,
+    formatCurrency,
+    calculateOfferFreeQuantity,
+    formatOfferSummary,
+} from "@/utils/purchase.utils";
+import type { ActiveProductOffer } from "@/types/purchase.types";
 import { useSupplierStore } from "@/stores/supplier.store";
+import { usePurchaseStore } from "@/stores/purchase.store";
 import { POItemDialog, type POItemDialogItem } from "./po-item-dialog";
 
 // ============================================================================
@@ -105,6 +113,7 @@ function makeDefaultItem() {
         batch_number: "",
         manufacturing_date: "",
         expiry_date: "",
+        offer_id: undefined as string | undefined,
         notes: "",
     };
 }
@@ -125,8 +134,10 @@ export function CreatePODialog({
     const [itemDialogOpen, setItemDialogOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<POItemDialogItem | null>(null);
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
+    const [activeOffers, setActiveOffers] = useState<ActiveProductOffer[]>([]);
 
     const suppliers = useSupplierStore((s) => s.suppliers);
+    const fetchActiveOffers = usePurchaseStore((s) => s.fetchActiveOffers);
 
     const {
         register,
@@ -175,6 +186,11 @@ export function CreatePODialog({
     const shippingCharges = watch("shipping_charges") ?? 0;
     const otherCharges = watch("other_charges") ?? 0;
     const roundOff = watch("round_off") ?? 0;
+
+    useEffect(() => {
+        if (!open || !storeId) return;
+        fetchActiveOffers(storeId).then((offers) => setActiveOffers(offers));
+    }, [open, storeId, fetchActiveOffers]);
 
     // Calculate totals
     const { itemTotals, poTotals } = useMemo(() => {
@@ -226,6 +242,7 @@ export function CreatePODialog({
                 tags: editOrder.tags ?? [],
                 items: (editOrder.items ?? []).map((item) => ({
                     product_id: item.product_id,
+                    variant_id: item.variant_id ?? undefined,
                     product_name: item.product_name,
                     product_code: item.product_code ?? "",
                     barcode: item.barcode ?? "",
@@ -242,6 +259,7 @@ export function CreatePODialog({
                     batch_number: item.batch_number ?? "",
                     manufacturing_date: item.manufacturing_date ?? "",
                     expiry_date: item.expiry_date ?? "",
+                    offer_id: item.offer_id ?? undefined,
                     notes: item.notes ?? "",
                 })),
             });
@@ -275,10 +293,50 @@ export function CreatePODialog({
     };
 
     const handleItemSave = (item: POItemDialogItem, index: number | null) => {
+        const variantOffer = item.variant_id
+            ? activeOffers.find(
+                  (offer) =>
+                      offer.auto_apply &&
+                      offer.product_id === item.product_id &&
+                      offer.variant_id === item.variant_id
+              )
+            : null;
+        const productOffer =
+            variantOffer ??
+            activeOffers.find(
+                (offer) =>
+                    offer.auto_apply &&
+                    offer.product_id === item.product_id &&
+                    offer.variant_id === null
+            ) ??
+            null;
+        const resolvedOffer = item.offer_id
+            ? activeOffers.find((offer) => offer.offer_id === item.offer_id) ?? null
+            : productOffer;
+        const freeQuantity = resolvedOffer
+            ? calculateOfferFreeQuantity(item.ordered_quantity, resolvedOffer)
+            : 0;
+        const itemWithOffer: POItemDialogItem = {
+            ...item,
+            offer_id: resolvedOffer?.offer_id ?? item.offer_id,
+            free_quantity: freeQuantity,
+            offer_applied: freeQuantity > 0,
+            offer_details: resolvedOffer
+                ? {
+                      offer_type: resolvedOffer.offer_type,
+                      offer_code: resolvedOffer.offer_code,
+                      offer_name: resolvedOffer.offer_name,
+                      buy_quantity: resolvedOffer.buy_quantity,
+                      get_quantity: resolvedOffer.get_quantity,
+                      calculated_free_qty: freeQuantity,
+                  }
+                : null,
+        };
+
         if (index === null) {
-            append(item);
+            append(itemWithOffer);
         } else {
-            update(index, item);
+            update(index, itemWithOffer);
         }
         setItemDialogOpen(false);
     };
@@ -329,6 +387,7 @@ export function CreatePODialog({
                 batch_number: item.batch_number || undefined,
                 manufacturing_date: item.manufacturing_date || undefined,
                 expiry_date: item.expiry_date || undefined,
+                offer_id: item.offer_id || undefined,
                 notes: item.notes || undefined,
             })),
         };
@@ -560,6 +619,7 @@ export function CreatePODialog({
                                                         <TableHead className="w-[40px] text-center">#</TableHead>
                                                         <TableHead>Product</TableHead>
                                                         <TableHead className="w-[90px] text-center">Qty</TableHead>
+                                                        <TableHead className="w-[90px] text-center">Free Qty</TableHead>
                                                         <TableHead className="w-[100px] text-right">Unit Price</TableHead>
                                                         <TableHead className="w-[70px] text-center">GST</TableHead>
                                                         <TableHead className="w-[80px] text-center">Disc %</TableHead>
@@ -614,11 +674,24 @@ export function CreatePODialog({
                                                                                     Exp: {item.expiry_date}
                                                                                 </span>
                                                                             )}
+                                                                            {(item as POItemDialogItem | undefined)?.offer_applied && (
+                                                                                <span className="text-[10px] text-green-700 bg-green-50 px-1 py-0.5 rounded dark:bg-green-950 dark:text-green-300">
+                                                                                    {formatOfferSummary(
+                                                                                        (item as POItemDialogItem).offer_details ?? null,
+                                                                                        (item as POItemDialogItem).free_quantity
+                                                                                    ) ?? "Offer applied"}
+                                                                                </span>
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell className="text-center text-sm">
                                                                     {item?.ordered_quantity ?? 0}
+                                                                </TableCell>
+                                                                <TableCell className="text-center text-sm font-medium text-green-700 dark:text-green-300">
+                                                                    {(item as POItemDialogItem | undefined)?.free_quantity && (item as POItemDialogItem).free_quantity > 0
+                                                                        ? `${(item as POItemDialogItem).free_quantity}`
+                                                                        : "—"}
                                                                 </TableCell>
                                                                 <TableCell className="text-right text-sm">
                                                                     {formatCurrency(item?.unit_price ?? 0)}

@@ -10,10 +10,13 @@ import { formatCurrency } from "@/utils/sales.utils";
 // TYPES
 // ============================================================================
 
+type GstDisplayMode = "B2C" | "B2B" | "export";
+
 interface CartTotalsPanelProps {
     totals: SaleCalculation;
     billDiscountPercentage: number;
     isInterstate: boolean;
+    gstType?: GstDisplayMode;
     onBillDiscountChange: (percentage: number, amount: number) => void;
 }
 
@@ -65,6 +68,7 @@ export function CartTotalsPanel({
     totals,
     billDiscountPercentage,
     isInterstate,
+    gstType = "B2C",
     onBillDiscountChange,
 }: CartTotalsPanelProps) {
     const handlePercentageChange = (value: string) => {
@@ -73,6 +77,10 @@ export function CartTotalsPanel({
         const amount = (totals.subtotal * pct) / 100;
         onBillDiscountChange(pct, Math.round(amount * 100) / 100);
     };
+
+    // B2C: Tax is included in MRP, don't show separate breakdown
+    // B2B/export: Tax is added on top, show full breakdown
+    const showGstBreakdown = gstType !== "B2C";
 
     return (
         <div className="space-y-1.5 px-3 py-2 bg-muted/30 rounded-lg">
@@ -109,22 +117,37 @@ export function CartTotalsPanel({
                 </div>
             </div>
 
-            <TotalRow label="Taxable Amount" value={formatCurrency(totals.taxable_amount)} muted />
-
-            <Separator className="my-1" />
-
-            {/* Tax breakdown */}
-            {isInterstate ? (
-                <TotalRow label="IGST" value={formatCurrency(totals.igst_amount)} muted />
+            {/* Show taxable amount for B2B, or "incl. GST" note for B2C */}
+            {showGstBreakdown ? (
+                <TotalRow label="Taxable Amount" value={formatCurrency(totals.taxable_amount)} muted />
             ) : (
-                <>
-                    <TotalRow label="CGST" value={formatCurrency(totals.cgst_amount)} muted />
-                    <TotalRow label="SGST" value={formatCurrency(totals.sgst_amount)} muted />
-                </>
+                totals.tax_amount > 0 && (
+                    <TotalRow 
+                        label="(Incl. GST)" 
+                        value={formatCurrency(totals.tax_amount)} 
+                        muted 
+                    />
+                )
             )}
 
-            {totals.cess_amount > 0 && (
-                <TotalRow label="Cess" value={formatCurrency(totals.cess_amount)} muted />
+            {showGstBreakdown && <Separator className="my-1" />}
+
+            {/* Tax breakdown - only for B2B/export */}
+            {showGstBreakdown && (
+                <>
+                    {isInterstate ? (
+                        <TotalRow label="IGST" value={formatCurrency(totals.igst_amount)} muted />
+                    ) : (
+                        <>
+                            <TotalRow label="CGST" value={formatCurrency(totals.cgst_amount)} muted />
+                            <TotalRow label="SGST" value={formatCurrency(totals.sgst_amount)} muted />
+                        </>
+                    )}
+
+                    {totals.cess_amount > 0 && (
+                        <TotalRow label="Cess" value={formatCurrency(totals.cess_amount)} muted />
+                    )}
+                </>
             )}
 
             {totals.round_off !== 0 && (

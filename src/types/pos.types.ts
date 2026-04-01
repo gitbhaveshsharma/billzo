@@ -3,6 +3,46 @@
 // Designed for O(1) barcode/ID lookup with zero network calls during billing
 // ============================================================================
 
+// ============================================================================
+// OFFER TYPES
+// ============================================================================
+
+/** Offer types supported by the system */
+export type PosOfferType =
+    | "BOGO"                  // Buy 1 Get 1 Free
+    | "BUY_X_GET_Y_FREE"      // Buy X Get Y Free
+    | "BUY_X_GET_Y_DISCOUNT"  // Buy X Get Y at discount
+    | "VOLUME_FREE";          // Volume threshold free items
+
+/**
+ * Active offer for a product at POS.
+ * Denormalized from product_offers table for fast lookup.
+ */
+export interface ProductOffer {
+    /** Offer ID */
+    offer_id: string;
+    /** Type of offer */
+    offer_type: PosOfferType;
+    /** Offer code for display */
+    offer_code: string;
+    /** Human-readable offer name */
+    offer_name: string;
+    /** Quantity required to buy to trigger offer */
+    buy_quantity: number;
+    /** Quantity given free/discounted */
+    get_quantity: number;
+    /** Discount percentage on free items (100 = fully free) */
+    discount_percentage: number;
+    /** Message to display at POS */
+    pos_display_message: string | null;
+    /** Whether to auto-apply the offer */
+    auto_apply: boolean;
+    /** Offer validity start date */
+    start_date: string;
+    /** Offer validity end date (null = no end) */
+    end_date: string | null;
+}
+
 /**
  * Flat sellable unit — one row per scannable item.
  * If a product has 5 variants → 5 SellableItem rows in memory.
@@ -49,6 +89,8 @@ export interface SellableItem {
     category_id: string | null;
     /** Whether the item is active */
     is_active: boolean;
+    /** Active offer for this product (null if no offer) */
+    active_offer: ProductOffer | null;
 }
 
 /**
@@ -67,7 +109,7 @@ export interface PosCacheMeta {
 }
 
 /** Current POS cache version. Bump this to force all clients to re-fetch. */
-export const POS_CACHE_VERSION = 1;
+export const POS_CACHE_VERSION = 2; // Bumped for offers support
 
 /**
  * Result of the hydration process (load from IndexedDB or network).

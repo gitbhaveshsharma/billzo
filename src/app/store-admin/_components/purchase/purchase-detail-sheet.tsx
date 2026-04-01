@@ -56,6 +56,7 @@ import {
     formatDate,
     formatQuantity,
     formatGstSummary,
+    formatOfferSummary,
     canReceiveItems,
     canAddPayment,
     canCreateReturn,
@@ -110,6 +111,7 @@ function ItemsTab({ items }: { items: PurchaseOrderItem[] }) {
                     <TableRow>
                         <TableHead>Product</TableHead>
                         <TableHead className="text-right">Qty</TableHead>
+                        <TableHead className="text-right">Free</TableHead>
                         <TableHead className="text-right">Rcvd</TableHead>
                         <TableHead className="text-right">Price</TableHead>
                         <TableHead className="text-right">Tax</TableHead>
@@ -127,10 +129,20 @@ function ItemsTab({ items }: { items: PurchaseOrderItem[] }) {
                                         {item.product_code}
                                         {item.hsn_code ? ` | HSN: ${item.hsn_code}` : ""}
                                     </p>
+                                    {item.offer_applied && (
+                                        <p className="text-[11px] text-green-700 dark:text-green-300">
+                                            {formatOfferSummary(item.offer_details, item.free_quantity) ?? "Supplier offer applied"}
+                                        </p>
+                                    )}
                                 </div>
                             </TableCell>
                             <TableCell className="text-right">
                                 {formatQuantity(item.ordered_quantity, item.unit_code)}
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-green-700 dark:text-green-300">
+                                {item.free_quantity > 0
+                                    ? formatQuantity(item.free_quantity, item.unit_code)
+                                    : "—"}
                             </TableCell>
                             <TableCell className="text-right">
                                 {formatQuantity(item.received_quantity, item.unit_code)}

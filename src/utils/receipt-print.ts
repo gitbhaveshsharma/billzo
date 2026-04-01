@@ -29,6 +29,9 @@ import type {
 // TYPES
 // ============================================================================
 
+/** GST type determines how tax is displayed on receipt */
+export type ReceiptGstType = "B2C" | "B2B" | "export";
+
 export interface PrintReceiptData {
     store: {
         name: string;
@@ -81,6 +84,8 @@ export interface PrintReceiptData {
         credit_due_date: string | null;
         notes: string | null;
     };
+    /** GST type - B2C hides tax breakdown, B2B/export shows it */
+    gstType?: ReceiptGstType;
 }
 
 // ============================================================================
@@ -169,6 +174,7 @@ export function buildTestReceiptData(
         },
         payments: [{ method: "Cash", amount: 1248, reference: null }],
         footer: { is_credit: false, credit_due_date: null, notes: null },
+        gstType: "B2C", // Default to B2C for test data
     };
 }
 
@@ -331,11 +337,24 @@ export function generateReceiptHtml(
     if (data.totals.discount > 0) {
         sections.push(kvRow("Discount", "-" + formatINR(data.totals.discount), "color:#666;"));
     }
-    if (config.showGstBreakdown) {
+    
+    // Show GST breakdown only if:
+    // 1. config.showGstBreakdown is true (user preference)
+    // 2. AND gstType is NOT B2C (B2C = tax inclusive, no breakdown needed)
+    const isB2B = data.gstType !== "B2C";
+    const showGst = config.showGstBreakdown && isB2B;
+    
+    if (showGst) {
         if (data.totals.cgst > 0) sections.push(kvRow("CGST", formatINR(data.totals.cgst), "color:#666;"));
         if (data.totals.sgst > 0) sections.push(kvRow("SGST", formatINR(data.totals.sgst), "color:#666;"));
         if (data.totals.igst > 0) sections.push(kvRow("IGST", formatINR(data.totals.igst), "color:#666;"));
         if (data.totals.cess > 0) sections.push(kvRow("Cess", formatINR(data.totals.cess), "color:#666;"));
+    } else if (data.gstType === "B2C") {
+        // B2C: Optionally show "(Incl. GST)" note
+        const totalTax = (data.totals.cgst || 0) + (data.totals.sgst || 0) + (data.totals.igst || 0) + (data.totals.cess || 0);
+        if (totalTax > 0) {
+            sections.push(kvRow("(Incl. GST)", formatINR(totalTax), "color:#888;font-size:smaller;"));
+        }
     }
     if (data.totals.round_off !== 0) {
         sections.push(kvRow("Round Off", formatINR(data.totals.round_off), "color:#666;"));

@@ -67,6 +67,7 @@ export const createPurchaseOrderItemSchema = z
         batch_number: z.string().max(50, "Batch number too long").transform(emptyToUndefined).optional(),
         manufacturing_date: z.string().transform(emptyToUndefined).optional(),
         expiry_date: z.string().transform(emptyToUndefined).optional(),
+        offer_id: z.string().uuid("Invalid offer ID").optional(),
 
         notes: z.string().max(500, "Notes must be at most 500 characters").transform(emptyToUndefined).optional(),
     })
@@ -104,6 +105,7 @@ export const updatePurchaseOrderItemSchema = z.object({
     batch_number: z.string().max(50).transform(emptyToUndefined).optional(),
     manufacturing_date: z.string().transform(emptyToUndefined).optional(),
     expiry_date: z.string().transform(emptyToUndefined).optional(),
+    offer_id: z.string().uuid("Invalid offer ID").optional(),
     notes: z.string().max(500).transform(emptyToUndefined).optional(),
 });
 

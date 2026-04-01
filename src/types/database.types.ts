@@ -1362,6 +1362,153 @@ export interface Database {
         Relationships: [];
       };
       // ======================================================================
+      // SUPPLIER OFFERS TABLES (migration: 19_supplier_offers.sql)
+      // ======================================================================
+      supplier_offers: {
+        Row: {
+          id: string;
+          store_id: string;
+          supplier_id: string | null;
+          offer_code: string;
+          offer_name: string;
+          description: string | null;
+          offer_type: string;
+          buy_quantity: number;
+          get_quantity: number;
+          discount_on_free: number;
+          applicable_product_ids: string[] | null;
+          applicable_category_ids: string[] | null;
+          applicable_brand: string | null;
+          minimum_order_value: number;
+          maximum_discount_amount: number | null;
+          start_date: string;
+          end_date: string | null;
+          is_active: boolean;
+          auto_apply: boolean;
+          priority: number;
+          terms_conditions: string | null;
+          pos_display_message: string | null;
+          metadata: Json;
+          created_at: string;
+          updated_at: string;
+          created_by: string | null;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          supplier_id?: string | null;
+          offer_code: string;
+          offer_name: string;
+          description?: string | null;
+          offer_type: string;
+          buy_quantity?: number;
+          get_quantity?: number;
+          discount_on_free?: number;
+          applicable_product_ids?: string[] | null;
+          applicable_category_ids?: string[] | null;
+          applicable_brand?: string | null;
+          minimum_order_value?: number;
+          maximum_discount_amount?: number | null;
+          start_date: string;
+          end_date?: string | null;
+          is_active?: boolean;
+          auto_apply?: boolean;
+          priority?: number;
+          terms_conditions?: string | null;
+          pos_display_message?: string | null;
+          metadata?: Json;
+          created_by?: string | null;
+          updated_by?: string | null;
+        };
+        Update: {
+          supplier_id?: string | null;
+          offer_code?: string;
+          offer_name?: string;
+          description?: string | null;
+          offer_type?: string;
+          buy_quantity?: number;
+          get_quantity?: number;
+          discount_on_free?: number;
+          applicable_product_ids?: string[] | null;
+          applicable_category_ids?: string[] | null;
+          applicable_brand?: string | null;
+          minimum_order_value?: number;
+          maximum_discount_amount?: number | null;
+          start_date?: string;
+          end_date?: string | null;
+          is_active?: boolean;
+          auto_apply?: boolean;
+          priority?: number;
+          terms_conditions?: string | null;
+          pos_display_message?: string | null;
+          metadata?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      product_offers: {
+        Row: {
+          id: string;
+          store_id: string;
+          product_id: string;
+          variant_id: string | null;
+          offer_id: string;
+          offer_type: string;
+          offer_code: string;
+          offer_name: string;
+          buy_quantity: number;
+          get_quantity: number;
+          discount_percentage: number;
+          pos_display_message: string | null;
+          auto_apply: boolean;
+          start_date: string;
+          end_date: string | null;
+          is_active: boolean;
+          priority: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          product_id: string;
+          variant_id?: string | null;
+          offer_id: string;
+          offer_type: string;
+          offer_code: string;
+          offer_name: string;
+          buy_quantity: number;
+          get_quantity: number;
+          discount_percentage?: number;
+          pos_display_message?: string | null;
+          auto_apply?: boolean;
+          start_date: string;
+          end_date?: string | null;
+          is_active?: boolean;
+          priority?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          offer_type?: string;
+          offer_code?: string;
+          offer_name?: string;
+          buy_quantity?: number;
+          get_quantity?: number;
+          discount_percentage?: number;
+          pos_display_message?: string | null;
+          auto_apply?: boolean;
+          start_date?: string;
+          end_date?: string | null;
+          is_active?: boolean;
+          priority?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      // ======================================================================
       // PURCHASE TABLES (migration: 6_purchase_orders.sql or similar)
       // ======================================================================
       purchase_orders: {
@@ -1547,6 +1694,10 @@ export interface Database {
           batch_number: string | null;
           manufacturing_date: string | null;
           expiry_date: string | null;
+          offer_id: string | null;
+          free_quantity: number;
+          offer_applied: boolean;
+          offer_details: Json | null;
           item_status: string;
           notes: string | null;
           created_at: string;
@@ -1587,12 +1738,20 @@ export interface Database {
           batch_number?: string | null;
           manufacturing_date?: string | null;
           expiry_date?: string | null;
+          offer_id?: string | null;
+          free_quantity?: number;
+          offer_applied?: boolean;
+          offer_details?: Json | null;
           item_status?: string;
           notes?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
+          offer_id?: string | null;
+          free_quantity?: number;
+          offer_applied?: boolean;
+          offer_details?: Json | null;
           received_quantity?: number;
           returned_quantity?: number;
           pending_quantity?: number;
@@ -2683,6 +2842,24 @@ export interface Database {
       complete_sale: {
         Args: { p_sale_id: string };
         Returns: Json;
+      };
+      get_active_pos_offers: {
+        Args: { p_store_id: string };
+        Returns: {
+          product_id: string;
+          variant_id: string | null;
+          offer_id: string;
+          offer_type: string;
+          offer_code: string;
+          offer_name: string;
+          buy_quantity: number;
+          get_quantity: number;
+          discount_percentage: number;
+          pos_display_message: string | null;
+          auto_apply: boolean;
+          start_date: string;
+          end_date: string | null;
+        }[];
       };
       generate_invoice_number: {
         Args: { p_store_id: string; p_sequence_type?: string };

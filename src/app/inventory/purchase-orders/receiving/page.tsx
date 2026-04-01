@@ -123,6 +123,9 @@ export default function ReceivingPage() {
         </div>
         <p className="text-sm text-muted-foreground">
           Record incoming goods against purchase orders.
+          <span className="ml-1 text-green-700 dark:text-green-300">
+            Free quantities from supplier offers are shown per item.
+          </span>
           {receivableOrders.length > 0 && (
             <span className="ml-1 font-medium text-foreground">
               {receivableOrders.length} order(s) awaiting receipt.

@@ -325,11 +325,23 @@ export function encodeReceiptEscPos(
         kvMoney("Discount", data.totals.discount, true);
     }
 
-    if (config.showGstBreakdown) {
+    // Show GST breakdown only if:
+    // 1. config.showGstBreakdown is true (user preference)
+    // 2. AND gstType is NOT B2C (B2C = tax inclusive, no breakdown needed)
+    const isB2B = data.gstType !== "B2C";
+    const showGst = config.showGstBreakdown && isB2B;
+
+    if (showGst) {
         if (data.totals.cgst > 0) kvMoney("CGST", data.totals.cgst);
         if (data.totals.sgst > 0) kvMoney("SGST", data.totals.sgst);
         if (data.totals.igst > 0) kvMoney("IGST", data.totals.igst);
         if (data.totals.cess > 0) kvMoney("Cess", data.totals.cess);
+    } else if (data.gstType === "B2C") {
+        // B2C: Optionally show "(Incl. GST)" note
+        const totalTax = (data.totals.cgst || 0) + (data.totals.sgst || 0) + (data.totals.igst || 0) + (data.totals.cess || 0);
+        if (totalTax > 0) {
+            kvMoney("(Incl. GST)", totalTax);
+        }
     }
 
     if (data.totals.round_off !== 0) {

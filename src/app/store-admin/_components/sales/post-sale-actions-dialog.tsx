@@ -131,6 +131,7 @@ export function PostSaleActionsDialog({
             totals: receipt.totals,
             payments: receipt.payments,
             footer: receipt.footer,
+            gstType: receipt.gstType,
         };
     }, [sale, storeName, storeAddress, storeGstin, storePhone, customerCache]);
 

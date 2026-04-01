@@ -86,6 +86,42 @@ export const RETURN_REASONS = [
 
 export type ReturnReason = (typeof RETURN_REASONS)[number];
 
+export const SUPPLIER_OFFER_TYPES = [
+    "BOGO",
+    "BUY_X_GET_Y_FREE",
+    "BUY_X_GET_Y_DISCOUNT",
+    "VOLUME_FREE",
+] as const;
+
+export type SupplierOfferType = (typeof SUPPLIER_OFFER_TYPES)[number];
+
+export interface SupplierOfferDetails {
+    offer_type?: SupplierOfferType | string;
+    offer_code?: string;
+    offer_name?: string;
+    buy_quantity?: number;
+    get_quantity?: number;
+    discount_on_free?: number;
+    calculated_free_qty?: number;
+}
+
+export interface ActiveProductOffer {
+    product_id: string;
+    variant_id: string | null;
+    offer_id: string;
+    offer_type: SupplierOfferType;
+    offer_code: string;
+    offer_name: string;
+    buy_quantity: number;
+    get_quantity: number;
+    discount_percentage: number;
+    auto_apply: boolean;
+    start_date: string;
+    end_date: string | null;
+    is_active?: boolean;
+    priority?: number;
+}
+
 // ============================================================================
 // PURCHASE ORDER - matches `purchase_orders` table
 // ============================================================================
@@ -229,6 +265,12 @@ export interface PurchaseOrderItem {
     batch_number: string | null;
     manufacturing_date: string | null;
     expiry_date: string | null;
+
+    // Supplier offer tracking
+    offer_id: string | null;
+    free_quantity: number;
+    offer_applied: boolean;
+    offer_details: SupplierOfferDetails | Record<string, unknown> | null;
 
     // Status
     item_status: POItemStatus;
@@ -484,6 +526,8 @@ export interface CreatePurchaseOrderItemRequest {
     batch_number?: string;
     manufacturing_date?: string;
     expiry_date?: string;
+
+    offer_id?: string;
 
     notes?: string;
 }

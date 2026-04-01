@@ -61,7 +61,7 @@ export default function NewPurchaseOrderPage() {
           <InfoTooltip content="Create a new purchase order for your supplier. Add items, specify quantities and prices, and the system will auto-calculate GST. Products that don't exist yet will be auto-created." />
         </div>
         <p className="text-sm text-muted-foreground">
-          Fill in the order details and add line items.
+          Fill in the order details and add line items. Supplier offers (like BOGO) will auto-apply eligible free quantity.
         </p>
       </div>
 

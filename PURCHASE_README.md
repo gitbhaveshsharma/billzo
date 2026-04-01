@@ -22,7 +22,8 @@ src/
 │   └── purchase.store.ts         # Zustand state management with cache & optimistic UI
 supabase/
 └── migrations/
-    └── 6_purchase_orders.sql     # Database tables, RLS, triggers, RPC functions
+    ├── 6_purchase_orders.sql     # Purchase tables, RLS, triggers, RPC functions
+    └── 19_supplier_offers.sql    # Supplier offers, product_offers, PO offer auto-apply
 ```
 
 ---
@@ -32,10 +33,12 @@ supabase/
 | Table | Description |
 |---|---|
 | `purchase_orders` | Core PO master with supplier ref, GST treatment, totals, payment/delivery status |
-| `purchase_order_items` | Line items referencing products/variants/units, with per-item GST breakdown |
+| `purchase_order_items` | Line items with product/variant/unit, GST breakdown, and offer fields (`offer_id`, `free_quantity`, `offer_applied`, `offer_details`) |
 | `purchase_payments` | Payment records (cash, cheque, bank transfer, UPI, credit note) |
 | `purchase_returns` | Return headers linked to a PO with refund tracking |
 | `purchase_return_items` | Individual return line items with quantity, reason, condition |
+| `supplier_offers` | Master supplier offer definitions (BOGO, Buy X Get Y, volume offers) |
+| `product_offers` | Denormalized product-level active offers for fast matching/auto-apply |
 
 ### Key Constraints
 - `UNIQUE(store_id, po_number)` — PO number unique per store
@@ -48,6 +51,7 @@ supabase/
 - Triggers prevent deletion of non-draft orders
 - Triggers update inventory when items received (creates `inventory_transactions`)
 - Triggers handle purchase return completion (inventory adjustment)
+- Trigger auto-applies supplier offer on PO item when `offer_id` is set and computes `free_quantity`
 - **Auto-create product**: `auto_create_product_from_po_item()` BEFORE INSERT trigger on `purchase_order_items` — if the referenced `product_id` doesn't exist in `products`, a minimal product row is auto-created using data from the PO item (name, SKU, HSN, barcode, prices, GST, unit). If the product already exists, its `purchase_price` is updated to the latest value. Migration: `9_auto_create_product_from_po.sql`
 
 ### RLS Policies
@@ -85,7 +89,7 @@ supabase/
 | Interface | Description |
 |---|---|
 | `PurchaseOrder` | Full PO record (matches DB schema) |
-| `PurchaseOrderItem` | Line item with product, GST, quantity tracking |
+| `PurchaseOrderItem` | Line item with product, GST, quantity tracking, and free-item offer metadata |
 | `PurchasePayment` | Payment record with method, reference, status |
 | `PurchaseReturn` | Return header with totals and refund status |
 | `PurchaseReturnItem` | Return line item with reason, condition, amount |
@@ -96,7 +100,7 @@ supabase/
 |---|---|
 | `CreatePurchaseOrderRequest` | Create a new PO with items |
 | `UpdatePurchaseOrderRequest` | Partial update (draft only) |
-| `CreatePurchaseOrderItemRequest` | Add line item to PO |
+| `CreatePurchaseOrderItemRequest` | Add line item to PO, optional `offer_id` for supplier offer mapping |
 | `ReceiveItemRequest` | Record item receipt with batch/expiry |
 | `CreatePurchasePaymentRequest` | Record a payment against PO |
 | `CreatePurchaseReturnRequest` | Create a return with items |
@@ -159,7 +163,7 @@ All methods return `ServiceResponse<T>` (`{ data: T | null, error: string | null
 | Method | Description |
 |---|---|
 | `getItems(poId)` | List all items for a PO |
-| `addItem(storeId, poId, item, isInterState)` | Add item with auto GST calculation |
+| `addItem(storeId, poId, item, isInterState)` | Add item with auto GST calculation and supplier-offer auto-resolution |
 | `updateItem(storeId, itemId, data)` | Update item fields |
 | `removeItem(storeId, itemId)` | Remove item from PO |
 | `receiveItems(storeId, poId, items)` | Batch receive items (triggers inventory update) |
@@ -413,5 +417,6 @@ downloadCSV(csv, `purchase-orders-${new Date().toISOString().split("T")[0]}.csv`
 | `src/utils/purchase.utils.ts` | Utilities | Display, tax calc, status checks, export helpers |
 | `src/services/purchase.service.ts` | Service | Supabase CRUD + items + payments + returns + stats |
 | `src/stores/purchase.store.ts` | Store | Zustand state with cache + optimistic UI |
-| `supabase/migrations/6_purchase_orders.sql` | DB | Tables + RLS + triggers + RPC functions |
+| `supabase/migrations/6_purchase_orders.sql` | DB | Purchase tables + RLS + triggers + RPC functions |
+| `supabase/migrations/19_supplier_offers.sql` | DB | Supplier offers, product offer mapping, PO free-item auto-apply |
 | `supabase/migrations/9_auto_create_product_from_po.sql` | DB | Auto-create product trigger when PO item references a new product |

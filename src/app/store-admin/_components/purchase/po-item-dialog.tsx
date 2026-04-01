@@ -37,6 +37,8 @@ import { createPurchaseOrderItemSchema } from "@/validations/purchase.validation
 import type { CreatePurchaseOrderItemFormData } from "@/validations/purchase.validation";
 import { calculateItemTotals, formatCurrency, generateSKU, generateBatchNumber } from "@/utils/purchase.utils";
 import { useProductStore } from "@/stores/product.store";
+import type { ActiveProductOffer } from "@/types/purchase.types";
+import { usePurchaseStore } from "@/stores/purchase.store";
 
 // ============================================================================
 // TYPES
@@ -45,6 +47,9 @@ import { useProductStore } from "@/stores/product.store";
 export interface POItemDialogItem extends CreatePurchaseOrderItemFormData {
     // internal key for useFieldArray
     _key?: string;
+    free_quantity?: number;
+    offer_applied?: boolean;
+    offer_details?: Record<string, unknown> | null;
 }
 
 interface POItemDialogProps {
@@ -115,6 +120,7 @@ const DEFAULT_VALUES: CreatePurchaseOrderItemFormData = {
     batch_number: "",
     manufacturing_date: "",
     expiry_date: "",
+    offer_id: undefined,
     notes: "",
 };
 
@@ -132,6 +138,8 @@ export function POItemDialog({
     isInterState = false,
 }: POItemDialogProps) {
     const { units, fetchUnits, lookupByBarcode } = useProductStore();
+    const fetchActiveOffers = usePurchaseStore((s) => s.fetchActiveOffers);
+    const [activeOffers, setActiveOffers] = useState<ActiveProductOffer[]>([]);
 
     const {
         register,
@@ -163,6 +171,11 @@ export function POItemDialog({
             fetchUnits(storeId);
         }
     }, [open, storeId]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (!open || !storeId) return;
+        fetchActiveOffers(storeId).then((offers) => setActiveOffers(offers));
+    }, [open, storeId, fetchActiveOffers]);
 
     const activeUnits = units.filter((u) => u.is_active);
 
@@ -219,6 +232,24 @@ export function POItemDialog({
     const { ref: rhfBarcodeRef, ...rhfBarcodeProps } = register("barcode");
 
     const gstPercentage = watch("gst_percentage");
+    const watchedProductId = watch("product_id");
+    const watchedVariantId = watch("variant_id");
+    const currentOffer =
+        (watchedVariantId
+            ? activeOffers.find(
+                  (offer) =>
+                      offer.auto_apply &&
+                      offer.product_id === watchedProductId &&
+                      offer.variant_id === watchedVariantId
+              )
+            : null) ??
+        activeOffers.find(
+            (offer) =>
+                offer.auto_apply &&
+                offer.product_id === watchedProductId &&
+                offer.variant_id === null
+        ) ??
+        null;
 
     // ── Live calculation ──
     const liveCalc = useMemo(() => {
@@ -674,6 +705,26 @@ export function POItemDialog({
                         </section>
 
                         <Separator />
+
+                        {/* ── OFFER PREVIEW ── */}
+                        {currentOffer && (
+                            <>
+                                <section className="space-y-2">
+                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Supplier Offer
+                                    </h4>
+                                    <div className="rounded-md border border-green-200 bg-green-50/60 dark:border-green-900 dark:bg-green-950/30 p-3">
+                                        <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                                            {currentOffer.offer_code} - {currentOffer.offer_name}
+                                        </p>
+                                        <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                                            Buy {currentOffer.buy_quantity} Get {currentOffer.get_quantity} free
+                                        </p>
+                                    </div>
+                                </section>
+                                <Separator />
+                            </>
+                        )}
 
                         {/* ── LIVE CALCULATION PREVIEW ── */}
                         <section className="space-y-3">

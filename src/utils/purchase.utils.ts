@@ -9,6 +9,8 @@ import type {
     RefundStatus,
     PurchaseDashboardStats,
     CreatePurchaseOrderItemRequest,
+    ActiveProductOffer,
+    SupplierOfferDetails,
 } from "@/types/purchase.types";
 
 // ============================================================================
@@ -380,6 +382,82 @@ export function buildItemPayload(
         tax_amount: calc.taxAmount,
         total_amount: calc.totalAmount,
     };
+}
+
+/**
+ * Calculate free quantity from offer rules and ordered quantity.
+ * Mirrors DB function calculate_offer_free_quantity for consistent preview.
+ */
+export function calculateOfferFreeQuantity(
+    orderedQuantity: number,
+    offer: Pick<ActiveProductOffer, "offer_type" | "buy_quantity" | "get_quantity">
+): number {
+    if (orderedQuantity <= 0 || offer.buy_quantity <= 0 || offer.get_quantity <= 0) return 0;
+    const sets = Math.floor(orderedQuantity / offer.buy_quantity);
+
+    switch (offer.offer_type) {
+        case "BOGO":
+        case "BUY_X_GET_Y_FREE":
+        case "BUY_X_GET_Y_DISCOUNT":
+            return sets * offer.get_quantity;
+        case "VOLUME_FREE":
+            return orderedQuantity >= offer.buy_quantity ? offer.get_quantity : 0;
+        default:
+            return 0;
+    }
+}
+
+export function findApplicableOfferForPurchaseItem(
+    item: Pick<CreatePurchaseOrderItemRequest, "product_id" | "variant_id" | "offer_id">,
+    offers: ActiveProductOffer[]
+): ActiveProductOffer | null {
+    if (!offers.length) return null;
+
+    if (item.offer_id) {
+        return offers.find((offer) => offer.offer_id === item.offer_id) ?? null;
+    }
+
+    const variantMatch = item.variant_id
+        ? offers.find(
+              (offer) =>
+                  offer.auto_apply &&
+                  offer.product_id === item.product_id &&
+                  offer.variant_id === item.variant_id
+          )
+        : null;
+    if (variantMatch) return variantMatch;
+
+    return (
+        offers.find(
+            (offer) =>
+                offer.auto_apply &&
+                offer.product_id === item.product_id &&
+                offer.variant_id === null
+        ) ?? null
+    );
+}
+
+export function formatOfferSummary(
+    details: SupplierOfferDetails | Record<string, unknown> | null | undefined,
+    freeQuantity?: number
+): string | null {
+    if (!details || typeof details !== "object") return null;
+
+    const offerCode = typeof details.offer_code === "string" ? details.offer_code : null;
+    const offerName = typeof details.offer_name === "string" ? details.offer_name : null;
+    const buyQty = typeof details.buy_quantity === "number" ? details.buy_quantity : null;
+    const getQty = typeof details.get_quantity === "number" ? details.get_quantity : null;
+    const qty = typeof freeQuantity === "number" ? freeQuantity : (
+        typeof details.calculated_free_qty === "number" ? details.calculated_free_qty : null
+    );
+
+    if (!offerCode && !offerName) return null;
+
+    const namePart = [offerCode, offerName].filter(Boolean).join(" - ");
+    if (buyQty && getQty && qty && qty > 0) {
+        return `${namePart} (Buy ${buyQty} Get ${getQty}, Free: ${qty})`;
+    }
+    return namePart;
 }
 
 // ============================================================================

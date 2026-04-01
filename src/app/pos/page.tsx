@@ -706,6 +706,7 @@ export default function POSPage() {
                         <CartTotalsPanel
                             totals={cartTotals}
                             isInterstate={cartIsInterstate}
+                            gstType={cartGstType}
                             billDiscountPercentage={cartBillDiscountPercentage}
                             onBillDiscountChange={(pct, amt) =>
                                 setCartBillDiscount(pct, amt)

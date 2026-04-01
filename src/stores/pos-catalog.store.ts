@@ -5,7 +5,7 @@
 
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import type { SellableItem, PosDataStatus, PosCacheMeta } from "@/types/pos.types";
+import type { SellableItem, PosDataStatus, PosCacheMeta, ProductOffer } from "@/types/pos.types";
 import type { PosIndexes } from "@/services/pos-data.service";
 import {
     fetchAllSellableItems,
@@ -105,6 +105,18 @@ interface PosCatalogActions {
      * Set cached store info (for receipt printing).
      */
     setStoreInfo: (info: CachedStoreInfo) => void;
+
+    /**
+     * Get active offer for a product/variant.
+     * O(1) lookup from in-memory item data.
+     */
+    getActiveOffer: (itemId: string) => ProductOffer | null;
+
+    /**
+     * Get all items that have active offers.
+     * Useful for displaying "On Offer" section in POS.
+     */
+    getItemsWithOffers: () => SellableItem[];
 
     /**
      * Full reset — clears memory and IndexedDB.
@@ -401,6 +413,23 @@ export const usePosCatalogStore = create<PosCatalogStore>()(
             // ==============================================================
             setStoreInfo: (info: CachedStoreInfo) => {
                 set({ storeInfo: info });
+            },
+
+            // ==============================================================
+            // GET ACTIVE OFFER — O(1) lookup from item data
+            // ==============================================================
+            getActiveOffer: (itemId: string): ProductOffer | null => {
+                const { indexes } = get();
+                const item = indexes.idMap.get(itemId);
+                return item?.active_offer ?? null;
+            },
+
+            // ==============================================================
+            // GET ITEMS WITH OFFERS — filter for items with active offers
+            // ==============================================================
+            getItemsWithOffers: (): SellableItem[] => {
+                const { items } = get();
+                return items.filter((item) => item.active_offer !== null);
             },
 
             // ==============================================================

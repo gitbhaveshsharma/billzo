@@ -275,13 +275,16 @@ const recalcCartTotals = (state: {
     cartBillDiscountPercentage: number;
     cartBillDiscountAmount: number;
     cartIsInterstate: boolean;
+    cartGstType: "B2C" | "B2B" | "export";
 }): SaleCalculation =>
     state.cart.length > 0
         ? calculateCartTotals(
               state.cart,
               state.cartBillDiscountPercentage,
               state.cartBillDiscountAmount,
-              state.cartIsInterstate
+              state.cartIsInterstate,
+              // export is treated as B2B for tax calculation (tax exclusive)
+              state.cartGstType === "B2C" ? "B2C" : "B2B"
           )
         : { ...EMPTY_CART_TOTALS };
 
@@ -1322,7 +1325,13 @@ export const useSalesStore = create<SalesState>()(
             },
 
             setCartGstType: (gstType) => {
-                set({ cartGstType: gstType });
+                set((state) => {
+                    const newState = { ...state, cartGstType: gstType };
+                    return {
+                        cartGstType: gstType,
+                        cartTotals: recalcCartTotals(newState),
+                    };
+                });
             },
 
             setCartShiftId: (shiftId) => {
@@ -1400,6 +1409,7 @@ export const useSalesStore = create<SalesState>()(
                         cartBillDiscountPercentage: state.cartBillDiscountPercentage,
                         cartBillDiscountAmount: state.cartBillDiscountAmount,
                         cartIsInterstate: state.cartIsInterstate,
+                        cartGstType: state.cartGstType,
                     }),
                 });
             },

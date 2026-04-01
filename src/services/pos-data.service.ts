@@ -5,7 +5,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import type { ServiceResponse } from "@/types/api.types";
-import type { SellableItem } from "@/types/pos.types";
+import type { SellableItem, ProductOffer, PosOfferType } from "@/types/pos.types";
 
 const getClient = () => createClient();
 
@@ -57,6 +57,25 @@ interface RawBarcode {
     product_id: string;
     barcode: string;
     is_active: boolean;
+}
+
+/**
+ * Raw product offer from get_active_pos_offers RPC.
+ */
+interface RawProductOffer {
+    product_id: string;
+    variant_id: string | null;
+    offer_id: string;
+    offer_type: string;
+    offer_code: string;
+    offer_name: string;
+    buy_quantity: number;
+    get_quantity: number;
+    discount_percentage: number;
+    pos_display_message: string | null;
+    auto_apply: boolean;
+    start_date: string;
+    end_date: string | null;
 }
 
 /**
@@ -150,6 +169,24 @@ async function fetchAdditionalBarcodes(
     }
 }
 
+/**
+ * Fetch active product offers via RPC.
+ * Returns all currently valid offers for POS display/application.
+ */
+async function fetchActiveOffers(
+    storeId: string
+): Promise<ServiceResponse<RawProductOffer[]>> {
+    try {
+        const { data, error } = await getClient()
+            .rpc("get_active_pos_offers", { p_store_id: storeId });
+
+        if (error) return { data: null, error: error.message };
+        return { data: (data ?? []) as RawProductOffer[], error: null };
+    } catch {
+        return { data: null, error: "Failed to fetch offers" };
+    }
+}
+
 // ============================================================================
 // MERGE INTO FLAT SELLABLE ITEMS
 // ============================================================================
@@ -188,17 +225,69 @@ function buildBarcodesMap(barcodes: RawBarcode[]): Map<string, string[]> {
 }
 
 /**
- * Merge products + variants + inventory + barcodes → flat SellableItem[].
+ * Build product offers lookup.
+ * Key: "productId" or "productId:variantId" for variant-specific offers.
+ * Variant-specific offers take priority over product-level offers.
+ */
+function buildOffersMap(offers: RawProductOffer[]): Map<string, ProductOffer> {
+    const map = new Map<string, ProductOffer>();
+    
+    // First pass: add product-level offers
+    for (const o of offers) {
+        if (!o.variant_id) {
+            map.set(o.product_id, {
+                offer_id: o.offer_id,
+                offer_type: o.offer_type as PosOfferType,
+                offer_code: o.offer_code,
+                offer_name: o.offer_name,
+                buy_quantity: o.buy_quantity,
+                get_quantity: o.get_quantity,
+                discount_percentage: o.discount_percentage,
+                pos_display_message: o.pos_display_message,
+                auto_apply: o.auto_apply,
+                start_date: o.start_date,
+                end_date: o.end_date,
+            });
+        }
+    }
+    
+    // Second pass: add/override with variant-specific offers
+    for (const o of offers) {
+        if (o.variant_id) {
+            const key = `${o.product_id}:${o.variant_id}`;
+            map.set(key, {
+                offer_id: o.offer_id,
+                offer_type: o.offer_type as PosOfferType,
+                offer_code: o.offer_code,
+                offer_name: o.offer_name,
+                buy_quantity: o.buy_quantity,
+                get_quantity: o.get_quantity,
+                discount_percentage: o.discount_percentage,
+                pos_display_message: o.pos_display_message,
+                auto_apply: o.auto_apply,
+                start_date: o.start_date,
+                end_date: o.end_date,
+            });
+        }
+    }
+    
+    return map;
+}
+
+/**
+ * Merge products + variants + inventory + barcodes + offers → flat SellableItem[].
  * Each variant becomes its own row. Products without variants get one row.
  */
 function mergeToSellableItems(
     products: RawProduct[],
     variants: RawVariant[],
     inventory: RawInventory[],
-    additionalBarcodes: RawBarcode[]
+    additionalBarcodes: RawBarcode[],
+    offers: RawProductOffer[] = []
 ): SellableItem[] {
     const invMap = buildInventoryMap(inventory);
     const bcMap = buildBarcodesMap(additionalBarcodes);
+    const offerMap = buildOffersMap(offers);
 
     // Group variants by product_id for quick lookup
     const variantsByProduct = new Map<string, RawVariant[]>();
@@ -238,6 +327,10 @@ function mergeToSellableItems(
                 }
                 allBarcodes.push(...extraBarcodes);
 
+                // Get offer: variant-specific first, then product-level
+                const variantOfferKey = `${p.id}:${v.id}`;
+                const activeOffer = offerMap.get(variantOfferKey) ?? offerMap.get(p.id) ?? null;
+
                 items.push({
                     id: v.id,
                     product_id: p.id,
@@ -259,6 +352,7 @@ function mergeToSellableItems(
                     brand: p.brand,
                     category_id: p.category_id,
                     is_active: v.is_active && p.is_active,
+                    active_offer: activeOffer,
                 });
             }
         } else {
@@ -275,6 +369,9 @@ function mergeToSellableItems(
                 allBarcodes.push(...p.alternate_barcodes);
             }
             allBarcodes.push(...extraBarcodes);
+
+            // Get offer for product
+            const activeOffer = offerMap.get(p.id) ?? null;
 
             items.push({
                 id: p.id,
@@ -297,6 +394,7 @@ function mergeToSellableItems(
                 brand: p.brand,
                 category_id: p.category_id,
                 is_active: p.is_active,
+                active_offer: activeOffer,
             });
         }
     }
@@ -425,20 +523,21 @@ export function restoreStock(
 // ============================================================================
 
 /**
- * Fetch products + variants + inventory + barcodes in parallel → merge → return flat list.
+ * Fetch products + variants + inventory + barcodes + offers in parallel → merge → return flat list.
  * Called once on POS open, or on explicit refresh.
  */
 export async function fetchAllSellableItems(
     storeId: string
 ): Promise<ServiceResponse<SellableItem[]>> {
     try {
-        // 4 parallel fetches — single network burst
-        const [productsRes, variantsRes, inventoryRes, barcodesRes] =
+        // 5 parallel fetches — single network burst
+        const [productsRes, variantsRes, inventoryRes, barcodesRes, offersRes] =
             await Promise.all([
                 fetchProducts(storeId),
                 fetchVariants(storeId),
                 fetchInventory(storeId),
                 fetchAdditionalBarcodes(storeId),
+                fetchActiveOffers(storeId),
             ]);
 
         // Fail if products fetch failed (critical)
@@ -449,17 +548,19 @@ export async function fetchAllSellableItems(
             };
         }
 
-        // Non-critical: variants/inventory/barcodes can be empty
+        // Non-critical: variants/inventory/barcodes/offers can be empty
         const products = productsRes.data;
         const variants = variantsRes.data ?? [];
         const inventory = inventoryRes.data ?? [];
         const barcodes = barcodesRes.data ?? [];
+        const offers = offersRes.data ?? [];
 
         const items = mergeToSellableItems(
             products,
             variants,
             inventory,
-            barcodes
+            barcodes,
+            offers
         );
 
         return { data: items, error: null };
@@ -526,6 +627,7 @@ export async function barcodeFallbackLookup(
                 brand: p.brand,
                 category_id: p.category_id,
                 is_active: p.is_active,
+                active_offer: null, // Offers loaded from cache; fallback items don't have offers
             };
             return { data: item, error: null };
         }
@@ -582,6 +684,7 @@ export async function barcodeFallbackLookup(
                     brand: p.brand,
                     category_id: p.category_id,
                     is_active: v.is_active && p.is_active,
+                    active_offer: null,
                 };
                 return { data: item, error: null };
             }
@@ -640,6 +743,7 @@ export async function barcodeFallbackLookup(
                     brand: p.brand,
                     category_id: p.category_id,
                     is_active: p.is_active,
+                    active_offer: null,
                 };
                 return { data: item, error: null };
             }

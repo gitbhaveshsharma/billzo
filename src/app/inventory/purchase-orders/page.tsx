@@ -289,7 +289,7 @@ export default function InventoryPurchaseOrdersPage() {
           <InfoTooltip content="Create and manage purchase orders for restocking inventory. Track order lifecycle from draft to receiving, manage payments, and handle returns." />
         </div>
         <p className="text-sm text-muted-foreground">
-          Create and manage purchase orders, track payments, receive items, and handle returns.
+          Create and manage purchase orders, track payments, receive items, and handle returns with supplier-offer free-item visibility.
         </p>
       </div>
 

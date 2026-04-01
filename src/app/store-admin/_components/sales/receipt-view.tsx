@@ -114,6 +114,7 @@ export const ReceiptView = forwardRef<HTMLDivElement, ReceiptViewProps>(
                 totals: receipt.totals,
                 payments: receipt.payments,
                 footer: receipt.footer,
+                gstType: receipt.gstType,
             };
 
             // Use custom print function (ESC/POS + fallback) if provided
