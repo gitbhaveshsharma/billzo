@@ -80,7 +80,8 @@ export function StockAdjustmentDialog({
             variant_id: item.variant_id ?? undefined,
             adjustment_type: adjustmentType,
             new_quantity: adjustmentType === "ADJUSTMENT" ? Number(newQuantity) : undefined,
-            quantity: adjustmentType !== "ADJUSTMENT" ? Number(quantity) : undefined,
+            // Schema expects quantity for all types; ADJUSTMENT flow ignores it in service logic.
+            quantity: adjustmentType !== "ADJUSTMENT" ? Number(quantity) : 0,
             reason,
             notes: notes || undefined,
         };
