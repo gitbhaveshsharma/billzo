@@ -763,8 +763,8 @@ export function CreatePODialog({
                                                                     {item?.ordered_quantity ?? 0}
                                                                 </TableCell>
                                                                 <TableCell className="text-center text-sm font-medium text-green-700 dark:text-green-300">
-                                                                    {(item as POItemDialogItem | undefined)?.free_quantity && (item as POItemDialogItem).free_quantity > 0
-                                                                        ? `${(item as POItemDialogItem).free_quantity}`
+                                                                    {((item as POItemDialogItem | undefined)?.free_quantity ?? 0) > 0
+                                                                        ? `${(item as POItemDialogItem | undefined)?.free_quantity ?? 0}`
                                                                         : "—"}
                                                                 </TableCell>
                                                                 <TableCell className="text-right text-sm">
