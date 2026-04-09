@@ -46,6 +46,20 @@ import type {
 
 const getClient = () => createClient();
 
+const normalizePrice = (value: unknown): number | null => {
+    if (value == null) return null;
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    if (typeof value === "string" && value.trim() !== "") {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+};
+
+const hasPriceChanged = (oldPrice: unknown, newPrice: unknown): boolean => {
+    return normalizePrice(oldPrice) !== normalizePrice(newPrice);
+};
+
 // ============================================================================
 // PRODUCT SERVICE
 // All CRUD operations for products, variants, barcodes, categories, units,
@@ -293,6 +307,17 @@ export const productService = {
         data: UpdateProductRequest
     ): Promise<ServiceResponse<Product>> => {
         try {
+            const { data: existingProduct, error: existingProductError } = await getClient()
+                .from("products")
+                .select("mrp, selling_price")
+                .eq("id", productId)
+                .eq("store_id", storeId)
+                .maybeSingle();
+
+            if (existingProductError) {
+                return { data: null, error: existingProductError.message };
+            }
+
             const updatedAt = new Date().toISOString();
 
             // Use Prefer: return=representation so the updated row is returned from
@@ -331,6 +356,45 @@ export const productService = {
                 ...data,
                 updated_at: updatedAt,
             } as Product;
+
+            const historyWrites: Array<Promise<ServiceResponse<PriceHistory>>> = [];
+            const previous = (existingProduct ?? {}) as {
+                mrp?: number | null;
+                selling_price?: number | null;
+            };
+
+            if (
+                data.selling_price !== undefined &&
+                hasPriceChanged(previous.selling_price, data.selling_price)
+            ) {
+                historyWrites.push(
+                    productService.recordPriceChange(
+                        storeId,
+                        productId,
+                        "SELLING",
+                        normalizePrice(previous.selling_price),
+                        data.selling_price,
+                        "Product selling price updated"
+                    )
+                );
+            }
+
+            if (data.mrp !== undefined && hasPriceChanged(previous.mrp, data.mrp)) {
+                historyWrites.push(
+                    productService.recordPriceChange(
+                        storeId,
+                        productId,
+                        "MRP",
+                        normalizePrice(previous.mrp),
+                        data.mrp,
+                        "Product MRP updated"
+                    )
+                );
+            }
+
+            if (historyWrites.length > 0) {
+                await Promise.all(historyWrites);
+            }
 
             return { data: merged, error: null };
         } catch {
@@ -496,6 +560,17 @@ export const productService = {
         data: UpdateProductVariantRequest
     ): Promise<ServiceResponse<ProductVariant>> => {
         try {
+            const { data: existingVariant, error: existingVariantError } = await getClient()
+                .from("product_variants")
+                .select("product_id, mrp, selling_price")
+                .eq("id", variantId)
+                .eq("store_id", storeId)
+                .maybeSingle();
+
+            if (existingVariantError) {
+                return { data: null, error: existingVariantError.message };
+            }
+
             const { data: variant, error } = await getClient()
                 .from("product_variants")
                 .update({
@@ -508,6 +583,52 @@ export const productService = {
                 .single();
 
             if (error) return { data: null, error: error.message };
+
+            const previous = (existingVariant ?? {}) as {
+                product_id?: string;
+                mrp?: number | null;
+                selling_price?: number | null;
+            };
+
+            if (previous.product_id) {
+                const historyWrites: Array<Promise<ServiceResponse<PriceHistory>>> = [];
+
+                if (
+                    data.selling_price !== undefined &&
+                    hasPriceChanged(previous.selling_price, data.selling_price)
+                ) {
+                    historyWrites.push(
+                        productService.recordPriceChange(
+                            storeId,
+                            previous.product_id,
+                            "SELLING",
+                            normalizePrice(previous.selling_price),
+                            data.selling_price,
+                            "Variant selling price updated",
+                            variantId
+                        )
+                    );
+                }
+
+                if (data.mrp !== undefined && hasPriceChanged(previous.mrp, data.mrp)) {
+                    historyWrites.push(
+                        productService.recordPriceChange(
+                            storeId,
+                            previous.product_id,
+                            "MRP",
+                            normalizePrice(previous.mrp),
+                            data.mrp,
+                            "Variant MRP updated",
+                            variantId
+                        )
+                    );
+                }
+
+                if (historyWrites.length > 0) {
+                    await Promise.all(historyWrites);
+                }
+            }
+
             return { data: variant as unknown as ProductVariant, error: null };
         } catch {
             return { data: null, error: "Failed to update variant" };
